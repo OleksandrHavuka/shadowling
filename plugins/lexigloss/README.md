@@ -1,14 +1,22 @@
 # lexigloss
 
-**Passive vocabulary glossing for Claude Code.** Collect words you're learning
-with a slash command; from then on, whenever one of those words shows up in
-Claude's replies, Claude appends a translation in your native language — inline
-and in a small summary at the bottom — until you've seen it enough times to have
-learned it. No flashcards, no separate app: you absorb terminology in the flow of
-your normal work.
+**Learn vocabulary passively, while you work with Claude Code.** Most developers
+aren't native English speakers — lexigloss turns your everyday Claude Code
+sessions into quiet vocabulary practice instead of a separate chore.
 
-By default it glosses English words with Ukrainian translations, but the
-languages are configurable.
+Collect words you don't know yet with `/vocab`. From then on, whenever one of
+those words appears in Claude's replies, Claude appends a translation in your
+native language — inline and in a short summary at the bottom — until you've seen
+it enough times to have learned it. No flashcards, no separate app: you absorb
+terminology in the flow of your normal work.
+
+Works for **any** native language (set it once). English vocabulary → your
+language is the default.
+
+<!-- Demo GIF — drop a ~10s recording at docs/demo.gif and uncomment:
+![lexigloss demo](docs/demo.gif)
+-->
+
 
 ---
 
@@ -151,6 +159,9 @@ A few design notes so nothing surprises you:
   instruction explicitly tells Claude *not* to steer toward those words — only to
   annotate ones that would have appeared anyway. You get the glosses without the
   tool quietly changing what Claude says.
+- **Everything stays on your machine.** The `Stop` hook reads your latest reply
+  locally to count word exposures — there are no network calls and no telemetry,
+  nothing leaves your computer.
 - **Your data outlives updates.** Words and settings live in `~/.lexigloss`,
   separate from the plugin's code, so updating or reinstalling never touches them.
 - **The active list stays small.** Only un-learned words are injected, and each one
