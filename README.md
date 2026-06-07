@@ -4,9 +4,10 @@ A Claude Code plugin marketplace. It currently hosts a single plugin:
 
 ### `lexigloss`
 
-Passive vocabulary glossing — collect words with `/vocab` and Claude appends a
-translation in your native language inline in its replies, until you've seen each
-word enough times to have learned it.
+Passive vocabulary learning for non-native developers — collect words with
+`/vocab` and Claude appends a translation in your native language inline in its
+replies, until you've seen each word enough times to have learned it. Works for
+any native language.
 
 → Full documentation: [`plugins/lexigloss/README.md`](plugins/lexigloss/README.md)
 
