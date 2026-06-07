@@ -1,0 +1,13 @@
+{
+  "name": "lexigloss",
+  "owner": {
+    "name": "Rostyslav Havuka"
+  },
+  "plugins": [
+    {
+      "name": "lexigloss",
+      "source": "./plugins/lexigloss",
+      "description": "Passive vocabulary glossing while you chat with Claude Code"
+    }
+  ]
+}
