@@ -2,6 +2,10 @@
   "name": "lexigloss",
   "description": "Passive vocabulary glossing: collect words via /vocab and get inline native-language glosses in Claude's replies until you've learned them",
   "version": "0.1.0",
+  "author": {
+    "name": "Rostyslav Havuka",
+    "email": "rostyslav.havuka@ekreative.com"
+  },
   "keywords": ["vocabulary", "language-learning", "glossing", "translation"],
   "license": "MIT"
 }
