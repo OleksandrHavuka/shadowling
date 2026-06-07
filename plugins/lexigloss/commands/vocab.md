@@ -1,5 +1,5 @@
 ---
-description: Add a word/term you're learning (auto-translated to your native language), or remove one. Usage: /vocab <word>  |  /vocab remove <word>
+description: "Add a word/term you're learning (auto-translated to your native language), or remove one. Usage: /vocab <word> | /vocab remove <word>"
 ---
 
 Manage the user's lexigloss vocabulary list. Raw arguments: `$ARGUMENTS`
