@@ -22,22 +22,25 @@ language is the default.
 
 ## What it looks like
 
+Examples here translate into Spanish, but you set your own native language in one
+step.
+
 You add a word once:
 
 ```
 /vocab throughput
-→ stored: throughput = пропускна здатність (remaining 10, active)
+→ stored: throughput = rendimiento (remaining 10, active)
 ```
 
 Later, in any normal reply that happens to use the word:
 
 ```
-...this batching improves throughput (пропускна здатність) under load, so the
+...this batching improves throughput (rendimiento) under load, so the
 queue drains faster.
 
 ---
 📖 Vocabulary:
-- throughput — пропускна здатність (10 to go)
+- throughput — rendimiento (10 to go)
 ```
 
 After the word has appeared in 10 replies it "graduates" and is no longer glossed.
@@ -100,9 +103,9 @@ Missing or malformed values fall back to the defaults above. See
 ## How it works
 
 ```
-/vocab despite
+/vocab throughput
    └─ Claude translates → vocab.py add → ~/.lexigloss/words.csv
-        despite, попри, remaining=10, active
+        throughput, rendimiento, remaining=10, active
 
 (before every reply)  UserPromptSubmit hook → vocab.py inject
    └─ injects <vocab_glossing> block: rules + active words
