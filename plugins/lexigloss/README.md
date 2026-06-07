@@ -40,7 +40,7 @@ Re-adding a graduated word resets it.
 ## Install
 
 ```
-/plugin marketplace add <your-github-user>/lexigloss
+/plugin marketplace add OleksandrHavuka/lexigloss
 /plugin install lexigloss
 ```
 
@@ -108,11 +108,9 @@ Missing or malformed values fall back to the defaults above. See
 
 - **Deterministic** (in the script): storage, exposure counting, graduation,
   word matching.
-- **Instruction-based** (Claude follows it): the actual glossing. There is no
+- **Instruction-based** (Claude follows it): the actual glossing. There's no
   Claude Code hook that rewrites an assistant message after it's generated, so the
-  gloss is produced by the model from the injected instruction — which also means
-  it can't bias your answers: the instruction explicitly says not to steer word
-  choice toward the list, only to annotate words that would have appeared anyway.
+  gloss is the model following the injected rule (see **Good to know** below).
 
 ### Counting / graduation
 A word starts at `remaining = 10`. Each reply it appears in decrements it by one
@@ -140,14 +138,24 @@ updates. Override the location with the `VOCAB_HOME` environment variable.
 
 ---
 
-## Limitations
+## Good to know
 
-- Glossing is instruction-following, not a guaranteed text transform — Claude has
-  to comply with the injected rule. Counting and graduation are deterministic
-  regardless.
-- The active word list is injected into context on every prompt. Graduation keeps
-  it small; there's no frequency-based cap yet, so adding hundreds of rarely-used
-  words would grow per-prompt token cost.
+A few design notes so nothing surprises you:
+
+- **Glossing is done by Claude, from an injected instruction.** There's no Claude
+  Code hook that rewrites a finished message, so the gloss is the model following a
+  rule rather than a guaranteed find-and-replace. In practice it's reliable — and
+  everything that *can* be exact is: storage, exposure counting, and graduation all
+  run in the script, independent of the glossing.
+- **It stays out of your answers.** The word list lives in context, but the
+  instruction explicitly tells Claude *not* to steer toward those words — only to
+  annotate ones that would have appeared anyway. You get the glosses without the
+  tool quietly changing what Claude says.
+- **Your data outlives updates.** Words and settings live in `~/.lexigloss`,
+  separate from the plugin's code, so updating or reinstalling never touches them.
+- **The active list stays small.** Only un-learned words are injected, and each one
+  retires after 10 exposures — so the per-prompt cost stays low as your vocabulary
+  grows.
 
 ---
 

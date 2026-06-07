@@ -1,17 +1,31 @@
 # lexigloss
 
-A Claude Code plugin marketplace hosting **lexigloss** — passive vocabulary
-glossing while you chat.
+A Claude Code plugin marketplace. It currently hosts a single plugin:
+
+### `lexigloss`
+
+Passive vocabulary glossing — collect words with `/vocab` and Claude appends a
+translation in your native language inline in its replies, until you've seen each
+word enough times to have learned it.
+
+→ Full documentation: [`plugins/lexigloss/README.md`](plugins/lexigloss/README.md)
 
 ## Install
 
 ```
-/plugin marketplace add <your-github-user>/lexigloss
+/plugin marketplace add OleksandrHavuka/lexigloss
 /plugin install lexigloss
 ```
 
-(While developing locally you can point the marketplace at this folder:
-`/plugin marketplace add ~/projects/lexigloss`.)
+Then restart Claude Code. Requires **Python 3.9+** (standard library only).
 
-Then restart Claude Code. See [`plugins/lexigloss/README.md`](plugins/lexigloss/README.md)
-for full usage, configuration, and design notes.
+Trying it locally before publishing? Point the marketplace at the repo folder:
+
+```
+/plugin marketplace add ~/projects/lexigloss
+/plugin install lexigloss
+```
+
+## License
+
+AGPL-3.0-only — see [LICENSE](LICENSE).
