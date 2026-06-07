@@ -14,12 +14,17 @@ class VocabTestBase(unittest.TestCase):
         os.remove(self.csv_path)  # start with NO file so load_rows() == []
         os.environ["VOCAB_CSV"] = self.csv_path
         os.environ.pop("VOCAB_CONFIG", None)  # tests default unless set explicitly
+        # isolate data_dir() into a temp home so main()/register never touch ~/.lexigloss
+        self.home = tempfile.mkdtemp()
+        os.environ["VOCAB_HOME"] = self.home
 
     def tearDown(self):
         os.environ.pop("VOCAB_CSV", None)
         os.environ.pop("VOCAB_CONFIG", None)
+        os.environ.pop("VOCAB_HOME", None)
         if os.path.exists(self.csv_path):
             os.remove(self.csv_path)
+        shutil.rmtree(self.home, ignore_errors=True)
 
     def rows_by_word(self):
         return {r["word"]: r for r in vocab.load_rows(vocab.csv_path())}
