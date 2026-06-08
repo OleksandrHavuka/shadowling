@@ -11,7 +11,7 @@ plugins/shadowling/
   vocab.py           # vocab store (add / remove / list-active) + glossing hooks (inject / scan)
   capture.py         # /en-review buffer + markdown tables
   skills/            # skill bodies:
-                     #   vocab/        — fork (haiku): translate + add terms, hint typos
+                     #   vocab/        — fork (sonnet): translate + add terms, hint typos
                      #   vocab-remove/ — fork (haiku): remove terms
                      #   setup/        — main: ask + set the plugin language
                      #   en-review/    — fork (sonnet): analyze buffer into docs

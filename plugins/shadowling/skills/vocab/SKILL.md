@@ -3,7 +3,7 @@ name: vocab
 description: "Add words/terms you're learning, auto-translated into your native language. Comma-separated for several at once. Usage: /vocab <word>[, <word2>, ...]"
 context: fork
 agent: claude
-model: haiku
+model: sonnet
 allowed-tools: Bash(python3 *)
 ---
 
