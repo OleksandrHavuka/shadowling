@@ -33,9 +33,20 @@ def save_rows(path, rows):
             writer.writerow({k: r[k] for k in FIELDS})
 
 
+def _norm(s):
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+
 def add(word, translation):
     word = word.strip().lower()
     translation = translation.strip()
+    # Guard against a failed/identity translation (e.g. the LLM echoing the term
+    # back untranslated). Never persist such a row — signal the caller instead.
+    if not translation or _norm(translation) == _norm(word):
+        return "untranslated", {
+            "word": word, "translation": translation,
+            "remaining": "-", "status": "-",
+        }
     path = csv_path()
     rows = load_rows(path)
     for r in rows:
@@ -177,18 +188,25 @@ def main(argv):
         return 1
     cmd = argv[0]
     if cmd == "add":
-        if len(argv) < 3:
-            print('usage: vocab.py add "<word>" "<translation>"', file=sys.stderr)
+        pairs = argv[1:]
+        if not pairs or len(pairs) % 2 != 0:
+            print('usage: vocab.py add "<word>" "<translation>" ['
+                  '"<word>" "<translation>" ...]', file=sys.stderr)
             return 1
-        action, row = add(argv[1], argv[2])
-        print("{0}: {1} = {2} (remaining {3}, {4})".format(
-            action, row["word"], row["translation"], row["remaining"], row["status"]))
+        for i in range(0, len(pairs), 2):
+            action, row = add(pairs[i], pairs[i + 1])
+            print("{0}: {1} = {2} (remaining {3}, {4})".format(
+                action, row["word"], row["translation"],
+                row["remaining"], row["status"]))
         return 0
     if cmd == "remove":
-        if len(argv) < 2:
-            print('usage: vocab.py remove "<word>"', file=sys.stderr)
+        words = argv[1:]
+        if not words:
+            print('usage: vocab.py remove "<word>" ["<word>" ...]', file=sys.stderr)
             return 1
-        print("removed" if remove(argv[1]) else "not found")
+        for word in words:
+            print("{0}: {1}".format(
+                word, "removed" if remove(word) else "not found"))
         return 0
     if cmd == "list-active":
         for r in list_active():

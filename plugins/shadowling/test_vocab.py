@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -6,6 +8,14 @@ import unittest
 
 import core
 import vocab
+
+
+def run_main(argv):
+    """Run vocab.main(argv), returning (exit_code, stdout)."""
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = vocab.main(argv)
+    return code, buf.getvalue()
 
 
 class VocabTestBase(unittest.TestCase):
@@ -52,6 +62,16 @@ class AddTest(VocabTestBase):
         self.assertEqual(row["remaining"], "7")  # unchanged
         self.assertEqual(row["status"], "active")
 
+    def test_add_identity_translation_is_untranslated_and_not_saved(self):
+        action, _ = vocab.add("Awesome", "awesome")  # case/space-insensitive match
+        self.assertEqual(action, "untranslated")
+        self.assertNotIn("awesome", self.rows_by_word())
+
+    def test_add_empty_translation_is_untranslated_and_not_saved(self):
+        action, _ = vocab.add("throughput", "   ")
+        self.assertEqual(action, "untranslated")
+        self.assertNotIn("throughput", self.rows_by_word())
+
     def test_add_existing_learned_resets_to_10_active(self):
         vocab.add("throughput", "t")
         rows = vocab.load_rows(vocab.csv_path())
@@ -73,6 +93,50 @@ class RemoveTest(VocabTestBase):
 
     def test_remove_unknown_returns_false_no_error(self):
         self.assertFalse(vocab.remove("nonexistent"))
+
+
+class MainAddTest(VocabTestBase):
+    def test_add_multiple_pairs_stores_all(self):
+        code, out = run_main(
+            ["add", "hello", "привіт", "machine learning", "машинне навчання"])
+        self.assertEqual(code, 0)
+        rows = self.rows_by_word()
+        self.assertEqual(rows["hello"]["translation"], "привіт")
+        self.assertEqual(rows["machine learning"]["translation"], "машинне навчання")
+        # one result line per word
+        self.assertEqual(out.count("\n"), 2)
+
+    def test_add_single_pair_still_works(self):
+        code, out = run_main(["add", "throughput", "пропускна здатність"])
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            self.rows_by_word()["throughput"]["translation"], "пропускна здатність")
+
+    def test_add_odd_arg_count_is_error(self):
+        code, _ = run_main(["add", "hello", "привіт", "orphan"])
+        self.assertEqual(code, 1)
+
+    def test_add_no_args_is_error(self):
+        code, _ = run_main(["add"])
+        self.assertEqual(code, 1)
+
+
+class MainRemoveTest(VocabTestBase):
+    def test_remove_multiple_words(self):
+        vocab.add("alpha", "а")
+        vocab.add("beta", "б")
+        code, out = run_main(["remove", "alpha", "beta"])
+        self.assertEqual(code, 0)
+        self.assertEqual(self.rows_by_word(), {})
+        self.assertIn("alpha: removed", out)
+        self.assertIn("beta: removed", out)
+
+    def test_remove_reports_unknown_per_word(self):
+        vocab.add("alpha", "а")
+        code, out = run_main(["remove", "alpha", "ghost"])
+        self.assertEqual(code, 0)
+        self.assertIn("alpha: removed", out)
+        self.assertIn("ghost: not found", out)
 
 
 class MatchTest(VocabTestBase):
