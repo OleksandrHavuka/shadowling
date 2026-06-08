@@ -95,7 +95,8 @@ def list_active():
     return [r for r in load_rows(csv_path()) if r["status"] == "active"]
 
 
-def last_assistant_text(transcript_path):
+def _last_message_text(transcript_path, role):
+    """Text of the last transcript message with the given role ('assistant'/'user')."""
     if not transcript_path or not os.path.exists(transcript_path):
         return ""
     last = ""
@@ -108,7 +109,9 @@ def last_assistant_text(transcript_path):
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if obj.get("type") != "assistant":
+            if obj.get("type") != role:
+                continue
+            if obj.get("isMeta"):  # slash-command bodies, skill injections, etc.
                 continue
             content = obj.get("message", {}).get("content", [])
             if isinstance(content, str):
@@ -122,6 +125,14 @@ def last_assistant_text(transcript_path):
             if text.strip():
                 last = text
     return last
+
+
+def last_assistant_text(transcript_path):
+    return _last_message_text(transcript_path, "assistant")
+
+
+def last_user_text(transcript_path):
+    return _last_message_text(transcript_path, "user")
 
 
 def scan(stdin_text):

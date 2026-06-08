@@ -1,7 +1,7 @@
 {
   "name": "lexigloss",
-  "description": "Passive vocabulary glossing: collect words via /vocab and get inline native-language glosses in Claude's replies until you've learned them",
-  "version": "0.1.0",
+  "description": "Passive language learning: /vocab glosses words you're learning inline in Claude's replies, and /en-review turns your English messages into personal grammar/phrasing/idiom/irregular-verb correction docs",
+  "version": "0.2.1",
   "author": {
     "name": "Oleksandr Havuka",
     "email": "7580678+OleksandrHavuka@users.noreply.github.com"
