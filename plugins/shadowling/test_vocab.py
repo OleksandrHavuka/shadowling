@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import unittest
 
+import core
 import vocab
 
 
@@ -12,16 +13,16 @@ class VocabTestBase(unittest.TestCase):
         fd, self.csv_path = tempfile.mkstemp(suffix=".csv")
         os.close(fd)
         os.remove(self.csv_path)  # start with NO file so load_rows() == []
-        os.environ["VOCAB_CSV"] = self.csv_path
-        os.environ.pop("VOCAB_CONFIG", None)  # tests default unless set explicitly
-        # isolate data_dir() into a temp home so main()/register never touch ~/.lexigloss
+        os.environ["SHADOWLING_CSV"] = self.csv_path
+        os.environ.pop("SHADOWLING_CONFIG", None)  # tests default unless set explicitly
+        # isolate data_dir() into a temp home so main()/register never touch ~/.shadowling
         self.home = tempfile.mkdtemp()
-        os.environ["VOCAB_HOME"] = self.home
+        os.environ["SHADOWLING_HOME"] = self.home
 
     def tearDown(self):
-        os.environ.pop("VOCAB_CSV", None)
-        os.environ.pop("VOCAB_CONFIG", None)
-        os.environ.pop("VOCAB_HOME", None)
+        os.environ.pop("SHADOWLING_CSV", None)
+        os.environ.pop("SHADOWLING_CONFIG", None)
+        os.environ.pop("SHADOWLING_HOME", None)
         if os.path.exists(self.csv_path):
             os.remove(self.csv_path)
         shutil.rmtree(self.home, ignore_errors=True)
@@ -308,7 +309,7 @@ class InjectTest(VocabTestBase):
         with open(cfg, "w", encoding="utf-8") as f:
             json.dump({"native_language": "Spanish",
                        "learning_language": "German"}, f)
-        os.environ["VOCAB_CONFIG"] = cfg
+        os.environ["SHADOWLING_CONFIG"] = cfg
         try:
             vocab.add("throughput", "rendimiento")
             ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
@@ -323,19 +324,19 @@ class ConfigTest(VocabTestBase):
         cfg = self.csv_path + ".config.json"
         with open(cfg, "w", encoding="utf-8") as f:
             f.write(data)
-        os.environ["VOCAB_CONFIG"] = cfg
+        os.environ["SHADOWLING_CONFIG"] = cfg
         return cfg
 
     def test_defaults_when_no_config_file(self):
-        os.environ["VOCAB_CONFIG"] = self.csv_path + ".missing.json"
-        cfg = vocab.load_config()
+        os.environ["SHADOWLING_CONFIG"] = self.csv_path + ".missing.json"
+        cfg = core.load_config()
         self.assertEqual(cfg["native_language"], "Ukrainian")
         self.assertEqual(cfg["learning_language"], "English")
 
     def test_reads_values_from_file(self):
         path = self._write('{"native_language": "Spanish"}')
         try:
-            cfg = vocab.load_config()
+            cfg = core.load_config()
             self.assertEqual(cfg["native_language"], "Spanish")
             # unspecified key keeps its default
             self.assertEqual(cfg["learning_language"], "English")
@@ -345,7 +346,7 @@ class ConfigTest(VocabTestBase):
     def test_bad_json_falls_back_to_defaults(self):
         path = self._write("not valid json {{")
         try:
-            cfg = vocab.load_config()
+            cfg = core.load_config()
             self.assertEqual(cfg["native_language"], "Ukrainian")
         finally:
             os.remove(path)
@@ -354,7 +355,7 @@ class ConfigTest(VocabTestBase):
 class DataDirTest(unittest.TestCase):
     def setUp(self):
         self._saved = {k: os.environ.get(k)
-                       for k in ("VOCAB_HOME", "VOCAB_CSV", "VOCAB_CONFIG")}
+                       for k in ("SHADOWLING_HOME", "SHADOWLING_CSV", "SHADOWLING_CONFIG")}
         for k in self._saved:
             os.environ.pop(k, None)
 
@@ -365,17 +366,17 @@ class DataDirTest(unittest.TestCase):
             else:
                 os.environ[k] = v
 
-    def test_default_data_dir_is_dot_lexigloss(self):
-        self.assertEqual(vocab.data_dir(), os.path.expanduser("~/.lexigloss"))
+    def test_default_data_dir_is_dot_shadowling(self):
+        self.assertEqual(core.data_dir(), os.path.expanduser("~/.shadowling"))
         self.assertEqual(
             vocab.csv_path(),
-            os.path.join(os.path.expanduser("~/.lexigloss"), "words.csv"))
+            os.path.join(os.path.expanduser("~/.shadowling"), "words.csv"))
 
-    def test_vocab_home_override(self):
-        os.environ["VOCAB_HOME"] = "/tmp/lexi_home"
-        self.assertEqual(vocab.data_dir(), "/tmp/lexi_home")
-        self.assertEqual(vocab.csv_path(), "/tmp/lexi_home/words.csv")
-        self.assertEqual(vocab.config_path(), "/tmp/lexi_home/config.json")
+    def test_shadowling_home_override(self):
+        os.environ["SHADOWLING_HOME"] = "/tmp/shadowling_home"
+        self.assertEqual(core.data_dir(), "/tmp/shadowling_home")
+        self.assertEqual(vocab.csv_path(), "/tmp/shadowling_home/words.csv")
+        self.assertEqual(core.config_path(), "/tmp/shadowling_home/config.json")
 
     def test_save_rows_creates_missing_dir(self):
         d = tempfile.mkdtemp()
@@ -389,12 +390,12 @@ class DataDirTest(unittest.TestCase):
     def test_main_registers_script_path(self):
         d = tempfile.mkdtemp()
         try:
-            os.environ["VOCAB_HOME"] = d
+            os.environ["SHADOWLING_HOME"] = d
             vocab.main(["list-active"])  # any command triggers registration
             registered = os.path.join(d, ".script_path")
             self.assertTrue(os.path.exists(registered))
             with open(registered, encoding="utf-8") as f:
-                self.assertEqual(f.read(), os.path.abspath(vocab.__file__))
+                self.assertEqual(f.read(), os.path.abspath(core.__file__))
         finally:
             shutil.rmtree(d)
 

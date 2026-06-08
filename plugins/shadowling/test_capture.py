@@ -31,12 +31,12 @@ def make_multi_user_transcript(entries):
 class CaptureTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
-        os.environ["VOCAB_HOME"] = self.home
-        os.environ.pop("VOCAB_EN_BUFFER", None)
+        os.environ["SHADOWLING_HOME"] = self.home
+        os.environ.pop("SHADOWLING_EN_BUFFER", None)
 
     def tearDown(self):
-        os.environ.pop("VOCAB_HOME", None)
-        os.environ.pop("VOCAB_EN_BUFFER", None)
+        os.environ.pop("SHADOWLING_HOME", None)
+        os.environ.pop("SHADOWLING_EN_BUFFER", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
     def _stdin(self, transcript_path):
@@ -99,7 +99,7 @@ class CaptureTest(CaptureTestBase):
 
     def test_command_marker_wrapper_not_buffered(self):
         tpath = make_multi_user_transcript([
-            {"text": "<command-message>lexigloss:en-review</command-message>\n"
+            {"text": "<command-message>shadowling:en-review</command-message>\n"
                      "<command-name>en-review</command-name>"},
         ])
         try:
@@ -110,7 +110,7 @@ class CaptureTest(CaptureTestBase):
 
     def test_local_command_stdout_not_buffered(self):
         tpath = make_multi_user_transcript([
-            {"text": "<local-command-stdout>Installed lexigloss successfully now"
+            {"text": "<local-command-stdout>Installed shadowling successfully now"
                      "</local-command-stdout>"},
         ])
         try:

@@ -1,12 +1,12 @@
 {
-  "name": "lexigloss",
+  "name": "shadowling-lab",
   "owner": {
     "name": "Oleksandr Havuka"
   },
   "plugins": [
     {
-      "name": "lexigloss",
-      "source": "./plugins/lexigloss",
+      "name": "shadowling",
+      "source": "./plugins/shadowling",
       "description": "Passive language learning while you chat with Claude Code: /vocab glosses words inline, /en-review turns your English into personal correction docs"
     }
   ]

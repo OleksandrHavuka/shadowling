@@ -1,23 +1,20 @@
 #!/usr/bin/env python3
-"""vocab.py - global vocabulary glossing store (stdlib only, Python 3.9+)."""
+"""vocab.py - vocabulary glossing store for shadowling (stdlib only, Python 3.9+)."""
 import csv
 import json
 import os
 import re
 import sys
 
+from core import data_dir, last_assistant_text, load_config, register_script_path
+
 FIELDS = ["word", "translation", "remaining", "status"]
 START_REMAINING = 10
 STEM_MIN_LEN = 4
 
 
-def data_dir():
-    """Persistent data directory (NOT the plugin code dir, which is ephemeral)."""
-    return os.environ.get("VOCAB_HOME") or os.path.expanduser("~/.lexigloss")
-
-
 def csv_path():
-    return os.environ.get("VOCAB_CSV") or os.path.join(data_dir(), "words.csv")
+    return os.environ.get("SHADOWLING_CSV") or os.path.join(data_dir(), "words.csv")
 
 
 def load_rows(path):
@@ -95,46 +92,6 @@ def list_active():
     return [r for r in load_rows(csv_path()) if r["status"] == "active"]
 
 
-def _last_message_text(transcript_path, role):
-    """Text of the last transcript message with the given role ('assistant'/'user')."""
-    if not transcript_path or not os.path.exists(transcript_path):
-        return ""
-    last = ""
-    with open(transcript_path, encoding="utf-8") as f:
-        for line in f:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                obj = json.loads(line)
-            except json.JSONDecodeError:
-                continue
-            if obj.get("type") != role:
-                continue
-            if obj.get("isMeta"):  # slash-command bodies, skill injections, etc.
-                continue
-            content = obj.get("message", {}).get("content", [])
-            if isinstance(content, str):
-                text = content
-            else:
-                parts = []
-                for block in content:
-                    if isinstance(block, dict) and block.get("type") == "text":
-                        parts.append(block.get("text", ""))
-                text = "".join(parts)
-            if text.strip():
-                last = text
-    return last
-
-
-def last_assistant_text(transcript_path):
-    return _last_message_text(transcript_path, "assistant")
-
-
-def last_user_text(transcript_path):
-    return _last_message_text(transcript_path, "user")
-
-
 def scan(stdin_text):
     try:
         data = json.loads(stdin_text) if stdin_text.strip() else {}
@@ -162,29 +119,6 @@ def scan(stdin_text):
     if changed:
         save_rows(path, rows)
     return changed
-
-
-DEFAULT_CONFIG = {"native_language": "Ukrainian", "learning_language": "English"}
-
-
-def config_path():
-    return os.environ.get("VOCAB_CONFIG") or os.path.join(data_dir(), "config.json")
-
-
-def load_config():
-    """Read config.json, falling back to DEFAULT_CONFIG for missing/bad values."""
-    cfg = dict(DEFAULT_CONFIG)
-    try:
-        with open(config_path(), encoding="utf-8") as f:
-            data = json.load(f)
-    except (OSError, ValueError):
-        return cfg
-    if isinstance(data, dict):
-        for key in DEFAULT_CONFIG:
-            value = data.get(key)
-            if isinstance(value, str) and value.strip():
-                cfg[key] = value.strip()
-    return cfg
 
 
 def gloss_rules(native_language, learning_language):
@@ -233,21 +167,6 @@ def inject(event="SessionStart"):
         }
     }
     return json.dumps(out, ensure_ascii=False)
-
-
-def register_script_path():
-    """Record this script's absolute path so the slash command can find it.
-
-    Hooks run with ${CLAUDE_PLUGIN_ROOT} set and know __file__; the /vocab command
-    body does not get that variable, so it reads the path from here instead.
-    """
-    try:
-        path = os.path.join(data_dir(), ".script_path")
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(os.path.abspath(__file__))
-    except OSError:
-        pass
 
 
 def main(argv):

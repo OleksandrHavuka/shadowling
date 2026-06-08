@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""capture.py - lexigloss English-correction collector (stdlib only, Python 3.9+).
+"""capture.py - shadowling English-correction collector (stdlib only, Python 3.9+).
 
 The Stop hook silently buffers the user's English messages (extracted from the
-chat transcript) into ~/.lexigloss/en_buffer.jsonl. On demand, `/en-review` has a
+chat transcript) into ~/.shadowling/en_buffer.jsonl. On demand, `/en-review` has a
 subagent read the buffer (`dump`) and append findings to four growing markdown
 tables (`add-row`), then `clear` the buffer. Nothing is printed into the chat.
 """
@@ -12,7 +12,7 @@ import re
 import sys
 from datetime import datetime
 
-from vocab import data_dir, last_user_text, register_script_path
+from core import data_dir, last_user_text, register_script_path
 
 # Each doc: filename, column headers (order == add-row arg order), key column index
 # used for dedup. Docs are single growing markdown tables; date is a column.
@@ -47,7 +47,7 @@ COMMAND_WRAPPERS = ("<command-", "<local-command-")
 
 
 def buffer_path():
-    return os.environ.get("VOCAB_EN_BUFFER") or os.path.join(
+    return os.environ.get("SHADOWLING_EN_BUFFER") or os.path.join(
         data_dir(), "en_buffer.jsonl")
 
 
