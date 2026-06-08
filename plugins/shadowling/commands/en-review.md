@@ -7,7 +7,7 @@ runs in a **subagent** so the buffer, the existing-doc keys, and the analysis
 reasoning never enter this conversation's context — only a short summary returns.
 
 Resolve the capture script path once (used below):
-`CAP="$(dir="$(dirname "$(cat "${VOCAB_HOME:-$HOME/.lexigloss}/.script_path" 2>/dev/null)")"; echo "${dir:-${CLAUDE_PLUGIN_ROOT}}/capture.py")"`
+`CAP="$(dir="$(dirname "$(cat "${SHADOWLING_HOME:-$HOME/.shadowling}/.script_path" 2>/dev/null)")"; echo "${dir:-${CLAUDE_PLUGIN_ROOT}}/capture.py")"`
 
 Follow these steps exactly:
 
@@ -17,7 +17,7 @@ Follow these steps exactly:
    run `dump` yourself and do **not** launch a subagent.
 
 2. Otherwise read `native_language` from
-   `${VOCAB_HOME:-$HOME/.lexigloss}/config.json` (default `Ukrainian` if missing),
+   `${SHADOWLING_HOME:-$HOME/.shadowling}/config.json` (default `Ukrainian` if missing),
    and get today's date (`date +%F`).
 
 3. **Launch ONE subagent** (Task tool, `subagent_type: general-purpose`). Pass it

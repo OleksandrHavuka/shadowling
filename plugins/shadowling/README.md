@@ -1,7 +1,7 @@
-# lexigloss
+# shadowling
 
 **Learn vocabulary passively, while you work with Claude Code.** Most developers
-aren't native English speakers — lexigloss turns your everyday Claude Code
+aren't native English speakers — shadowling turns your everyday Claude Code
 sessions into quiet vocabulary practice instead of a separate chore.
 
 Collect words you don't know yet with `/vocab`. From then on, whenever one of
@@ -14,7 +14,7 @@ Works for **any** native language (set it once). English vocabulary → your
 language is the default.
 
 <!-- Demo GIF — drop a ~10s recording at docs/demo.gif and uncomment:
-![lexigloss demo](docs/demo.gif)
+![shadowling demo](docs/demo.gif)
 -->
 
 
@@ -51,8 +51,8 @@ Re-adding a graduated word resets it.
 ## Install
 
 ```
-/plugin marketplace add OleksandrHavuka/lexigloss
-/plugin install lexigloss
+/plugin marketplace add OleksandrHavuka/shadowling
+/plugin install shadowling@shadowling-lab
 ```
 
 Restart Claude Code. Requires **Python 3.9+** on your PATH (standard library only,
@@ -77,13 +77,13 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/en-review` | Analyze your buffered English messages into personal correction docs. |
 
 On the **first** `/vocab` you'll be asked your native language once; the answer is
-saved to `~/.lexigloss/config.json`.
+saved to `~/.shadowling/config.json`.
 
 ---
 
 ## Configuration
 
-Config lives at `~/.lexigloss/config.json`:
+Config lives at `~/.shadowling/config.json`:
 
 ```json
 {
@@ -106,7 +106,7 @@ Missing or malformed values fall back to the defaults above. See
 
 ```
 /vocab throughput
-   └─ Claude translates → vocab.py add → ~/.lexigloss/words.csv
+   └─ Claude translates → vocab.py add → ~/.shadowling/words.csv
         throughput, rendimiento, remaining=10, active
 
 (before every reply)  UserPromptSubmit hook → vocab.py inject
@@ -140,14 +140,14 @@ punctuation (e.g. `C++`) are matched too.
 
 ## English corrections (`/en-review`)
 
-Beyond single words, lexigloss can quietly build a **personal dataset of how you
+Beyond single words, shadowling can quietly build a **personal dataset of how you
 (a non-native) phrase things vs. how natives say it** — so you can study it later.
 
 It's a two-phase, **silent** model:
 
 1. **Collect (passive).** When you write prompts in English, the `Stop` hook
    extracts your message and appends it to a raw buffer
-   (`~/.lexigloss/en_buffer.jsonl`). No analysis, nothing printed in the chat.
+   (`~/.shadowling/en_buffer.jsonl`). No analysis, nothing printed in the chat.
    Ukrainian/other-language and slash-command messages are skipped.
 2. **Review (on demand).** Run `/en-review`. The analysis happens in a **subagent**
    with its own context window, so the buffer, the existing entries, and the
@@ -167,7 +167,7 @@ Each doc is a single markdown table with a stable key column, so duplicates are
 skipped two ways: the subagent avoids near-duplicates it sees in the existing
 entries, and the script refuses an exact key match as a safety net.
 
-Everything stays local — the buffer and docs live in `~/.lexigloss/`, no network
+Everything stays local — the buffer and docs live in `~/.shadowling/`, no network
 calls.
 
 ---
@@ -176,14 +176,14 @@ calls.
 
 | Path | What |
 |---|---|
-| `~/.lexigloss/words.csv` | your vocabulary (`word,translation,remaining,status`) |
-| `~/.lexigloss/config.json` | language settings |
-| `~/.lexigloss/en_buffer.jsonl` | buffered English messages awaiting `/en-review` |
-| `~/.lexigloss/{grammar,rephrasings,idioms,irregular_verbs}.md` | correction docs from `/en-review` |
-| `~/.lexigloss/.script_path` | script location recorded by the hooks (internal) |
+| `~/.shadowling/words.csv` | your vocabulary (`word,translation,remaining,status`) |
+| `~/.shadowling/config.json` | language settings |
+| `~/.shadowling/en_buffer.jsonl` | buffered English messages awaiting `/en-review` |
+| `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.md` | correction docs from `/en-review` |
+| `~/.shadowling/.script_path` | script location recorded by the hooks (internal) |
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
-updates. Override the location with the `VOCAB_HOME` environment variable.
+updates. Override the location with the `SHADOWLING_HOME` environment variable.
 
 ---
 
@@ -203,7 +203,7 @@ A few design notes so nothing surprises you:
 - **Everything stays on your machine.** The `Stop` hook reads your latest reply
   locally to count word exposures — there are no network calls and no telemetry,
   nothing leaves your computer.
-- **Your data outlives updates.** Words and settings live in `~/.lexigloss`,
+- **Your data outlives updates.** Words and settings live in `~/.shadowling`,
   separate from the plugin's code, so updating or reinstalling never touches them.
 - **The active list stays small.** Only un-learned words are injected, and each one
   retires after 10 exposures — so the per-prompt cost stays low as your vocabulary
@@ -214,13 +214,13 @@ A few design notes so nothing surprises you:
 ## Development
 
 ```
-cd plugins/lexigloss
+cd plugins/shadowling
 python3 -m unittest test_vocab test_capture -v   # 63 tests, stdlib only
 claude plugin validate . --strict                # validate the manifest
 ```
 
-The tool is two dependency-free files (`vocab.py` glossing, `capture.py`
-English-correction collection) plus tests.
+The tool is three dependency-free files (`core.py` shared infra, `vocab.py`
+glossing, `capture.py` English-correction collection) plus tests.
 
 ---
 
