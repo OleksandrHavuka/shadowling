@@ -62,8 +62,9 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 
 - `UserPromptSubmit` → injects the active word list + glossing instruction into
   context before each reply.
-- `Stop` → scans the reply you just received, counts exposures, and graduates
-  learned words.
+- `Stop` → scans the reply you just received (counts exposures, graduates learned
+  words) **and** quietly buffers your English messages for later review (see
+  [English corrections](#english-corrections-en-review)).
 
 ---
 
@@ -73,6 +74,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 |---|---|
 | `/vocab <word>` | Translate `<word>` into your native language and start tracking it. |
 | `/vocab remove <word>` | Stop tracking and delete a word. |
+| `/en-review` | Analyze your buffered English messages into personal correction docs. |
 
 On the **first** `/vocab` you'll be asked your native language once; the answer is
 saved to `~/.lexigloss/config.json`.
@@ -136,12 +138,48 @@ punctuation (e.g. `C++`) are matched too.
 
 ---
 
+## English corrections (`/en-review`)
+
+Beyond single words, lexigloss can quietly build a **personal dataset of how you
+(a non-native) phrase things vs. how natives say it** — so you can study it later.
+
+It's a two-phase, **silent** model:
+
+1. **Collect (passive).** When you write prompts in English, the `Stop` hook
+   extracts your message and appends it to a raw buffer
+   (`~/.lexigloss/en_buffer.jsonl`). No analysis, nothing printed in the chat.
+   Ukrainian/other-language and slash-command messages are skipped.
+2. **Review (on demand).** Run `/en-review`. The analysis happens in a **subagent**
+   with its own context window, so the buffer, the existing entries, and the
+   reasoning never pollute your current conversation — only a short summary comes
+   back. It reads the buffer, and appends findings to four growing markdown tables:
+
+   | Doc | Captures |
+   |---|---|
+   | `grammar.md` | grammar fixes (also articles, prepositions, false friends) |
+   | `rephrasings.md` | non-native phrasing → natural native phrasing / collocations |
+   | `idioms.md` | idioms that would have fit the context |
+   | `irregular_verbs.md` | irregular verbs you stumbled on, with the full triad |
+
+   Then the buffer is cleared.
+
+Each doc is a single markdown table with a stable key column, so duplicates are
+skipped two ways: the subagent avoids near-duplicates it sees in the existing
+entries, and the script refuses an exact key match as a safety net.
+
+Everything stays local — the buffer and docs live in `~/.lexigloss/`, no network
+calls.
+
+---
+
 ## Data & files
 
 | Path | What |
 |---|---|
 | `~/.lexigloss/words.csv` | your vocabulary (`word,translation,remaining,status`) |
 | `~/.lexigloss/config.json` | language settings |
+| `~/.lexigloss/en_buffer.jsonl` | buffered English messages awaiting `/en-review` |
+| `~/.lexigloss/{grammar,rephrasings,idioms,irregular_verbs}.md` | correction docs from `/en-review` |
 | `~/.lexigloss/.script_path` | script location recorded by the hooks (internal) |
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
@@ -177,11 +215,12 @@ A few design notes so nothing surprises you:
 
 ```
 cd plugins/lexigloss
-python3 -m unittest test_vocab -v        # 36 tests, stdlib only
-claude plugin validate . --strict         # validate the manifest
+python3 -m unittest test_vocab test_capture -v   # 63 tests, stdlib only
+claude plugin validate . --strict                # validate the manifest
 ```
 
-The whole tool is one dependency-free file (`vocab.py`) plus tests.
+The tool is two dependency-free files (`vocab.py` glossing, `capture.py`
+English-correction collection) plus tests.
 
 ---
 

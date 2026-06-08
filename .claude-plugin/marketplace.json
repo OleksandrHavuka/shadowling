@@ -7,7 +7,7 @@
     {
       "name": "lexigloss",
       "source": "./plugins/lexigloss",
-      "description": "Passive vocabulary glossing while you chat with Claude Code"
+      "description": "Passive language learning while you chat with Claude Code: /vocab glosses words inline, /en-review turns your English into personal correction docs"
     }
   ]
 }
