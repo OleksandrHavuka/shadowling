@@ -1,6 +1,6 @@
 ---
-name: vocab-add
-description: "Add words/terms you're learning, auto-translated into your native language. Comma-separated for several at once. Usage: /shadowling:vocab-add <word>[, <word2>, ...]"
+name: vocab
+description: "Add words/terms you're learning, auto-translated into your native language. Comma-separated for several at once. Usage: /vocab <word>[, <word2>, ...]"
 context: fork
 agent: claude
 model: haiku
@@ -35,7 +35,7 @@ Steps:
    conservative — don't flag intentional phrases, technical/proper nouns, or real
    but uncommon words), append a hint AFTER the results, e.g.:
    "⚠️ `asesome` looks like a typo of `awesome`. To fix it:
-   `/shadowling:vocab-remove asesome` then `/shadowling:vocab-add awesome`."
+   `/vocab-remove asesome` then `/vocab awesome`."
    This is only a hint — the term was still added.
 
 Do NOT gloss anything in your reply.

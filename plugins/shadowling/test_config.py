@@ -46,6 +46,13 @@ class LangTest(ConfigCliTestBase):
         self.assertEqual(code, 0)
         self.assertEqual(out.strip(), "Spanish")
 
+    def test_lang_empty_when_config_lacks_native_language(self):
+        # malformed/empty config must NOT mask first-run (no default echoed)
+        self._write_config({"learning_language": "English"})
+        code, out = run_main(["lang"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "")
+
 
 class SetLangTest(ConfigCliTestBase):
     def test_set_lang_persists_and_load_reads_it(self):

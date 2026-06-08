@@ -20,19 +20,24 @@ def config_path():
     return os.environ.get("SHADOWLING_CONFIG") or os.path.join(data_dir(), "config.json")
 
 
-def load_config():
-    """Read config.json, falling back to DEFAULT_CONFIG for missing/bad values."""
-    cfg = dict(DEFAULT_CONFIG)
+def raw_config():
+    """Parsed config.json as written (no defaults). Returns {} if missing/bad."""
     try:
         with open(config_path(), encoding="utf-8") as f:
             data = json.load(f)
     except (OSError, ValueError):
-        return cfg
-    if isinstance(data, dict):
-        for key in DEFAULT_CONFIG:
-            value = data.get(key)
-            if isinstance(value, str) and value.strip():
-                cfg[key] = value.strip()
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def load_config():
+    """Read config.json, falling back to DEFAULT_CONFIG for missing/bad values."""
+    cfg = dict(DEFAULT_CONFIG)
+    data = raw_config()
+    for key in DEFAULT_CONFIG:
+        value = data.get(key)
+        if isinstance(value, str) and value.strip():
+            cfg[key] = value.strip()
     return cfg
 
 
@@ -43,14 +48,7 @@ def save_config(values):
     string values, and writes the result back. Returns the written dict.
     """
     path = config_path()
-    data = {}
-    try:
-        with open(path, encoding="utf-8") as f:
-            loaded = json.load(f)
-        if isinstance(loaded, dict):
-            data = loaded
-    except (OSError, ValueError):
-        pass
+    data = raw_config()
     for key, value in values.items():
         if isinstance(value, str) and value.strip():
             data[key] = value.strip()
