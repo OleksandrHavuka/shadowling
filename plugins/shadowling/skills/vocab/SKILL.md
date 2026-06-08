@@ -28,6 +28,8 @@ Steps:
    in the target language only, never explanation or transliteration. The
    translation MUST differ from the source term; never echo the term back.
 4. One call: `python3 "$DIR/vocab.py" add "<term1>" "<tr1>" "<term2>" "<tr2>" ...`.
+   When interpolating a value into the quoted args, backslash-escape any `\`, `"`,
+   `` ` `` or `$` it contains so bash passes it literally.
 5. Report the per-word results (the script prints `add`/`refresh`/`relearn`; it
    prints `untranslated` and skips a row if a translation was missing/identical —
    if so, say it couldn't be translated and suggest re-running).
