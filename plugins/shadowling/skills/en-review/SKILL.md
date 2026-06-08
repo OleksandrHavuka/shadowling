@@ -39,7 +39,8 @@ Steps:
    - `irregular_verbs` — base, past, past-participle, example-fix  *(when a misused or noteworthy irregular verb appears)*
    `add-row` already skips exact-key duplicates; `<existing>` is so you avoid
    proposing near-duplicates too. Don't invent corrections — only record real
-   issues or genuinely apt idioms.
+   issues or genuinely apt idioms. When a cell value contains `\`, `"`, `` ` `` or
+   `$`, backslash-escape it inside the quoted arg so bash passes it literally.
 
 5. Run `python3 "$DIR/capture.py" clear`.
 
