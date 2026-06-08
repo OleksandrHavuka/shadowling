@@ -72,12 +72,14 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 
 | Command | Effect |
 |---|---|
-| `/vocab <word>` | Translate `<word>` into your native language and start tracking it. |
-| `/vocab remove <word>` | Stop tracking and delete a word. |
+| `/shadowling:setup` | Set your native language (run once). |
+| `/vocab <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
+| `/vocab-remove <word>[, ...]` | Stop tracking and delete word(s). |
 | `/en-review` | Analyze your buffered English messages into personal correction docs. |
 
-On the **first** `/vocab` you'll be asked your native language once; the answer is
-saved to `~/.shadowling/config.json`.
+Run **`/shadowling:setup`** once to set your native language; the answer is saved
+to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
+`/shadowling:vocab`.)
 
 ---
 

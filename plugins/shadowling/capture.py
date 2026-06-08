@@ -165,13 +165,19 @@ def read_keys(doc):
 def add_row(doc, *cols):
     """Append a row to a doc table, skipping exact-key duplicates.
 
+    Callers pass the content columns only; the `date` column (recording date) is
+    filled in here with today's date — it's a write-time fact, not the caller's.
     Returns 'added' | 'dup' | 'error'. Printing is the caller's (main's) job.
     """
     if doc not in DOCS:
         return "error"
     spec = DOCS[doc]
     headers = spec["cols"]
-    cols = list(cols) + [""] * len(headers)
+    cols = list(cols)
+    if "date" in headers:
+        di = headers.index("date")
+        cols = cols[:di] + [datetime.now().strftime("%Y-%m-%d")] + cols[di:]
+    cols = cols + [""] * len(headers)
     cols = cols[:len(headers)]
     key = norm_key(cols[spec["key"]])
     if key and key in read_keys(doc):

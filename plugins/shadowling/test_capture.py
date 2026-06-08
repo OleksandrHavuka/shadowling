@@ -4,6 +4,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from datetime import datetime
 
 import capture
 
@@ -150,35 +151,38 @@ class AddRowTest(CaptureTestBase):
 
     def test_creates_header_and_separator(self):
         self.assertEqual(
-            capture.add_row("grammar", "2026-06-08", "I has", "I have", "subj-verb"),
-            "added")
+            capture.add_row("grammar", "I has", "I have", "subj-verb"), "added")
         text = self._read("grammar")
         lines = text.strip().splitlines()
         self.assertEqual(lines[0], "| date | ❌ original | ✅ fixed | rule |")
         self.assertEqual(lines[1], "| --- | --- | --- | --- |")
-        self.assertIn("| 2026-06-08 | I has | I have | subj-verb |", lines[2])
+        # date is auto-filled (today, ISO); assert the content columns landed
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.assertIn("| {0} | I has | I have | subj-verb |".format(today), lines[2])
 
     def test_duplicate_key_is_skipped(self):
-        capture.add_row("grammar", "2026-06-08", "I has", "I have", "rule")
+        capture.add_row("grammar", "I has", "I have", "rule")
         # same key, different case/spacing -> dup
-        self.assertEqual(
-            capture.add_row("grammar", "2026-06-09", "  I HAS ", "x", "y"), "dup")
+        self.assertEqual(capture.add_row("grammar", "  I HAS ", "x", "y"), "dup")
         rows = [l for l in self._read("grammar").splitlines()
                 if l.startswith("| ") and "date" not in l and "---" not in l]
         self.assertEqual(len(rows), 1)
 
     def test_pipe_in_content_is_escaped(self):
-        capture.add_row("rephrasings", "2026-06-08", "a|b", "c", "why")
+        capture.add_row("rephrasings", "a|b", "c", "why")
         self.assertIn("a\\|b", self._read("rephrasings"))
         # and the key round-trips so a second identical add is a dup
-        self.assertEqual(
-            capture.add_row("rephrasings", "2026-06-08", "a|b", "c", "why"), "dup")
+        self.assertEqual(capture.add_row("rephrasings", "a|b", "c", "why"), "dup")
 
     def test_irregular_verbs_key_is_base(self):
-        capture.add_row("irregular_verbs", "go", "went", "gone", "fix", "2026-06-08")
+        capture.add_row("irregular_verbs", "go", "went", "gone", "fix")
         self.assertEqual(
-            capture.add_row("irregular_verbs", "Go", "x", "y", "z", "2026-06-09"),
-            "dup")
+            capture.add_row("irregular_verbs", "Go", "x", "y", "z"), "dup")
+
+    def test_date_column_is_auto_filled(self):
+        capture.add_row("grammar", "orig", "fixed", "rule")
+        today = datetime.now().strftime("%Y-%m-%d")
+        self.assertIn("| " + today + " |", self._read("grammar"))
 
     def test_unknown_doc_returns_error(self):
         self.assertEqual(capture.add_row("nonsense", "a", "b"), "error")
@@ -186,9 +190,9 @@ class AddRowTest(CaptureTestBase):
 
 class ReadKeysTest(CaptureTestBase):
     def test_parses_existing_table_keys(self):
-        capture.add_row("idioms", "2026-06-08", "finishing work", "wrap up",
+        capture.add_row("idioms", "finishing work", "wrap up",
                         "закінчити", "let's finish")
-        capture.add_row("idioms", "2026-06-08", "agreeing", "I'm in",
+        capture.add_row("idioms", "agreeing", "I'm in",
                         "я за", "I agree")
         self.assertEqual(capture.read_keys("idioms"), {"wrap up", "i'm in"})
 
@@ -205,7 +209,7 @@ class DumpAndCountTest(CaptureTestBase):
 
     def test_dump_contains_pending_and_existing(self):
         self._capture_text("I have went there and seen the results already")
-        capture.add_row("grammar", "2026-06-08", "old mistake", "fixed", "rule")
+        capture.add_row("grammar", "old mistake", "fixed", "rule")
         text = capture.dump()
         self.assertIn("<pending>", text)
         self.assertIn("I have went there", text)
