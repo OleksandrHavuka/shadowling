@@ -4,30 +4,31 @@ description: "Add words/terms you're learning, auto-translated into your native 
 context: fork
 agent: claude
 model: sonnet
-allowed-tools: Bash(python3 *)
+allowed-tools: Bash(python3 */config.py*) Bash(python3 */vocab.py*)
 ---
 
 You translate the given terms and add them to the vocab store. Add everything you
 are given — do NOT ask, do NOT block on typos.
 
-Resolve the plugin script dir once:
-
-```
-DIR="$(dirname "$(cat "${SHADOWLING_HOME:-$HOME/.shadowling}/.script_path" 2>/dev/null)")"
-```
+The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so
+each command starts with `python3` (e.g.
+`python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang`).
 
 Terms (comma-separated): `$ARGUMENTS`
 
 Steps:
 
-1. Run `python3 "$DIR/config.py" lang`. If it prints nothing, reply that no
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang`. If it prints nothing, reply that no
    language is set — tell the user to run `/shadowling:setup` first — and stop.
 2. Split `$ARGUMENTS` on commas, trim each, drop empties. Keep multi-word phrases
    whole (`machine learning` is one term).
 3. Translate each term INTO the language from step 1 — one short word or phrase,
-   in the target language only, never explanation or transliteration. The
-   translation MUST differ from the source term; never echo the term back.
-4. One call: `python3 "$DIR/vocab.py" add "<term1>" "<tr1>" "<term2>" "<tr2>" ...`.
+   in the target language only, never explanation or transliteration. Use natural,
+   standard usage in that language; prefer the common dictionary form over calques,
+   loanwords, slang, or other non-standard variants. Near-synonyms may share the
+   same translation — do NOT invent an artificial variant just to make entries
+   differ. The translation MUST differ from the source term; never echo the term back.
+4. One call: `python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add "<term1>" "<tr1>" "<term2>" "<tr2>" ...`.
    When interpolating a value into the quoted args, backslash-escape any `\`, `"`,
    `` ` `` or `$` it contains so bash passes it literally.
 5. Report the per-word results (the script prints `add`/`refresh`/`relearn`; it

@@ -1,23 +1,21 @@
 ---
 name: setup
 description: "Set up shadowling's language — the native language words and corrections are translated into. Usage: /shadowling:setup"
-allowed-tools: Bash(python3 *)
+allowed-tools: Bash(python3 */config.py*)
 ---
 
 Configure the plugin-wide language (used by vocab glossing, en-review, and other
 features).
 
-Resolve the plugin script dir once:
-
-```
-DIR="$(dirname "$(cat "${SHADOWLING_HOME:-$HOME/.shadowling}/.script_path" 2>/dev/null)")"
-```
+The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so
+each command starts with `python3` (e.g.
+`python3 "${CLAUDE_SKILL_DIR}/../../config.py" set-lang "<answer>"`).
 
 Steps:
 
 1. Ask the user with `AskUserQuestion`: "What's your native language — the one to
    translate words and corrections INTO?"
-2. Run `python3 "$DIR/config.py" set-lang "<answer>"`.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" set-lang "<answer>"`.
 3. Confirm the language that was set.
 
 Do NOT gloss anything in your reply.

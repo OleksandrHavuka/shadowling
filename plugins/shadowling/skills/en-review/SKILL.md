@@ -4,33 +4,31 @@ description: "Analyze your buffered English messages into personal learning docs
 context: fork
 agent: claude
 model: sonnet
-allowed-tools: Bash(python3 *)
+allowed-tools: Bash(python3 */capture.py*) Bash(python3 */config.py*)
 ---
 
 You run as an isolated subagent, so the buffer, the existing-doc keys, and your
 analysis reasoning stay out of the main conversation — only your final summary
 returns. Do the whole analysis here yourself.
 
-Resolve the plugin script dir once:
-
-```
-DIR="$(dirname "$(cat "${SHADOWLING_HOME:-$HOME/.shadowling}/.script_path" 2>/dev/null)")"
-```
+The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so
+each command starts with `python3` (e.g.
+`python3 "${CLAUDE_SKILL_DIR}/../../capture.py" pending-count`).
 
 Steps:
 
-1. Run `python3 "$DIR/capture.py" pending-count`. If it prints `0`, tell the user
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" pending-count`. If it prints `0`, tell the user
    there's nothing to review and STOP.
 
-2. Get `native_language` via `python3 "$DIR/config.py" lang` (default `Ukrainian`
+2. Get `native_language` via `python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang` (default `Ukrainian`
    if it prints nothing).
 
-3. Run `python3 "$DIR/capture.py" dump` to read `<pending>` (messages to analyze)
+3. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" dump` to read `<pending>` (messages to analyze)
    and `<existing>` (keys already recorded per doc).
 
 4. Analyze each pending entry. For every finding **whose normalized key is not
    already in `<existing>`**, append a row via
-   `python3 "$DIR/capture.py" add-row <doc> <col1> <col2> ...` with columns in this
+   `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" add-row <doc> <col1> <col2> ...` with columns in this
    order (the recording date is added automatically — do NOT pass it). Only write
    categories that have findings:
    - `grammar` — original, fixed, rule  *(also articles, prepositions, false friends)*
@@ -42,7 +40,7 @@ Steps:
    issues or genuinely apt idioms. When a cell value contains `\`, `"`, `` ` `` or
    `$`, backslash-escape it inside the quoted arg so bash passes it literally.
 
-5. Run `python3 "$DIR/capture.py" clear`.
+5. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" clear`.
 
 6. Return ONLY a compact summary: how many entries were processed and the
    `added`/`dup` counts per doc. No reasoning, no doc contents, no gloss.
