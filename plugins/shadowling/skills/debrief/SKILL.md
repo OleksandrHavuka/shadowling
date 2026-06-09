@@ -1,7 +1,7 @@
 ---
 name: debrief
 description: "Review your buffered English into per-category frequency docs (grammar / rephrasings / idioms / verbs). Usage: /debrief"
-allowed-tools: Bash(python3 */capture.py*)
+allowed-tools: Bash(python3 */capture.py*) Skill(shadowling:debrief-grammar) Skill(shadowling:debrief-rephrasing) Skill(shadowling:debrief-idioms) Skill(shadowling:debrief-verbs)
 ---
 
 You orchestrate the four per-category specialists. You run in the MAIN agent (this
