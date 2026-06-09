@@ -14,16 +14,17 @@ from .base import Model
 
 class Grammar(Model):
     file = "grammar.md"
-    columns = ["slug", "counter", "problem", "last example", "last_seen"]
+    columns = ["slug", "counter", "problem", "last example", "created_at", "updated_at"]
     key = "slug"
     counter = "counter"
+    created = "created_at"
+    updated = "updated_at"
 
 
 def record(slug, problem, original, fixed, rule):
     slug = slugify(slug)
     result = Grammar.upsert({"slug": slug, "problem": problem,
-                             "last example": "{0} → {1}".format(original, fixed),
-                             "last_seen": today()})
+                             "last example": "{0} → {1}".format(original, fixed)})
     jsonl_append(os.path.join(data_dir(), "grammar.log.jsonl"),
                  {"date": today(), "slug": slug,
                   "original": original, "fixed": fixed, "rule": rule})

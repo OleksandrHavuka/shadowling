@@ -13,14 +13,16 @@ from .base import Model
 
 class Idioms(Model):
     file = "idioms.md"
-    columns = ["idiom", "counter", "meaning", "last example", "last_seen"]
+    columns = ["idiom", "counter", "meaning", "last example", "created_at", "updated_at"]
     key = "idiom"
     counter = "counter"
+    created = "created_at"
+    updated = "updated_at"
 
 
 def record(idiom, meaning, context, you_wrote):
     result = Idioms.upsert({"idiom": idiom, "meaning": meaning,
-                            "last example": you_wrote, "last_seen": today()})
+                            "last example": you_wrote})
     jsonl_append(os.path.join(data_dir(), "idioms.log.jsonl"),
                  {"date": today(), "context": context, "idiom": idiom,
                   "meaning": meaning, "you_wrote": you_wrote})

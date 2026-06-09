@@ -14,18 +14,18 @@ from .base import Model
 
 class Rephrasing(Model):
     file = "rephrasings.md"
-    columns = ["slug", "counter", "problem", "last example",
-               "your phrasing", "natural phrasing", "last_seen"]
+    columns = ["slug", "counter", "problem",
+               "your phrasing", "natural phrasing", "created_at", "updated_at"]
     key = "slug"
     counter = "counter"
+    created = "created_at"
+    updated = "updated_at"
 
 
 def record(slug, problem, yours, natural, why):
     slug = slugify(slug)
     result = Rephrasing.upsert({"slug": slug, "problem": problem,
-                                "last example": "{0} → {1}".format(yours, natural),
-                                "your phrasing": yours, "natural phrasing": natural,
-                                "last_seen": today()})
+                                "your phrasing": yours, "natural phrasing": natural})
     jsonl_append(os.path.join(data_dir(), "rephrasings.log.jsonl"),
                  {"date": today(), "slug": slug,
                   "yours": yours, "natural": natural, "why": why})
