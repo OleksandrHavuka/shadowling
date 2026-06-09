@@ -65,5 +65,28 @@ class RephrasingRecordTest(RecordTestBase):
         self.assertIn("date", log[0])
 
 
+class IdiomsRecordTest(RecordTestBase):
+    def test_record_uses_natural_key_and_logs(self):
+        from models.idioms import Idioms
+        self.assertEqual(models.RECORDERS["idioms"](
+            "break the ice", "почати розмову", "at a party",
+            "I wanted to broke the ice"), "inserted")
+        row = Idioms.select("break the ice")
+        self.assertEqual(row["counter"], "1")
+        self.assertEqual(row["meaning"], "почати розмову")
+        self.assertEqual(row["last example"], "I wanted to broke the ice")
+        log = self._log("idioms.log.jsonl")
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["idiom"], "break the ice")
+        self.assertEqual(log[0]["context"], "at a party")
+        self.assertEqual(log[0]["you_wrote"], "I wanted to broke the ice")
+
+    def test_same_idiom_increments(self):
+        models.RECORDERS["idioms"]("break the ice", "m", "c", "y1")
+        self.assertEqual(
+            models.RECORDERS["idioms"]("Break the ice", "m", "c", "y2"),
+            "incremented")  # natural key normalized
+
+
 if __name__ == "__main__":
     unittest.main()
