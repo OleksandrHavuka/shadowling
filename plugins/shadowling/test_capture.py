@@ -4,9 +4,9 @@ import os
 import shutil
 import tempfile
 import unittest
-from datetime import datetime
 
 import capture
+import jsonl
 
 
 def make_user_transcript(text):
@@ -14,7 +14,6 @@ def make_user_transcript(text):
 
 
 def make_multi_user_transcript(entries):
-    """entries: list of {'text': str, 'isMeta': bool?} written as user turns."""
     fd, path = tempfile.mkstemp(suffix=".jsonl")
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         for e in entries:
@@ -65,6 +64,11 @@ class IsEnglishTest(unittest.TestCase):
         self.assertFalse(capture.is_english("ok thx"))
 
 
+class BufferPathTest(CaptureTestBase):
+    def test_default_buffer_filename(self):
+        self.assertTrue(capture.buffer_path().endswith("/buffer.jsonl"))
+
+
 class CaptureTest(CaptureTestBase):
     def test_english_message_buffered(self):
         self.assertTrue(self._capture_text("Despite the delay we have finished it"))
@@ -87,7 +91,6 @@ class CaptureTest(CaptureTestBase):
         self.assertEqual(len(capture._read_buffer()), 1)
 
     def test_slash_command_body_is_meta_not_buffered(self):
-        # the expanded /en-review body lands as a user message with isMeta=True
         tpath = make_multi_user_transcript([
             {"text": "Turn the user's buffered English messages into curated docs",
              "isMeta": True},
@@ -100,8 +103,8 @@ class CaptureTest(CaptureTestBase):
 
     def test_command_marker_wrapper_not_buffered(self):
         tpath = make_multi_user_transcript([
-            {"text": "<command-message>shadowling:en-review</command-message>\n"
-                     "<command-name>en-review</command-name>"},
+            {"text": "<command-message>shadowling:debrief</command-message>\n"
+                     "<command-name>debrief</command-name>"},
         ])
         try:
             self.assertFalse(capture.capture(self._stdin(tpath)))
@@ -109,19 +112,7 @@ class CaptureTest(CaptureTestBase):
             os.remove(tpath)
         self.assertEqual(capture._read_buffer(), [])
 
-    def test_local_command_stdout_not_buffered(self):
-        tpath = make_multi_user_transcript([
-            {"text": "<local-command-stdout>Installed shadowling successfully now"
-                     "</local-command-stdout>"},
-        ])
-        try:
-            self.assertFalse(capture.capture(self._stdin(tpath)))
-        finally:
-            os.remove(tpath)
-
     def test_meta_message_skipped_falls_back_to_real_one(self):
-        # a real typed message followed by a meta slash-command body:
-        # capture the real message, ignore the meta one
         tpath = make_multi_user_transcript([
             {"text": "This is my real english sentence to capture please"},
             {"text": "Turn the user's buffered messages into docs and so on",
@@ -144,84 +135,56 @@ class CaptureTest(CaptureTestBase):
             json.dumps({"transcript_path": "/no/such.jsonl"})))
 
 
-class AddRowTest(CaptureTestBase):
-    def _read(self, doc):
-        with open(capture.doc_path(doc), encoding="utf-8") as f:
-            return f.read()
+class CorpusTest(CaptureTestBase):
+    def test_capture_appends_to_messages_log(self):
+        self._capture_text("I have went to the store and buyed milk today")
+        log = jsonl.read(capture.messages_log_path())
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["text"],
+                         "I have went to the store and buyed milk today")
+        self.assertIn("ts", log[0])
+        self.assertIn("date", log[0])
 
-    def test_creates_header_and_separator(self):
-        self.assertEqual(
-            capture.add_row("grammar", "I has", "I have", "subj-verb"), "added")
-        text = self._read("grammar")
-        lines = text.strip().splitlines()
-        self.assertEqual(lines[0], "| date | ❌ original | ✅ fixed | rule |")
-        self.assertEqual(lines[1], "| --- | --- | --- | --- |")
-        # date is auto-filled (today, ISO); assert the content columns landed
-        today = datetime.now().strftime("%Y-%m-%d")
-        self.assertIn("| {0} | I has | I have | subj-verb |".format(today), lines[2])
-
-    def test_duplicate_key_is_skipped(self):
-        capture.add_row("grammar", "I has", "I have", "rule")
-        # same key, different case/spacing -> dup
-        self.assertEqual(capture.add_row("grammar", "  I HAS ", "x", "y"), "dup")
-        rows = [l for l in self._read("grammar").splitlines()
-                if l.startswith("| ") and "date" not in l and "---" not in l]
-        self.assertEqual(len(rows), 1)
-
-    def test_pipe_in_content_is_escaped(self):
-        capture.add_row("rephrasings", "a|b", "c", "why")
-        self.assertIn("a\\|b", self._read("rephrasings"))
-        # and the key round-trips so a second identical add is a dup
-        self.assertEqual(capture.add_row("rephrasings", "a|b", "c", "why"), "dup")
-
-    def test_irregular_verbs_key_is_base(self):
-        capture.add_row("irregular_verbs", "go", "went", "gone", "fix")
-        self.assertEqual(
-            capture.add_row("irregular_verbs", "Go", "x", "y", "z"), "dup")
-
-    def test_date_column_is_auto_filled(self):
-        capture.add_row("grammar", "orig", "fixed", "rule")
-        today = datetime.now().strftime("%Y-%m-%d")
-        self.assertIn("| " + today + " |", self._read("grammar"))
-
-    def test_unknown_doc_returns_error(self):
-        self.assertEqual(capture.add_row("nonsense", "a", "b"), "error")
+    def test_duplicate_capture_not_logged_twice(self):
+        self._capture_text("This is a perfectly normal english sentence here")
+        self._capture_text("This is a perfectly normal english sentence here")
+        self.assertEqual(len(jsonl.read(capture.messages_log_path())), 1)
 
 
-class ReadKeysTest(CaptureTestBase):
-    def test_parses_existing_table_keys(self):
-        capture.add_row("idioms", "finishing work", "wrap up",
-                        "закінчити", "let's finish")
-        capture.add_row("idioms", "agreeing", "I'm in",
-                        "я за", "I agree")
-        self.assertEqual(capture.read_keys("idioms"), {"wrap up", "i'm in"})
+class MessagesTest(CaptureTestBase):
+    def test_empty_buffer_returns_empty_block(self):
+        self.assertEqual(capture.messages(), "<messages></messages>")
 
-    def test_missing_file_is_empty_set(self):
-        self.assertEqual(capture.read_keys("grammar"), set())
+    def test_messages_lists_buffered_entries(self):
+        self._capture_text("First normal english sentence here please now")
+        block = capture.messages()
+        self.assertIn("<messages>", block)
+        self.assertIn("First normal english sentence", block)
+        self.assertIn("<m ts=", block)
+
+    def test_messages_xml_escapes_text(self):
+        capture._append_buffer({"ts": "t", "text": "a < b & c > d here"})
+        block = capture.messages()
+        self.assertIn("a &lt; b &amp; c &gt; d here", block)
 
 
-class DumpAndCountTest(CaptureTestBase):
+class CountAndClearTest(CaptureTestBase):
     def test_pending_count(self):
         self.assertEqual(capture.pending_count(), 0)
         self._capture_text("First normal english sentence here please")
         self._capture_text("Second different english sentence over here")
         self.assertEqual(capture.pending_count(), 2)
 
-    def test_dump_contains_pending_and_existing(self):
-        self._capture_text("I have went there and seen the results already")
-        capture.add_row("grammar", "old mistake", "fixed", "rule")
-        text = capture.dump()
-        self.assertIn("<pending>", text)
-        self.assertIn("I have went there", text)
-        self.assertIn("<existing>", text)
-        self.assertIn("<grammar>", text)
-        self.assertIn("old mistake", text)
-
     def test_clear_empties_buffer(self):
         self._capture_text("A normal english sentence to be cleared soon")
         self.assertEqual(len(capture._read_buffer()), 1)
         self.assertEqual(capture.clear(), "cleared")
         self.assertEqual(capture._read_buffer(), [])
+
+    def test_clear_keeps_corpus(self):
+        self._capture_text("A normal english sentence to be cleared soon")
+        capture.clear()
+        self.assertEqual(len(jsonl.read(capture.messages_log_path())), 1)
 
 
 class MainTest(CaptureTestBase):
@@ -233,6 +196,9 @@ class MainTest(CaptureTestBase):
         finally:
             capture.sys.stdin = old
         self.assertEqual(ret, 0)
+
+    def test_messages_via_main(self):
+        self.assertEqual(capture.main(["messages"]), 0)
 
     def test_unknown_command_returns_one(self):
         self.assertEqual(capture.main(["bogus"]), 1)
