@@ -13,14 +13,17 @@ from .base import Model
 
 class Verbs(Model):
     file = "irregular_verbs.md"
-    columns = ["verb", "counter", "past", "past participle", "last example", "last_seen"]
+    columns = ["verb", "counter", "past", "past participle", "last example",
+               "created_at", "updated_at"]
     key = "verb"
     counter = "counter"
+    created = "created_at"
+    updated = "updated_at"
 
 
 def record(verb, past, participle, example_fix):
     result = Verbs.upsert({"verb": verb, "past": past, "past participle": participle,
-                           "last example": example_fix, "last_seen": today()})
+                           "last example": example_fix})
     jsonl_append(os.path.join(data_dir(), "irregular_verbs.log.jsonl"),
                  {"date": today(), "base": verb, "past": past,
                   "participle": participle, "example_fix": example_fix})
