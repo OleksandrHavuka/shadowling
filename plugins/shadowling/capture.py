@@ -8,11 +8,11 @@ tables (`add-row`), then `clear` the buffer. Nothing is printed into the chat.
 """
 import json
 import os
-import re
 import sys
 from datetime import datetime
 
 from core import data_dir, last_user_text, register_script_path
+from mddb import norm_key, _split_row, _is_separator, _escape_cell
 
 # Each doc: filename, column headers (order == add-row arg order), key column index
 # used for dedup. Docs are single growing markdown tables; date is a column.
@@ -57,11 +57,6 @@ def doc_path(doc):
 
 def docs_paths():
     return {d: doc_path(d) for d in DOCS}
-
-
-def norm_key(s):
-    """Normalized dedup key: collapse whitespace, trim, lowercase."""
-    return re.sub(r"\s+", " ", s).strip().lower()
 
 
 def is_english(text):
@@ -121,24 +116,6 @@ def capture(stdin_text):
 
 
 # --- markdown tables -------------------------------------------------------
-
-def _escape_cell(s):
-    return s.replace("|", "\\|").replace("\r", " ").replace("\n", " ").strip()
-
-
-def _split_row(line):
-    line = line.strip()
-    if line.startswith("|"):
-        line = line[1:]
-    if line.endswith("|"):
-        line = line[:-1]
-    parts = re.split(r"(?<!\\)\|", line)
-    return [p.strip() for p in parts]
-
-
-def _is_separator(cells):
-    return all(c and set(c) <= set("-: ") for c in cells)
-
 
 def read_keys(doc):
     """Set of normalized keys already present in a doc's table (empty if no file)."""
