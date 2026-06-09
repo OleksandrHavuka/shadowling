@@ -7,6 +7,7 @@ Home-directory resolution, config loading, transcript reading, and the
 """
 import json
 import os
+from datetime import datetime
 
 DEFAULT_CONFIG = {"native_language": "Ukrainian", "learning_language": "English"}
 
@@ -112,3 +113,8 @@ def register_script_path():
             f.write(os.path.abspath(__file__))
     except OSError:
         pass
+
+
+def today():
+    """Today's date as YYYY-MM-DD — the single write-time date source."""
+    return datetime.now().strftime("%Y-%m-%d")
