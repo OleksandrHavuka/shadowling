@@ -13,7 +13,7 @@ from .base import Model
 
 class Idioms(Model):
     file = "idioms.md"
-    columns = ["idiom", "counter", "meaning", "last example", "created_at", "updated_at"]
+    columns = ["idiom", "meaning", "last example", "created_at", "updated_at", "counter"]
     key = "idiom"
     counter = "counter"
     created = "created_at"

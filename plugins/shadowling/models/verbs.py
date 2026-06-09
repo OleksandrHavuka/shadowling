@@ -13,8 +13,8 @@ from .base import Model
 
 class Verbs(Model):
     file = "irregular_verbs.md"
-    columns = ["verb", "counter", "past", "past participle", "last example",
-               "created_at", "updated_at"]
+    columns = ["verb", "past", "past participle", "last example",
+               "created_at", "updated_at", "counter"]
     key = "verb"
     counter = "counter"
     created = "created_at"
