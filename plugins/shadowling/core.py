@@ -7,9 +7,11 @@ Home-directory resolution, config loading, transcript reading, and the
 """
 import json
 import os
+import re
 from datetime import datetime
 
-DEFAULT_CONFIG = {"native_language": "Ukrainian", "learning_language": "English"}
+DEFAULT_CONFIG = {"native_language": "Ukrainian", "learning_language": "English",
+                  "explanation_language": "English"}
 
 
 def data_dir():
@@ -118,3 +120,18 @@ def register_script_path():
 def today():
     """Today's date as YYYY-MM-DD — the single write-time date source."""
     return datetime.now().strftime("%Y-%m-%d")
+
+
+def slugify(s):
+    """Canonical kebab-case slug key, robust to whatever the LLM emits.
+
+    Lowercases, turns any run of whitespace/underscores into a single hyphen, drops
+    every remaining char outside [a-z0-9-], collapses repeated hyphens, and trims
+    leading/trailing hyphens. Guarantees the result matches `^[a-z0-9]+(-[a-z0-9]+)*$`
+    (or is empty). So "Word Choice_Plural", "word-choice-plural", and "  word  choice
+    plural " all canonicalize to the same key, keeping the frequency counter honest.
+    """
+    s = re.sub(r"[\s_]+", "-", s.strip().lower())
+    s = re.sub(r"[^a-z0-9-]+", "", s)
+    s = re.sub(r"-+", "-", s)
+    return s.strip("-")

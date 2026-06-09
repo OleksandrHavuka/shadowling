@@ -16,8 +16,9 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK verbs: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang` for the native language
-   (default `Ukrainian` if it prints nothing).
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
+   language to write any explanation in (it always prints one; default `English`).
+   The verb forms and `example fix` stay in English regardless.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" verbs select`. Collect the
    existing `verb` values — your dedup context.
 4. Read every `<m>` message and find misused or otherwise noteworthy IRREGULAR

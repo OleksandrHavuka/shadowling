@@ -73,6 +73,34 @@ class SetLangTest(ConfigCliTestBase):
         self.assertEqual(code, 1)
 
 
+class ExplanationLangTest(ConfigCliTestBase):
+    def test_defaults_to_english_when_unset(self):
+        code, out = run_main(["explanation-lang"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "English")
+
+    def test_prints_configured_value(self):
+        self._write_config({"explanation_language": "Ukrainian"})
+        code, out = run_main(["explanation-lang"])
+        self.assertEqual(out.strip(), "Ukrainian")
+
+    def test_set_persists_and_load_reads_it(self):
+        code, _ = run_main(["set-explanation-lang", "German"])
+        self.assertEqual(code, 0)
+        self.assertEqual(core.load_config()["explanation_language"], "German")
+
+    def test_set_preserves_native_language(self):
+        self._write_config({"native_language": "Spanish"})
+        run_main(["set-explanation-lang", "German"])
+        loaded = core.load_config()
+        self.assertEqual(loaded["native_language"], "Spanish")
+        self.assertEqual(loaded["explanation_language"], "German")
+
+    def test_set_empty_is_error(self):
+        code, _ = run_main(["set-explanation-lang", "  "])
+        self.assertEqual(code, 1)
+
+
 class UnknownCommandTest(ConfigCliTestBase):
     def test_no_args_is_error(self):
         code, _ = run_main([])

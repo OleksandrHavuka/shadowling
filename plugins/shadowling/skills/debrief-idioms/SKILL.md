@@ -15,8 +15,9 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK idioms: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang` for the native language
-   (default `Ukrainian` if it prints nothing) — the `meaning` is glossed in it.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
+   language to WRITE EXPLANATIONS IN (it always prints one; default `English`).
+   The `meaning` is written in THAT language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms select`. Collect the
    existing `idiom` values — your dedup context.
 4. Read every `<m>` message and find idioms / fixed expressions worth learning —
@@ -25,7 +26,7 @@ Steps:
    (lowercase, no surrounding punctuation, e.g. `break the ice`); reuse an existing
    key when it's the same idiom. Record each with ONE call:
    `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms record "<idiom>" "<meaning>" "<context>" "<you wrote>"`
-   where `meaning` is the meaning in the native language, `context` the situation,
+   where `meaning` is the meaning in the explanation language, `context` the situation,
    `you wrote` the user's actual wording. Don't invent idioms. Backslash-escape
    `\`, `"`, `` ` `` or `$` inside the quoted args.
 5. Print exactly one line and nothing else:

@@ -16,22 +16,31 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK rephrasing: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang` for the native language
-   (default `Ukrainian` if it prints nothing) — used for the `why` gloss if helpful.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
+   language to WRITE EXPLANATIONS IN (it always prints one; default `English`).
+   Write `problem` and `why` in THAT language only — no other-language glosses.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing select`. Collect the
    existing `slug` values — your dedup context.
 4. Read every `<m>` message and find phrasing that is grammatical but UNNATURAL
    (awkward collocations, calques, wrong register, wordiness). For each, derive a
    slug:
-   - Template (HARD): `<area>-<phenomenon>[-<refinement>]`, kebab-case, English.
+   - Slug format (HARD): the slug is ONE kebab-case token matching
+     `^[a-z0-9]+(-[a-z0-9]+)*$` — all lowercase ASCII, words joined by single
+     hyphens, NO spaces and NO underscores anywhere. Shape it as
+     `<area>-<phenomenon>[-<refinement>]` (the area is one token from the list
+     below, joined to the rest with a hyphen, never a space).
+     Good: `word-choice-demonstrative-plural`, `collocation-make-vs-take-photo`,
+     `register-too-formal-email`.
+     Bad: `word-choice demonstrative-plural` (space), `Word_Choice`
+     (caps + underscore), `calque--literal-translation` (double hyphen).
    - Match first: reuse an existing slug for the same class; mint only if none
      fits. Prefer these areas (mint a new one only if none truly fits):
      `collocation word-choice register wordiness phrasing calque idiomaticity`.
    Then record it with ONE call:
    `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing record "<slug>" "<problem>" "<yours>" "<natural>" "<why>"`
    where `problem` is a short description of the class, `yours` the user's wording,
-   `natural` the natural rephrasing, `why` a short reason (add a native-language
-   gloss if helpful). Don't invent issues. Backslash-escape `\`, `"`, `` ` `` or
+   `natural` the natural rephrasing, `why` a short reason written in the explanation
+   language. Don't invent issues. Backslash-escape `\`, `"`, `` ` `` or
    `$` inside the quoted args.
 5. Print exactly one line and nothing else:
    `OK rephrasing: <N> incremented, <M> inserted` (or `OK rephrasing: nothing found`).
