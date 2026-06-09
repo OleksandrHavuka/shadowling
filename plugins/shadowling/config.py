@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """config.py - plugin-wide language/config CLI for shadowling (stdlib only).
 
-Language is a cross-cutting concern (used by vocab glossing, en-review, and future
+Language is a cross-cutting concern (used by vocab glossing, debrief, and future
 features), so it lives here at the plugin level rather than inside vocab.py.
 Thin CLI over core.load_config / core.save_config.
 """
