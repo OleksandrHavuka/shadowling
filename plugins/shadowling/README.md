@@ -64,7 +64,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
   context before each reply.
 - `Stop` → scans the reply you just received (counts exposures, graduates learned
   words) **and** quietly buffers your English messages for later review (see
-  [English corrections](#english-corrections-en-review)).
+  [English corrections](#english-corrections-debrief)).
 
 ---
 
@@ -75,7 +75,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/shadowling:setup` | Set your native language (run once). |
 | `/vocab <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/vocab-remove <word>[, ...]` | Stop tracking and delete word(s). |
-| `/en-review` | Analyze your buffered English messages into personal correction docs. |
+| `/debrief` | Review your buffered English messages into per-category frequency docs (grammar / rephrasings / idioms / verbs). |
 
 Run **`/shadowling:setup`** once to set your native language; the answer is saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
@@ -140,7 +140,7 @@ punctuation (e.g. `C++`) are matched too.
 
 ---
 
-## English corrections (`/en-review`)
+## English corrections (`/debrief`)
 
 Beyond single words, shadowling can quietly build a **personal dataset of how you
 (a non-native) phrase things vs. how natives say it** — so you can study it later.
@@ -148,29 +148,33 @@ Beyond single words, shadowling can quietly build a **personal dataset of how yo
 It's a two-phase, **silent** model:
 
 1. **Collect (passive).** When you write prompts in English, the `Stop` hook
-   extracts your message and appends it to a raw buffer
-   (`~/.shadowling/en_buffer.jsonl`). No analysis, nothing printed in the chat.
-   Ukrainian/other-language and slash-command messages are skipped.
-2. **Review (on demand).** Run `/en-review`. The analysis happens in a **subagent**
+   extracts your message and dual-writes it: to the transient buffer
+   (`~/.shadowling/buffer.jsonl`, the current unprocessed batch) **and** to the
+   permanent raw corpus (`~/.shadowling/messages.log.jsonl`). No analysis, nothing
+   printed in the chat. Ukrainian/other-language and slash-command messages are
+   skipped.
+2. **Review (on demand).** Run `/debrief`. It orchestrates four per-category
+   **specialist subagents** — grammar, rephrasing, idioms, irregular verbs — each
    with its own context window, so the buffer, the existing entries, and the
-   reasoning never pollute your current conversation — only a short summary comes
-   back. It reads the buffer, and appends findings to four growing markdown tables:
+   reasoning never pollute your current conversation; only a short summary comes
+   back. Each specialist reads the buffer and writes two things per category:
 
-   | Doc | Captures |
-   |---|---|
-   | `grammar.md` | grammar fixes (also articles, prepositions, false friends) |
-   | `rephrasings.md` | non-native phrasing → natural native phrasing / collocations |
-   | `idioms.md` | idioms that would have fit the context |
-   | `irregular_verbs.md` | irregular verbs you stumbled on, with the full triad |
+   | Category | Frequency product (markdown) | Findings log (append-only JSONL) |
+   |---|---|---|
+   | grammar | `grammar.md` | `grammar.log.jsonl` |
+   | rephrasing | `rephrasings.md` | `rephrasings.log.jsonl` |
+   | idioms | `idioms.md` | `idioms.log.jsonl` |
+   | irregular verbs | `irregular_verbs.md` | `irregular_verbs.log.jsonl` |
 
-   Then the buffer is cleared.
+   If all four succeed, the buffer is cleared (the raw corpus is kept).
 
-Each doc is a single markdown table with a stable key column, so duplicates are
-skipped two ways: the subagent avoids near-duplicates it sees in the existing
-entries, and the script refuses an exact key match as a safety net.
+Each product is a markdown table keyed on a stable column with a `counter`: a
+recurring mistake bumps its counter instead of adding a row, so the table doubles
+as a frequency ranking of your weak spots. The matching `*.log.jsonl` keeps every
+verbatim instance, append-only, for deeper study.
 
-Everything stays local — the buffer and docs live in `~/.shadowling/`, no network
-calls.
+Everything stays local — the buffer, corpus, and docs live in `~/.shadowling/`, no
+network calls.
 
 ---
 
@@ -180,8 +184,10 @@ calls.
 |---|---|
 | `~/.shadowling/words.csv` | your vocabulary (`word,translation,remaining,status`) |
 | `~/.shadowling/config.json` | language settings |
-| `~/.shadowling/en_buffer.jsonl` | buffered English messages awaiting `/en-review` |
-| `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.md` | correction docs from `/en-review` |
+| `~/.shadowling/buffer.jsonl` | current batch of buffered English messages awaiting `/debrief` |
+| `~/.shadowling/messages.log.jsonl` | permanent raw corpus of every captured English message |
+| `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.md` | per-category frequency products from `/debrief` |
+| `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.log.jsonl` | append-only findings datasets from `/debrief` |
 | `~/.shadowling/.script_path` | script location recorded by the hooks (internal) |
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
@@ -217,12 +223,14 @@ A few design notes so nothing surprises you:
 
 ```
 cd plugins/shadowling
-python3 -m unittest test_vocab test_capture -v   # 63 tests, stdlib only
-claude plugin validate . --strict                # validate the manifest
+python3 -m unittest discover -p 'test_*.py' -v    # full suite, stdlib only
+claude plugin validate . --strict                 # validate the manifest
 ```
 
-The tool is three dependency-free files (`core.py` shared infra, `vocab.py`
-glossing, `capture.py` English-correction collection) plus tests.
+The tool is dependency-free stdlib Python: `core.py` (shared infra), `vocab.py`
+(glossing), `capture.py` (English-message capture), `jsonl.py` (append-only log
+helper), and the markdown data layer (`mddb.py`, `db.py` CLI, `models/`) plus
+tests.
 
 ---
 

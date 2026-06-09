@@ -4,7 +4,7 @@ description: "Set up shadowling's language — the native language words and cor
 allowed-tools: Bash(python3 */config.py*)
 ---
 
-Configure the plugin-wide language (used by vocab glossing, en-review, and other
+Configure the plugin-wide language (used by vocab glossing, debrief, and other
 features).
 
 The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so

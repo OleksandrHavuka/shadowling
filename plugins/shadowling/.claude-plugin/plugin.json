@@ -1,6 +1,6 @@
 {
   "name": "shadowling",
-  "description": "Passive language learning: add words with /vocab (remove with /vocab-remove) and Claude glosses them inline in its replies, while /en-review turns your English messages into personal grammar/phrasing/idiom/irregular-verb correction docs",
+  "description": "Passive language learning: add words with /vocab (remove with /vocab-remove) and Claude glosses them inline in its replies, while /debrief turns your English messages into personal grammar/phrasing/idiom/irregular-verb frequency docs",
   "version": "0.3.0",
   "author": {
     "name": "Oleksandr Havuka",
