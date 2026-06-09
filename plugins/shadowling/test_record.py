@@ -88,5 +88,22 @@ class IdiomsRecordTest(RecordTestBase):
             "incremented")  # natural key normalized
 
 
+class VerbsRecordTest(RecordTestBase):
+    def test_record_uses_verb_key_and_logs(self):
+        from models.verbs import Verbs
+        self.assertEqual(models.RECORDERS["verbs"](
+            "go", "went", "gone", "I have went → I have gone"), "inserted")
+        row = Verbs.select("go")
+        self.assertEqual(row["counter"], "1")
+        self.assertEqual(row["past"], "went")
+        self.assertEqual(row["past participle"], "gone")
+        self.assertEqual(row["last example"], "I have went → I have gone")
+        log = self._log("irregular_verbs.log.jsonl")
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["base"], "go")
+        self.assertEqual(log[0]["participle"], "gone")
+        self.assertEqual(log[0]["example_fix"], "I have went → I have gone")
+
+
 if __name__ == "__main__":
     unittest.main()
