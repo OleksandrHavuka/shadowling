@@ -48,3 +48,9 @@ Steps:
    `OK grammar: <N> incremented, <M> inserted` — counting the `incremented` /
    `inserted` results from step 4 (or `OK grammar: nothing found` if there were no
    findings).
+6. If ANY command fails (non-zero exit, missing/garbled output) or you cannot finish
+   a step, print exactly ONE line instead of the OK line:
+   `ERROR grammar: <short reason>` — name the step/command that failed and include
+   the key error text (e.g. `ERROR grammar: db.py record failed — <stderr>`). Never
+   print a partial or blank status; the orchestrator keys off the `OK `/`ERROR `
+   prefix and keeps the buffer for a retry on `ERROR `.

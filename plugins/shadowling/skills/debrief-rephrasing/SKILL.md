@@ -44,3 +44,9 @@ Steps:
    `$` inside the quoted args.
 5. Print exactly one line and nothing else:
    `OK rephrasing: <N> incremented, <M> inserted` (or `OK rephrasing: nothing found`).
+6. If ANY command fails (non-zero exit, missing/garbled output) or you cannot finish
+   a step, print exactly ONE line instead of the OK line:
+   `ERROR rephrasing: <short reason>` — name the step/command that failed and include
+   the key error text (e.g. `ERROR rephrasing: db.py record failed — <stderr>`).
+   Never print a partial or blank status; the orchestrator keys off the
+   `OK `/`ERROR ` prefix and keeps the buffer for a retry on `ERROR `.
