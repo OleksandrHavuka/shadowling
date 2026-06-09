@@ -5,7 +5,7 @@ CLI/registry name is `rephrasing`; the files are `rephrasings.md` /
 """
 import os
 
-from core import data_dir, today
+from core import data_dir, slugify, today
 from jsonl import append as jsonl_append
 
 from . import register
@@ -20,6 +20,7 @@ class Rephrasing(Model):
 
 
 def record(slug, problem, yours, natural, why):
+    slug = slugify(slug)
     result = Rephrasing.upsert({"slug": slug, "problem": problem,
                                 "last example": "{0} → {1}".format(yours, natural),
                                 "last_seen": today()})

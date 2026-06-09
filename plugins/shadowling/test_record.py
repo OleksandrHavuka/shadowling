@@ -47,6 +47,24 @@ class GrammarRecordTest(RecordTestBase):
         self.assertEqual(Grammar.select("s1")["counter"], "2")
         self.assertEqual(len(self._log("grammar.log.jsonl")), 2)
 
+    def test_slug_normalized_dedups_across_formatting(self):
+        from models.grammar import Grammar
+        # Same class, three different LLM formattings → one canonical row.
+        self.assertEqual(
+            models.RECORDERS["grammar"]("Word Choice Plural", "p", "a", "b", "r"),
+            "inserted")
+        self.assertEqual(
+            models.RECORDERS["grammar"]("word-choice-plural", "p", "c", "d", "r"),
+            "incremented")
+        self.assertEqual(
+            models.RECORDERS["grammar"]("  word_choice  plural ", "p", "e", "f", "r"),
+            "incremented")
+        self.assertEqual(Grammar.select("word-choice-plural")["counter"], "3")
+        # The log slug is canonicalized too, so it joins to the product key.
+        self.assertTrue(
+            all(r["slug"] == "word-choice-plural"
+                for r in self._log("grammar.log.jsonl")))
+
 
 class RephrasingRecordTest(RecordTestBase):
     def test_record_inserts_product_and_log(self):

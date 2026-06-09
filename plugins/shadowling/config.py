@@ -7,13 +7,14 @@ Thin CLI over core.load_config / core.save_config.
 """
 import sys
 
-from core import raw_config, register_script_path, save_config
+from core import load_config, raw_config, register_script_path, save_config
 
 
 def main(argv):
     register_script_path()
     if not argv:
-        print("usage: config.py {lang|set-lang} ...", file=sys.stderr)
+        print("usage: config.py {lang|set-lang|explanation-lang|set-explanation-lang} ...",
+              file=sys.stderr)
         return 1
     cmd = argv[0]
     if cmd == "lang":
@@ -30,6 +31,17 @@ def main(argv):
             return 1
         cfg = save_config({"native_language": argv[1]})
         print("native_language = {0}".format(cfg["native_language"]))
+        return 0
+    if cmd == "explanation-lang":
+        # The language debrief writes its explanations in (defaults to English).
+        print(load_config()["explanation_language"])
+        return 0
+    if cmd == "set-explanation-lang":
+        if len(argv) < 2 or not argv[1].strip():
+            print('usage: config.py set-explanation-lang "<language>"', file=sys.stderr)
+            return 1
+        cfg = save_config({"explanation_language": argv[1]})
+        print("explanation_language = {0}".format(cfg["explanation_language"]))
         return 0
     print("unknown command: {0}".format(cmd), file=sys.stderr)
     return 1

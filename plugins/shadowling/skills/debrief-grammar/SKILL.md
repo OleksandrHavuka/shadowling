@@ -16,14 +16,23 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK grammar: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" lang` for the native language
-   (default `Ukrainian` if it prints nothing) — used only if a gloss helps.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
+   language to WRITE EXPLANATIONS IN (it always prints one; default `English`).
+   Write `problem` and `rule` in THAT language only — no other-language glosses.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar select`. Collect the
    existing `slug` values — this is your dedup context.
 4. Read every `<m>` message and find GRAMMAR errors only (articles, prepositions,
    agreement, tense, word order, etc. — not naturalness / idioms / verb forms
    unless they are a grammar error). For each real error, derive a slug:
-   - Template (HARD): `<area>-<phenomenon>[-<refinement>]`, kebab-case, English.
+   - Slug format (HARD): the slug is ONE kebab-case token matching
+     `^[a-z0-9]+(-[a-z0-9]+)*$` — all lowercase ASCII, words joined by single
+     hyphens, NO spaces and NO underscores anywhere. Shape it as
+     `<area>-<phenomenon>[-<refinement>]` (the area is one token from the list
+     below, joined to the rest with a hyphen, never a space).
+     Good: `article-omission-before-countable`, `preposition-wrong-after-verb`,
+     `subject-verb-agreement-plural`.
+     Bad: `article omission before countable` (spaces), `Article_Omission`
+     (caps + underscore), `-tense-shift-` (leading/trailing hyphen).
    - Match first: if the error is the same CLASS as an existing slug, REUSE it
      verbatim; mint a new slug only if none fits. Prefer these areas (mint a new
      one only if none truly fits): `article preposition agreement tense modal

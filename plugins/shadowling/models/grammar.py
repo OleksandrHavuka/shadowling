@@ -5,7 +5,7 @@ instance to the per-instance findings dataset (grammar.log.jsonl, Tier 1).
 """
 import os
 
-from core import data_dir, today
+from core import data_dir, slugify, today
 from jsonl import append as jsonl_append
 
 from . import register
@@ -20,6 +20,7 @@ class Grammar(Model):
 
 
 def record(slug, problem, original, fixed, rule):
+    slug = slugify(slug)
     result = Grammar.upsert({"slug": slug, "problem": problem,
                              "last example": "{0} → {1}".format(original, fixed),
                              "last_seen": today()})
