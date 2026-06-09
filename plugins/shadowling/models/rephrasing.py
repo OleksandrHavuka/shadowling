@@ -14,8 +14,8 @@ from .base import Model
 
 class Rephrasing(Model):
     file = "rephrasings.md"
-    columns = ["slug", "counter", "problem",
-               "your phrasing", "natural phrasing", "created_at", "updated_at"]
+    columns = ["slug", "problem", "your phrasing", "natural phrasing",
+               "created_at", "updated_at", "counter"]
     key = "slug"
     counter = "counter"
     created = "created_at"

@@ -14,7 +14,7 @@ from .base import Model
 
 class Grammar(Model):
     file = "grammar.md"
-    columns = ["slug", "counter", "problem", "last example", "created_at", "updated_at"]
+    columns = ["slug", "problem", "last example", "created_at", "updated_at", "counter"]
     key = "slug"
     counter = "counter"
     created = "created_at"
