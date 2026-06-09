@@ -81,7 +81,7 @@ Real data lives in `~/.shadowling/`:
 | `words.csv`       | vocab list (word, translation, remaining, status) |
 | `en_buffer.jsonl` | buffered English messages awaiting `/en-review` |
 | `grammar.md` etc. | generated correction docs                    |
-| `.script_path`    | abs path to a script, so command bodies locate the plugin |
+| `.script_path`    | abs path to a script, written by hooks (legacy; skills now locate scripts via `${CLAUDE_SKILL_DIR}`) |
 
 Env overrides (used by tests and smoke runs):
 
