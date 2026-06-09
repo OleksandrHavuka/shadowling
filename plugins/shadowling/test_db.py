@@ -58,5 +58,38 @@ class DbTest(unittest.TestCase):
         self.assertEqual(code, 1)
 
 
+class RecordTest(unittest.TestCase):
+    def setUp(self):
+        self.calls = []
+        models.RECORDERS["faux"] = lambda *a: self.calls.append(a) or "inserted"
+
+    def tearDown(self):
+        models.RECORDERS.pop("faux", None)
+
+    def _run(self, argv):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            code = db.main(argv)
+        return code, buf.getvalue()
+
+    def test_record_dispatches_positional_args(self):
+        code, out = self._run(["faux", "record", "a", "b", "c"])
+        self.assertEqual(code, 0)
+        self.assertIn("inserted", out)
+        self.assertEqual(self.calls, [("a", "b", "c")])
+
+    def test_unknown_recorder_exits_nonzero(self):
+        code, _ = self._run(["nope", "record", "x"])
+        self.assertEqual(code, 1)
+
+    def test_record_arity_error_exits_nonzero(self):
+        models.RECORDERS["strict"] = lambda x, y: "inserted"
+        try:
+            code, _ = self._run(["strict", "record", "only-one-arg"])
+        finally:
+            models.RECORDERS.pop("strict", None)
+        self.assertEqual(code, 1)
+
+
 if __name__ == "__main__":
     unittest.main()

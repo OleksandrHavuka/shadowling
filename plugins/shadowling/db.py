@@ -27,6 +27,17 @@ def main(argv):
         return 1
     name, op = argv[0], argv[1]
     args = argv[2:]
+    if op == "record":
+        recorder = models.RECORDERS.get(name)
+        if recorder is None:
+            print("unknown recorder: " + name, file=sys.stderr)
+            return 1
+        try:
+            print(recorder(*args))
+        except (UniqueViolation, NotFound, ValueError, TypeError) as e:
+            print("error: " + str(e), file=sys.stderr)
+            return 1
+        return 0
     model = models.REGISTRY.get(name)
     if model is None:
         print("unknown repo: " + name, file=sys.stderr)
