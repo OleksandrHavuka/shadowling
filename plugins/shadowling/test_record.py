@@ -76,6 +76,8 @@ class RephrasingRecordTest(RecordTestBase):
         row = Rephrasing.select("collocation-make-vs-take-photo")
         self.assertEqual(row["counter"], "1")
         self.assertEqual(row["last example"], "make a photo → take a photo")
+        self.assertEqual(row["your phrasing"], "make a photo")
+        self.assertEqual(row["natural phrasing"], "take a photo")
         log = self._log("rephrasings.log.jsonl")
         self.assertEqual(len(log), 1)
         self.assertEqual(log[0]["yours"], "make a photo")
