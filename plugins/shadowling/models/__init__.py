@@ -16,3 +16,4 @@ def register(name, model, recorder=None):
 from . import grammar  # noqa: E402,F401  (populates REGISTRY / RECORDERS on import)
 from . import rephrasing  # noqa: E402,F401
 from . import idioms  # noqa: E402,F401
+from . import verbs  # noqa: E402,F401
