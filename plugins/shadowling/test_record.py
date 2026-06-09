@@ -48,5 +48,22 @@ class GrammarRecordTest(RecordTestBase):
         self.assertEqual(len(self._log("grammar.log.jsonl")), 2)
 
 
+class RephrasingRecordTest(RecordTestBase):
+    def test_record_inserts_product_and_log(self):
+        from models.rephrasing import Rephrasing
+        self.assertEqual(models.RECORDERS["rephrasing"](
+            "collocation-make-vs-take-photo", "wrong verb with photo",
+            "make a photo", "take a photo", "English uses 'take' with photo"),
+            "inserted")
+        row = Rephrasing.select("collocation-make-vs-take-photo")
+        self.assertEqual(row["counter"], "1")
+        self.assertEqual(row["last example"], "make a photo → take a photo")
+        log = self._log("rephrasings.log.jsonl")
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["yours"], "make a photo")
+        self.assertEqual(log[0]["natural"], "take a photo")
+        self.assertIn("date", log[0])
+
+
 if __name__ == "__main__":
     unittest.main()
