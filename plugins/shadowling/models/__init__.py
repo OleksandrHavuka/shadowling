@@ -11,3 +11,6 @@ def register(name, model, recorder=None):
     REGISTRY[name] = model
     if recorder is not None:
         RECORDERS[name] = recorder
+
+
+from . import grammar  # noqa: E402,F401  (populates REGISTRY / RECORDERS on import)
