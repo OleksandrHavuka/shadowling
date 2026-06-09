@@ -1,2 +1,13 @@
-"""models package - repository registry. Concrete models register into REGISTRY."""
+"""models package - product registry (REGISTRY) + record recorders (RECORDERS).
+
+Concrete category modules register their product Model and `record` fan-out here
+on import, so the db.py CLI can drive them by name.
+"""
 REGISTRY = {}
+RECORDERS = {}
+
+
+def register(name, model, recorder=None):
+    REGISTRY[name] = model
+    if recorder is not None:
+        RECORDERS[name] = recorder
