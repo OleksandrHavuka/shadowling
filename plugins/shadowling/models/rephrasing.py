@@ -14,7 +14,8 @@ from .base import Model
 
 class Rephrasing(Model):
     file = "rephrasings.md"
-    columns = ["slug", "counter", "problem", "last example", "last_seen"]
+    columns = ["slug", "counter", "problem", "last example",
+               "your phrasing", "natural phrasing", "last_seen"]
     key = "slug"
     counter = "counter"
 
@@ -23,6 +24,7 @@ def record(slug, problem, yours, natural, why):
     slug = slugify(slug)
     result = Rephrasing.upsert({"slug": slug, "problem": problem,
                                 "last example": "{0} → {1}".format(yours, natural),
+                                "your phrasing": yours, "natural phrasing": natural,
                                 "last_seen": today()})
     jsonl_append(os.path.join(data_dir(), "rephrasings.log.jsonl"),
                  {"date": today(), "slug": slug,
