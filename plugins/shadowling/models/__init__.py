@@ -17,3 +17,4 @@ from . import grammar  # noqa: E402,F401  (populates REGISTRY / RECORDERS on imp
 from . import rephrasing  # noqa: E402,F401
 from . import idioms  # noqa: E402,F401
 from . import verbs  # noqa: E402,F401
+from . import decode  # noqa: E402,F401
