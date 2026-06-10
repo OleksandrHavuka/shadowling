@@ -76,6 +76,8 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/vocab <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/vocab-remove <word>[, ...]` | Stop tracking and delete word(s). |
 | `/debrief` | Review your buffered English messages into per-category frequency docs (grammar / rephrasings / idioms / verbs). |
+| `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to `decode.md`. |
+| `/vipe` | Dev: wipe the `/debrief` product/log docs for a clean test run (keeps config, words, buffer, raw corpus). |
 
 Run **`/shadowling:setup`** once to set your native language; the answer is saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
@@ -90,12 +92,17 @@ Config lives at `~/.shadowling/config.json`:
 ```json
 {
   "native_language": "Ukrainian",
-  "learning_language": "English"
+  "learning_language": "English",
+  "explanation_language": "English"
 }
 ```
 
 - `native_language` — the language words are translated **into** (the gloss). This
-  is the one that matters; change it to learn with a different native language.
+  is the one that matters; change it to learn with a different native language. Set
+  it with `/shadowling:setup`.
+- `explanation_language` — the language `/debrief` and `/aha` write their
+  **explanations** in (meanings, takeaways, corrections). Defaults to English; set
+  it with `config.py set-explanation-lang "<language>"`.
 - `learning_language` — cosmetic framing in the instruction ("learning English
   vocabulary"). Matching is literal, so this doesn't affect behavior.
 
@@ -154,10 +161,11 @@ It's a two-phase, **silent** model:
    printed in the chat. Ukrainian/other-language and slash-command messages are
    skipped.
 2. **Review (on demand).** Run `/debrief`. It orchestrates four per-category
-   **specialist subagents** — grammar, rephrasing, idioms, irregular verbs — each
-   with its own context window, so the buffer, the existing entries, and the
-   reasoning never pollute your current conversation; only a short summary comes
-   back. Each specialist reads the buffer and writes two things per category:
+   **specialist subagents** — grammar, rephrasing, idioms, irregular verbs — in
+   parallel, each with its own context window, so the buffer, the existing entries,
+   and the reasoning never pollute your current conversation; only a short summary
+   comes back. Each specialist reads the buffer and writes two things per category
+   (its explanations written in your `explanation_language`, English by default):
 
    | Category | Frequency product (markdown) | Findings log (append-only JSONL) |
    |---|---|---|
@@ -178,6 +186,31 @@ network calls.
 
 ---
 
+## Comprehension help (`/aha`)
+
+The flip side of `/debrief`: instead of fixing English you *wrote*, `/aha` explains
+English you *read* but couldn't decode literally — idioms, set phrases, and grammar
+patterns whose meaning isn't the sum of the words.
+
+Run `/aha <phrase>`, optionally with your own hunch at what it means
+(e.g. `/aha "it cost an arm and a leg" — I thought it's about an arm and a leg`).
+Claude — seeing the conversation for context — gives a verdict and teaches it inline:
+
+- **`fixed`** — a set expression you just have to memorize (the meaning isn't
+  derivable). The key is the phrase itself.
+- **`method`** — derivable from a grammar pattern you're missing; the key is the
+  **rule** (e.g. `present-perfect-passive`), so one rule aggregates across the
+  different phrases that trip you on it.
+
+Comparing against your hunch, it points out exactly where your literal read went
+wrong. Each call writes the deduped product `decode.md` (your "what trips me most"
+ranking) and appends the verbatim submission — your hunch and where it appeared — to
+`decode.log.jsonl`; explanations follow your `explanation_language` (English by
+default). Literal phrases and bare unknown words aren't recorded — for a single
+unknown word it points you at `/vocab` instead.
+
+---
+
 ## Data & files
 
 | Path | What |
@@ -188,6 +221,8 @@ network calls.
 | `~/.shadowling/messages.log.jsonl` | permanent raw corpus of every captured English message |
 | `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.md` | per-category frequency products from `/debrief` |
 | `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.log.jsonl` | append-only findings datasets from `/debrief` |
+| `~/.shadowling/decode.md` | comprehension product from `/aha` — deduped ranking of expressions you couldn't read literally |
+| `~/.shadowling/decode.log.jsonl` | append-only log of every `/aha` submission (your hunch + context) |
 | `~/.shadowling/.script_path` | script location recorded by the hooks (internal) |
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
@@ -227,10 +262,10 @@ python3 -m unittest discover -p 'test_*.py' -v    # full suite, stdlib only
 claude plugin validate . --strict                 # validate the manifest
 ```
 
-The tool is dependency-free stdlib Python: `core.py` (shared infra), `vocab.py`
-(glossing), `capture.py` (English-message capture), `jsonl.py` (append-only log
-helper), and the markdown data layer (`mddb.py`, `db.py` CLI, `models/`) plus
-tests.
+The tool is dependency-free stdlib Python: `core.py` (shared infra), `config.py`
+(plugin-wide language config), `vocab.py` (glossing), `capture.py` (English-message
+capture), `jsonl.py` (append-only log helper), and the markdown data layer
+(`mddb.py`, `db.py` CLI, `models/`) plus tests.
 
 ---
 
