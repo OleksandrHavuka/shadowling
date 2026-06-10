@@ -15,12 +15,10 @@ import json
 import sys
 
 import models
-from core import register_script_path
 from mddb import NotFound, UniqueViolation
 
 
 def main(argv):
-    register_script_path()
     if len(argv) < 2:
         print("usage: db.py <repo> {select|insert|update|upsert|delete|drop} [args]",
               file=sys.stderr)

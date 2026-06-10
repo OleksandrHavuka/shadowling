@@ -7,11 +7,10 @@ Thin CLI over core.load_config / core.save_config.
 """
 import sys
 
-from core import load_config, raw_config, register_script_path, save_config
+from core import load_config, raw_config, save_config
 
 
 def main(argv):
-    register_script_path()
     if not argv:
         print("usage: config.py {lang|set-lang|explanation-lang|set-explanation-lang} ...",
               file=sys.stderr)

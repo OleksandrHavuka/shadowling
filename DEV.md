@@ -6,7 +6,7 @@ Local dev notes for working on the shadowling plugin.
 
 ```
 plugins/shadowling/
-  core.py            # shared: data dir, config load/save, transcript, .script_path
+  core.py            # shared: data dir, config load/save, transcript reading
   config.py          # plugin-wide language CLI (lang / set-lang / explanation-lang / set-explanation-lang)
   vocab.py           # vocab store (add / remove / list-active) + glossing hooks (inject / scan)
   capture.py         # English-message capture for /debrief (buffer + raw corpus)
@@ -98,7 +98,6 @@ Real data lives in `~/.shadowling/`:
 | `messages.log.jsonl`  | permanent raw corpus of every captured English message                     |
 | `grammar.md` etc.     | `/debrief` correction products (+ matching `*.log.jsonl` findings)          |
 | `decode.md`           | `/aha` comprehension product (+ `decode.log.jsonl`)                        |
-| `.script_path`        | abs path to a script, written by hooks (legacy; skills now locate scripts via `${CLAUDE_SKILL_DIR}`) |
 
 Env overrides (used by tests and smoke runs):
 

@@ -223,7 +223,6 @@ unknown word it points you at `/loot` instead.
 | `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.log.jsonl` | append-only findings datasets from `/debrief` |
 | `~/.shadowling/decode.md` | comprehension product from `/aha` — deduped ranking of expressions you couldn't read literally |
 | `~/.shadowling/decode.log.jsonl` | append-only log of every `/aha` submission (your hunch + context) |
-| `~/.shadowling/.script_path` | script location recorded by the hooks (internal) |
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
 updates. Override the location with the `SHADOWLING_HOME` environment variable.

@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import datetime
 
-from core import data_dir, last_user_text, register_script_path, today
+from core import data_dir, last_user_text, today
 from jsonl import append as jsonl_append, read as jsonl_read
 
 MIN_LETTERS = 8  # below this we can't judge language reliably / not worth logging
@@ -115,7 +115,6 @@ def paths():
 
 
 def main(argv):
-    register_script_path()
     if not argv:
         print("usage: capture.py {capture|pending-count|messages|clear|paths} ...",
               file=sys.stderr)

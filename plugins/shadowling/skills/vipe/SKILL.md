@@ -13,7 +13,7 @@ expansion), never a wildcard or `rm -rf`.
 Run EXACTLY this one command and print its output, then STOP:
 
 ```
-rm -fv "${SHADOWLING_HOME:-$HOME/.shadowling}"/{grammar.md,rephrasings.md,idioms.md,irregular_verbs.md,grammar.log.jsonl,rephrasings.log.jsonl,idioms.log.jsonl,irregular_verbs.log.jsonl,.script_path}
+rm -fv "${SHADOWLING_HOME:-$HOME/.shadowling}"/{grammar.md,rephrasings.md,idioms.md,irregular_verbs.md,grammar.log.jsonl,rephrasings.log.jsonl,idioms.log.jsonl,irregular_verbs.log.jsonl}
 ```
 
 `-f` keeps it quiet on files that don't exist; `-v` lists what was actually removed.
