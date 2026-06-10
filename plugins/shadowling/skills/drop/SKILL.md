@@ -1,6 +1,6 @@
 ---
-name: vocab-remove
-description: "Remove words/terms from your vocab list. Comma-separated for several at once. Usage: /shadowling:vocab-remove <word>[, <word2>, ...]"
+name: drop
+description: "Remove words/terms from your vocab list. Comma-separated for several at once. Usage: /drop <word>[, <word2>, ...]"
 context: fork
 agent: claude
 model: haiku
