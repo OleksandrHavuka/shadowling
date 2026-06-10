@@ -82,7 +82,7 @@ class CaptureTest(CaptureTestBase):
         self.assertEqual(capture._read_buffer(), [])
 
     def test_slash_command_not_buffered(self):
-        self.assertFalse(self._capture_text("/vocab remove throughput please now"))
+        self.assertFalse(self._capture_text("/drop throughput please now"))
         self.assertEqual(capture._read_buffer(), [])
 
     def test_same_text_twice_not_duplicated(self):

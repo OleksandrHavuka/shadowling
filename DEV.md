@@ -15,7 +15,7 @@ plugins/shadowling/
   db.py              # CLI over models/ (e.g. `db.py decode record ...`)
   models/            # product models + record fan-out (grammar, rephrasing, idioms, verbs, decode)
   skills/            # skill bodies:
-                     #   vocab/, vocab-remove/ — fork: translate+add / remove terms
+                     #   loot/, drop/          — fork: translate+add / remove terms
                      #   setup/                — main: ask + set the plugin language
                      #   debrief/              — main: orchestrate the four specialists
                      #   debrief-{grammar,rephrasing,idioms,verbs}/ — fork: analyze buffer → docs
@@ -112,7 +112,7 @@ Env overrides (used by tests and smoke runs):
 ## Notes
 
 - stdlib only (Python 3.9+), no third-party deps.
-- `/vocab` runs as a forked subagent (`context: fork`): translation happens off
+- `/loot` runs as a forked subagent (`context: fork`): translation happens off
   the main context; deterministic work lives in `vocab.py`.
 - `/aha` runs in the **main** agent (it needs the live conversation for context);
   `/debrief` runs in main but forks the four specialists into their own windows.
