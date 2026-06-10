@@ -63,7 +63,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 - `UserPromptSubmit` → injects the active word list + glossing instruction into
   context before each reply.
 - `Stop` → scans the reply you just received (counts exposures, graduates learned
-  words) **and** quietly buffers your English messages for later review (see
+  words) **and** quietly stores your messages (any language) for later review (see
   [English corrections](#english-corrections-debrief)).
 
 ---
@@ -75,9 +75,9 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/shadowling:setup` | Set both languages (run once; required before anything else works). |
 | `/loot <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/drop <word>[, ...]` | Stop tracking and delete word(s). |
-| `/debrief` | Review your buffered English messages into per-category frequency docs (grammar / rephrasings / idioms / verbs). |
+| `/debrief` | Review your captured messages into per-category frequency docs (grammar / rephrasings / idioms / verbs / friction). |
 | `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to `decode.md`. |
-| `/vipe` | Dev: wipe the `/debrief` product/log docs for a clean test run (keeps config, words, buffer, raw corpus). |
+| `/vipe` | Dev: wipe the `/debrief` product/log docs for a clean test run (keeps config, words, message store). |
 
 Run **`/shadowling:setup`** once to set both languages; the answers are saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
@@ -150,18 +150,20 @@ Beyond single words, shadowling can quietly build a **personal dataset of how yo
 
 It's a two-phase, **silent** model:
 
-1. **Collect (passive).** When you write prompts in English, the `Stop` hook
-   extracts your message and dual-writes it: to the transient buffer
-   (`~/.shadowling/buffer.jsonl`, the current unprocessed batch) **and** to the
-   permanent raw corpus (`~/.shadowling/messages.log.jsonl`). No analysis, nothing
-   printed in the chat. Ukrainian/other-language and slash-command messages are
-   skipped.
-2. **Review (on demand).** Run `/debrief`. It orchestrates four per-category
-   **specialist subagents** — grammar, rephrasing, idioms, irregular verbs — in
-   parallel, each with its own context window, so the buffer, the existing entries,
-   and the reasoning never pollute your current conversation; only a short summary
-   comes back. Each specialist reads the buffer and writes two things per category
-   (its explanations written in your `explanation_language`):
+1. **Collect (passive).** When you write prompts, the `Stop` hook extracts your
+   message and stores it in the local message store
+   (`~/.shadowling/shadowling.db`) — any language, no analysis, nothing printed
+   in the chat. Slash-command turns are skipped. Messages are kept forever:
+   a debrief marks them processed instead of deleting them, so the store
+   doubles as your language-tagged history.
+2. **Review (on demand).** Run `/debrief`. A triage subagent first tags each
+   message's language(s); then five per-category **specialist subagents** —
+   grammar, rephrasing, idioms, irregular verbs, and friction — run in
+   parallel, each with its own context window, so the batch, the existing
+   entries, and the reasoning never pollute your current conversation; only a
+   short summary comes back. Each specialist reads its slice of the batch and
+   writes two things per category (explanations written in your
+   `explanation_language`):
 
    | Category | Frequency product (markdown) | Findings log (append-only JSONL) |
    |---|---|---|
@@ -169,16 +171,24 @@ It's a two-phase, **silent** model:
    | rephrasing | `rephrasings.md` | `rephrasings.log.jsonl` |
    | idioms | `idioms.md` | `idioms.log.jsonl` |
    | irregular verbs | `irregular_verbs.md` | `irregular_verbs.log.jsonl` |
+   | friction (code-switching) | `friction.md` | `friction.log.jsonl` |
 
-   If all four succeed, the buffer is cleared (the raw corpus is kept).
+   If all of them succeed, the batch is marked processed (and kept as history).
 
 Each product is a markdown table keyed on a stable column with a `counter`: a
 recurring mistake bumps its counter instead of adding a row, so the table doubles
 as a frequency ranking of your weak spots. The matching `*.log.jsonl` keeps every
 verbatim instance, append-only, for deeper study.
 
-Everything stays local — the buffer, corpus, and docs live in `~/.shadowling/`, no
+Everything stays local — the message store and docs live in `~/.shadowling/`, no
 network calls.
+
+The friction specialist deserves a note: it watches for **code-switching** —
+the moments you bail from English into your native language. Native words
+dropped mid-English-sentence are treated as an implicit `/loot` (the English
+equivalent goes straight into your vocabulary), and recurring bail-out zones
+are ranked in `friction.md` with a type verdict: `lexical`, `phrasal`,
+`structural`, `topical`, or `register`.
 
 ---
 
@@ -213,10 +223,11 @@ unknown word it points you at `/loot` instead.
 |---|---|
 | `~/.shadowling/words.csv` | your vocabulary (`word,translation,remaining,status`) |
 | `~/.shadowling/config.json` | language settings |
-| `~/.shadowling/buffer.jsonl` | current batch of buffered English messages awaiting `/debrief` |
-| `~/.shadowling/messages.log.jsonl` | permanent raw corpus of every captured English message |
+| `~/.shadowling/shadowling.db` | sqlite message store: every captured message, language tags, processed flags (your queryable history) |
 | `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.md` | per-category frequency products from `/debrief` |
 | `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.log.jsonl` | append-only findings datasets from `/debrief` |
+| `~/.shadowling/friction.md` | code-switching product from `/debrief` — typed ranking of zones where you bail out of English |
+| `~/.shadowling/friction.log.jsonl` | append-only log of every friction incident |
 | `~/.shadowling/decode.md` | comprehension product from `/aha` — deduped ranking of expressions you couldn't read literally |
 | `~/.shadowling/decode.log.jsonl` | append-only log of every `/aha` submission (your hunch + context) |
 
@@ -258,8 +269,8 @@ claude plugin validate . --strict                 # validate the manifest
 ```
 
 The tool is dependency-free stdlib Python: `core.py` (shared infra), `config.py`
-(plugin-wide language config), `vocab.py` (glossing), `capture.py` (English-message
-capture), `jsonl.py` (append-only log helper), and the markdown data layer
+(plugin-wide language config), `vocab.py` (glossing), `capture.py` (message
+capture + sqlite store), `jsonl.py` (append-only log helper), and the markdown data layer
 (`mddb.py`, `db.py` CLI, `models/`) plus tests.
 
 ---
