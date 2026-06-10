@@ -9,16 +9,17 @@ plugins/shadowling/
   core.py            # shared: data dir, config load/save, transcript reading
   config.py          # plugin-wide language config CLI (get / set)
   vocab.py           # vocab store (add / remove / list-active) + glossing hooks (inject / scan)
-  capture.py         # English-message capture for /debrief (buffer + raw corpus)
+  capture.py         # message capture + sqlite store (tag / slices / mark-processed / ro query)
   jsonl.py           # append-only JSONL helper
   mddb.py            # markdown-table CRUD primitives
   db.py              # CLI over models/ (e.g. `db.py decode record ...`)
-  models/            # product models + record fan-out (grammar, rephrasing, idioms, verbs, decode)
+  models/            # product models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
   skills/            # skill bodies:
                      #   loot/, drop/          — fork: translate+add / remove terms
                      #   setup/                — main: ask + set the plugin language
-                     #   debrief/              — main: orchestrate the four specialists
-                     #   debrief-{grammar,rephrasing,idioms,verbs}/ — fork: analyze buffer → docs
+                     #   debrief/              — main: orchestrate triage + five specialists
+                     #   debrief-triage/       — fork: tag each message's language(s)
+                     #   debrief-{grammar,rephrasing,idioms,verbs,friction}/ — fork: analyze batch slice → docs
                      #   aha/                  — main: explain expressions you can't read literally
                      #   vipe/                 — dev: wipe debrief docs for a clean test run
   hooks/hooks.json   # UserPromptSubmit (inject) + Stop (scan, capture)
@@ -70,13 +71,15 @@ python3 plugins/shadowling/vocab.py list-active
 python3 plugins/shadowling/vocab.py remove hello ghost
 ```
 
-`/debrief` buffer (Stop hook feeds this; inspect/clear by hand):
+`/debrief` message store (Stop hook feeds this; inspect by hand):
 
 ```
-python3 plugins/shadowling/capture.py paths          # show buffer + corpus paths
-python3 plugins/shadowling/capture.py pending-count  # how many messages await /debrief
-python3 plugins/shadowling/capture.py messages       # dump the raw corpus
-python3 plugins/shadowling/capture.py clear          # clear the buffer
+python3 plugins/shadowling/capture.py paths            # show the sqlite db path
+python3 plugins/shadowling/capture.py pending-count    # unprocessed messages
+python3 plugins/shadowling/capture.py messages         # current batch as XML
+python3 plugins/shadowling/capture.py tag "1=en" "2=en,uk"
+python3 plugins/shadowling/capture.py mark-processed   # stamp tagged rows
+python3 plugins/shadowling/capture.py query "SELECT id, langs, processed_at FROM messages ORDER BY id DESC LIMIT 5"
 ```
 
 `/aha` and `/debrief` products go through the `db.py` record CLI:
@@ -93,9 +96,8 @@ Real data lives in `~/.shadowling/`:
 | --------------------- | -------------------------------------------------------------------------- |
 | `config.json`         | `native_language` / `explanation_language` — both required (whole-plugin gate)|
 | `words.csv`           | vocab list (word, translation, remaining, status)                          |
-| `buffer.jsonl`        | buffered English messages awaiting `/debrief`                              |
-| `messages.log.jsonl`  | permanent raw corpus of every captured English message                     |
-| `grammar.md` etc.     | `/debrief` correction products (+ matching `*.log.jsonl` findings)          |
+| `shadowling.db`       | sqlite message store — captured messages, language tags, processed stamps   |
+| `grammar.md` etc.     | `/debrief` correction products (+ matching `*.log.jsonl` findings; incl. `friction.md` / `friction.log.jsonl`) |
 | `decode.md`           | `/aha` comprehension product (+ `decode.log.jsonl`)                        |
 
 Env overrides (used by tests and smoke runs):
@@ -110,5 +112,5 @@ Env overrides (used by tests and smoke runs):
 - `/loot` runs as a forked subagent (`context: fork`): translation happens off
   the main context; deterministic work lives in `vocab.py`.
 - `/aha` runs in the **main** agent (it needs the live conversation for context);
-  `/debrief` runs in main but forks the four specialists into their own windows.
+  `/debrief` runs in main but forks triage + the five specialists into their own windows.
 - Hooks must never crash the session — `scan` and `capture` swallow exceptions.
