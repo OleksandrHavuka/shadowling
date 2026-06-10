@@ -13,8 +13,10 @@ invoke them directly so each command starts with `python3`.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --lang en`. If it prints
    `<messages></messages>` (empty), print `OK idioms: nothing found` and STOP.
+   If a listed message turns out not to be English prose (a mis-tag), skip it —
+   never analyze non-English text.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
    for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
    `ERROR idioms: not configured — run /shadowling:setup` and STOP.
