@@ -9,8 +9,7 @@ import os
 import re
 from datetime import datetime
 
-DEFAULT_CONFIG = {"native_language": "Ukrainian", "learning_language": "English",
-                  "explanation_language": "English"}
+CONFIG_KEYS = ("native_language", "explanation_language")
 
 
 def data_dir():
@@ -19,7 +18,7 @@ def data_dir():
 
 
 def config_path():
-    return os.environ.get("SHADOWLING_CONFIG") or os.path.join(data_dir(), "config.json")
+    return os.path.join(data_dir(), "config.json")
 
 
 def raw_config():
@@ -33,14 +32,19 @@ def raw_config():
 
 
 def load_config():
-    """Read config.json, falling back to DEFAULT_CONFIG for missing/bad values."""
-    cfg = dict(DEFAULT_CONFIG)
+    """Exactly CONFIG_KEYS, each "" when missing/malformed. No defaults."""
     data = raw_config()
-    for key in DEFAULT_CONFIG:
+    cfg = {}
+    for key in CONFIG_KEYS:
         value = data.get(key)
-        if isinstance(value, str) and value.strip():
-            cfg[key] = value.strip()
+        cfg[key] = value.strip() if isinstance(value, str) else ""
     return cfg
+
+
+def config_ready(cfg=None):
+    """The whole-plugin gate: True iff every CONFIG_KEYS value is non-empty."""
+    cfg = load_config() if cfg is None else cfg
+    return all(cfg.get(key) for key in CONFIG_KEYS)
 
 
 def save_config(values):
