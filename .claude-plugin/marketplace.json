@@ -7,7 +7,7 @@
     {
       "name": "shadowling",
       "source": "./plugins/shadowling",
-      "description": "Passive language learning while you chat with Claude Code: /vocab glosses words inline, /debrief turns your English into personal correction docs, /aha explains expressions you can't read literally"
+      "description": "Passive language learning while you chat with Claude Code: /loot adds words Claude glosses inline, /debrief turns your English into personal correction docs, /aha explains expressions you can't read literally"
     }
   ]
 }

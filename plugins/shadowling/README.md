@@ -4,7 +4,7 @@
 aren't native English speakers — shadowling turns your everyday Claude Code
 sessions into quiet vocabulary practice instead of a separate chore.
 
-Collect words you don't know yet with `/vocab`. From then on, whenever one of
+Collect words you don't know yet with `/loot`. From then on, whenever one of
 those words appears in Claude's replies, Claude appends a translation in your
 native language — inline and in a short summary at the bottom — until you've seen
 it enough times to have learned it. No flashcards, no separate app: you absorb
@@ -28,7 +28,7 @@ step.
 You add a word once:
 
 ```
-/vocab throughput
+/loot throughput
 → stored: throughput = rendimiento (remaining 10, active)
 ```
 
@@ -73,15 +73,15 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | Command | Effect |
 |---|---|
 | `/shadowling:setup` | Set your native language (run once). |
-| `/vocab <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
-| `/vocab-remove <word>[, ...]` | Stop tracking and delete word(s). |
+| `/loot <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
+| `/drop <word>[, ...]` | Stop tracking and delete word(s). |
 | `/debrief` | Review your buffered English messages into per-category frequency docs (grammar / rephrasings / idioms / verbs). |
 | `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to `decode.md`. |
 | `/vipe` | Dev: wipe the `/debrief` product/log docs for a clean test run (keeps config, words, buffer, raw corpus). |
 
 Run **`/shadowling:setup`** once to set your native language; the answer is saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
-`/shadowling:vocab`.)
+`/shadowling:loot`.)
 
 ---
 
@@ -114,7 +114,7 @@ Missing or malformed values fall back to the defaults above. See
 ## How it works
 
 ```
-/vocab throughput
+/loot throughput
    └─ Claude translates → vocab.py add → ~/.shadowling/words.csv
         throughput, rendimiento, remaining=10, active
 
@@ -207,7 +207,7 @@ wrong. Each call writes the deduped product `decode.md` (your "what trips me mos
 ranking) and appends the verbatim submission — your hunch and where it appeared — to
 `decode.log.jsonl`; explanations follow your `explanation_language` (English by
 default). Literal phrases and bare unknown words aren't recorded — for a single
-unknown word it points you at `/vocab` instead.
+unknown word it points you at `/loot` instead.
 
 ---
 

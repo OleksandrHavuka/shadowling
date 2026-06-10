@@ -4,7 +4,7 @@ A Claude Code plugin marketplace. It currently hosts a single plugin:
 
 ### `shadowling`
 
-Passive language learning for non-native developers. Collect words with `/vocab`
+Passive language learning for non-native developers. Collect words with `/loot`
 and Claude appends a translation in your native language inline in its replies,
 until you've seen each word enough times to have learned it. `/debrief` quietly
 turns the English you write into personal correction docs — grammar, natural
