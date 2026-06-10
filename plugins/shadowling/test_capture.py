@@ -6,6 +6,7 @@ import tempfile
 import unittest
 
 import capture
+import core
 import jsonl
 
 
@@ -32,11 +33,11 @@ class CaptureTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
-        os.environ.pop("SHADOWLING_BUFFER", None)
+        core.save_config({"native_language": "Ukrainian",
+                          "explanation_language": "English"})
 
     def tearDown(self):
         os.environ.pop("SHADOWLING_HOME", None)
-        os.environ.pop("SHADOWLING_BUFFER", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
     def _stdin(self, transcript_path):
@@ -203,9 +204,13 @@ class MainTest(CaptureTestBase):
     def test_unknown_command_returns_one(self):
         self.assertEqual(capture.main(["bogus"]), 1)
 
-    def test_main_registers_script_path(self):
-        capture.main(["pending-count"])
-        self.assertTrue(os.path.exists(os.path.join(self.home, ".script_path")))
+
+class CaptureGateTest(CaptureTestBase):
+    def test_capture_noop_without_config(self):
+        os.remove(os.path.join(self.home, "config.json"))
+        self.assertFalse(
+            self._capture_text("This is a perfectly fine English sentence"))
+        self.assertEqual(capture._read_buffer(), [])
 
 
 if __name__ == "__main__":

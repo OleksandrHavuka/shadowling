@@ -1,50 +1,40 @@
 #!/usr/bin/env python3
-"""config.py - plugin-wide language/config CLI for shadowling (stdlib only).
+"""config.py - plugin-wide language config CLI for shadowling (stdlib only).
 
-Language is a cross-cutting concern (used by vocab glossing, debrief, and future
-features), so it lives here at the plugin level rather than inside vocab.py.
-Thin CLI over core.load_config / core.save_config.
+Two generic verbs over the two mandatory keys:
+
+  config.py get <key>            value on stdout, or exit 1 when unconfigured
+  config.py set <key> <value>
+
+`get` doubles as the whole-plugin gate: a skill makes its one call and, on
+failure, tells the user to run /shadowling:setup and stops.
 """
 import sys
 
-from core import load_config, raw_config, register_script_path, save_config
+from core import CONFIG_KEYS, config_ready, load_config, save_config
+
+USAGE = "usage: config.py {get|set} {" + "|".join(CONFIG_KEYS) + "} [<value>]"
+NOT_CONFIGURED = "shadowling is not configured — run /shadowling:setup"
 
 
 def main(argv):
-    register_script_path()
-    if not argv:
-        print("usage: config.py {lang|set-lang|explanation-lang|set-explanation-lang} ...",
-              file=sys.stderr)
+    if len(argv) < 2 or argv[0] not in ("get", "set") or argv[1] not in CONFIG_KEYS:
+        print(USAGE, file=sys.stderr)
         return 1
-    cmd = argv[0]
-    if cmd == "lang":
-        # Print native_language only if it's EXPLICITLY set in the file (not the
-        # built-in default). Empty output is the first-run signal callers rely on,
-        # so a missing/empty/malformed config correctly triggers setup.
-        value = raw_config().get("native_language")
-        if isinstance(value, str) and value.strip():
-            print(value.strip())
-        return 0
-    if cmd == "set-lang":
-        if len(argv) < 2 or not argv[1].strip():
-            print('usage: config.py set-lang "<language>"', file=sys.stderr)
+    cmd, key = argv[0], argv[1]
+    if cmd == "get":
+        cfg = load_config()
+        if not config_ready(cfg):
+            print(NOT_CONFIGURED, file=sys.stderr)
             return 1
-        cfg = save_config({"native_language": argv[1]})
-        print("native_language = {0}".format(cfg["native_language"]))
+        print(cfg[key])
         return 0
-    if cmd == "explanation-lang":
-        # The language debrief writes its explanations in (defaults to English).
-        print(load_config()["explanation_language"])
-        return 0
-    if cmd == "set-explanation-lang":
-        if len(argv) < 2 or not argv[1].strip():
-            print('usage: config.py set-explanation-lang "<language>"', file=sys.stderr)
-            return 1
-        cfg = save_config({"explanation_language": argv[1]})
-        print("explanation_language = {0}".format(cfg["explanation_language"]))
-        return 0
-    print("unknown command: {0}".format(cmd), file=sys.stderr)
-    return 1
+    if len(argv) != 3 or not argv[2].strip():
+        print(USAGE, file=sys.stderr)
+        return 1
+    cfg = save_config({key: argv[2]})
+    print("{0} = {1}".format(key, cfg[key]))
+    return 0
 
 
 if __name__ == "__main__":
