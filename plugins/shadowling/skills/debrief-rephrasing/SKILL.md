@@ -16,8 +16,9 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK rephrasing: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
-   language to WRITE EXPLANATIONS IN (it always prints one; default `English`).
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
+   `ERROR rephrasing: not configured — run /shadowling:setup` and STOP.
    Write `problem` and `why` in THAT language only — no other-language glosses.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing select`. Collect the
    existing `slug` values — your dedup context.
