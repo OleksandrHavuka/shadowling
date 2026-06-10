@@ -169,5 +169,43 @@ class DecodeRecordTest(RecordTestBase):
         self.assertEqual(len(self._log("decode.log.jsonl")), 2)
 
 
+class FrictionRecordTest(RecordTestBase):
+    def test_record_inserts_product_and_log(self):
+        from models.friction import Friction
+        self.assertEqual(models.RECORDERS["friction"](
+            "polite-pushback", "register", "disagreeing politely in reviews",
+            "та ну, це ж очевидно неправильно",
+            "I see it differently — here's my concern",
+            "review thread, switched mid-discussion"), "inserted")
+        row = Friction.select("polite-pushback")
+        self.assertEqual(row["counter"], "1")
+        self.assertEqual(row["type"], "register")
+        self.assertEqual(row["zone"], "disagreeing politely in reviews")
+        self.assertEqual(row["you reached for"], "та ну, це ж очевидно неправильно")
+        self.assertEqual(row["natural english"],
+                         "I see it differently — here's my concern")
+        self.assertTrue(row["created_at"])
+        self.assertTrue(row["updated_at"])
+        log = self._log("friction.log.jsonl")
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["you_reached_for"],
+                         "та ну, це ж очевидно неправильно")
+        self.assertEqual(log[0]["context"], "review thread, switched mid-discussion")
+        self.assertIn("date", log[0])
+
+    def test_same_zone_increments_across_fragments(self):
+        from models.friction import Friction
+        self.assertEqual(models.RECORDERS["friction"](
+            "Polite Pushback", "register", "disagreeing politely",
+            "ну такое", "I'm not convinced", "ctx1"), "inserted")
+        self.assertEqual(models.RECORDERS["friction"](
+            "polite-pushback", "register", "disagreeing politely",
+            "та ви шо", "with respect, I disagree", "ctx2"), "incremented")
+        row = Friction.select("polite-pushback")
+        self.assertEqual(row["counter"], "2")
+        self.assertEqual(row["you reached for"], "та ви шо")  # latest example
+        self.assertEqual(len(self._log("friction.log.jsonl")), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
