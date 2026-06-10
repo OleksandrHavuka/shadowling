@@ -24,7 +24,7 @@ Steps:
    a. If it is literal / there is nothing to explain → say so to the user and DO NOT
       record it.
    b. If it is just an unknown single word (not an idiom, not a grammar pattern) →
-      explain it and suggest `/vocab <word>`; DO NOT record a decode row.
+      explain it and suggest `/loot <word>`; DO NOT record a decode row.
    c. Otherwise classify it:
       - `fixed` — a set expression whose meaning is NOT compositional → the action is
         "memorize". The slug is the canonical phrase, lowercase (e.g. `break the ice`).
