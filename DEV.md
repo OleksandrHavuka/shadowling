@@ -6,8 +6,8 @@ Local dev notes for working on the shadowling plugin.
 
 ```
 plugins/shadowling/
-  core.py            # shared: data dir, config load/save, transcript, .script_path
-  config.py          # plugin-wide language CLI (lang / set-lang / explanation-lang / set-explanation-lang)
+  core.py            # shared: data dir, config load/save, transcript reading
+  config.py          # plugin-wide language config CLI (get / set)
   vocab.py           # vocab store (add / remove / list-active) + glossing hooks (inject / scan)
   capture.py         # English-message capture for /debrief (buffer + raw corpus)
   jsonl.py           # append-only JSONL helper
@@ -62,10 +62,9 @@ home so you never touch real data. Language now lives in `config.py`:
 
 ```
 export SHADOWLING_HOME=/tmp/sl
-python3 plugins/shadowling/config.py set-lang Spanish
-python3 plugins/shadowling/config.py lang                  # native language, empty if unset
-python3 plugins/shadowling/config.py set-explanation-lang Spanish
-python3 plugins/shadowling/config.py explanation-lang      # always prints one (default English)
+python3 plugins/shadowling/config.py set native_language Spanish
+python3 plugins/shadowling/config.py set explanation_language Spanish
+python3 plugins/shadowling/config.py get native_language        # exit 1 + setup hint until BOTH keys are set
 python3 plugins/shadowling/vocab.py add hello hola "machine learning" "aprendizaje automatico"
 python3 plugins/shadowling/vocab.py list-active
 python3 plugins/shadowling/vocab.py remove hello ghost
@@ -92,22 +91,18 @@ Real data lives in `~/.shadowling/`:
 
 | File                  | What                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
-| `config.json`         | `native_language` / `explanation_language` (`learning_language` is cosmetic)|
+| `config.json`         | `native_language` / `explanation_language` — both required (whole-plugin gate)|
 | `words.csv`           | vocab list (word, translation, remaining, status)                          |
 | `buffer.jsonl`        | buffered English messages awaiting `/debrief`                              |
 | `messages.log.jsonl`  | permanent raw corpus of every captured English message                     |
 | `grammar.md` etc.     | `/debrief` correction products (+ matching `*.log.jsonl` findings)          |
 | `decode.md`           | `/aha` comprehension product (+ `decode.log.jsonl`)                        |
-| `.script_path`        | abs path to a script, written by hooks (legacy; skills now locate scripts via `${CLAUDE_SKILL_DIR}`) |
 
 Env overrides (used by tests and smoke runs):
 
 | Var                   | Overrides                       |
 | --------------------- | ------------------------------- |
 | `SHADOWLING_HOME`     | the whole data dir              |
-| `SHADOWLING_CONFIG`   | path to `config.json`           |
-| `SHADOWLING_CSV`      | path to `words.csv`             |
-| `SHADOWLING_BUFFER`   | path to the buffer (`buffer.jsonl`) |
 
 ## Notes
 

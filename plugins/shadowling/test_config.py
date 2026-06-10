@@ -20,95 +20,100 @@ def run_main(argv):
 
 class ConfigCliTestBase(unittest.TestCase):
     def setUp(self):
-        os.environ.pop("SHADOWLING_CONFIG", None)  # use data_dir()/config.json
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
 
     def tearDown(self):
         os.environ.pop("SHADOWLING_HOME", None)
-        os.environ.pop("SHADOWLING_CONFIG", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
     def _write_config(self, data):
         with open(os.path.join(self.home, "config.json"), "w", encoding="utf-8") as f:
             json.dump(data, f)
 
-
-class LangTest(ConfigCliTestBase):
-    def test_lang_empty_when_no_config(self):
-        code, out = run_main(["lang"])
-        self.assertEqual(code, 0)
-        self.assertEqual(out.strip(), "")
-
-    def test_lang_prints_configured_language(self):
-        self._write_config({"native_language": "Spanish"})
-        code, out = run_main(["lang"])
-        self.assertEqual(code, 0)
-        self.assertEqual(out.strip(), "Spanish")
-
-    def test_lang_empty_when_config_lacks_native_language(self):
-        # malformed/empty config must NOT mask first-run (no default echoed)
-        self._write_config({"learning_language": "English"})
-        code, out = run_main(["lang"])
-        self.assertEqual(code, 0)
-        self.assertEqual(out.strip(), "")
-
-
-class SetLangTest(ConfigCliTestBase):
-    def test_set_lang_persists_and_load_reads_it(self):
-        code, _ = run_main(["set-lang", "Spanish"])
-        self.assertEqual(code, 0)
-        self.assertEqual(core.load_config()["native_language"], "Spanish")
-
-    def test_set_lang_preserves_existing_learning_language(self):
+    def _configure(self):
         self._write_config({"native_language": "Ukrainian",
-                            "learning_language": "German"})
-        run_main(["set-lang", "Spanish"])
-        loaded = core.load_config()
-        self.assertEqual(loaded["native_language"], "Spanish")
-        self.assertEqual(loaded["learning_language"], "German")
+                            "explanation_language": "English"})
 
-    def test_set_lang_empty_is_error(self):
-        code, _ = run_main(["set-lang", "   "])
+
+class GetTest(ConfigCliTestBase):
+    def test_get_fails_when_no_config(self):
+        code, out = run_main(["get", "native_language"])
+        self.assertEqual(code, 1)
+        self.assertEqual(out.strip(), "")
+
+    def test_get_fails_when_partially_configured(self):
+        # whole-plugin gate: ANY missing key means not configured
+        self._write_config({"native_language": "Ukrainian"})
+        code, _ = run_main(["get", "explanation_language"])
         self.assertEqual(code, 1)
 
+    def test_get_prints_each_configured_key(self):
+        self._configure()
+        self.assertEqual(run_main(["get", "native_language"])[1].strip(),
+                         "Ukrainian")
+        self.assertEqual(run_main(["get", "explanation_language"])[1].strip(),
+                         "English")
 
-class ExplanationLangTest(ConfigCliTestBase):
-    def test_defaults_to_english_when_unset(self):
-        code, out = run_main(["explanation-lang"])
-        self.assertEqual(code, 0)
-        self.assertEqual(out.strip(), "English")
+    def test_get_unknown_key_is_error(self):
+        self._configure()
+        self.assertEqual(run_main(["get", "learning_language"])[0], 1)
 
-    def test_prints_configured_value(self):
-        self._write_config({"explanation_language": "Ukrainian"})
-        code, out = run_main(["explanation-lang"])
-        self.assertEqual(out.strip(), "Ukrainian")
 
-    def test_set_persists_and_load_reads_it(self):
-        code, _ = run_main(["set-explanation-lang", "German"])
-        self.assertEqual(code, 0)
-        self.assertEqual(core.load_config()["explanation_language"], "German")
+class SetTest(ConfigCliTestBase):
+    def test_set_persists_and_get_reads_it(self):
+        self.assertEqual(run_main(["set", "native_language", "Spanish"])[0], 0)
+        self.assertEqual(run_main(["set", "explanation_language", "German"])[0], 0)
+        self.assertEqual(run_main(["get", "native_language"])[1].strip(), "Spanish")
+        self.assertEqual(run_main(["get", "explanation_language"])[1].strip(),
+                         "German")
 
-    def test_set_preserves_native_language(self):
-        self._write_config({"native_language": "Spanish"})
-        run_main(["set-explanation-lang", "German"])
-        loaded = core.load_config()
-        self.assertEqual(loaded["native_language"], "Spanish")
-        self.assertEqual(loaded["explanation_language"], "German")
+    def test_set_preserves_unknown_keys_in_file(self):
+        self._write_config({"native_language": "Ukrainian",
+                            "explanation_language": "English",
+                            "future_key": "kept"})
+        run_main(["set", "native_language", "Spanish"])
+        raw = core.raw_config()
+        self.assertEqual(raw["future_key"], "kept")
+        self.assertEqual(raw["explanation_language"], "English")
+        self.assertEqual(raw["native_language"], "Spanish")
 
-    def test_set_empty_is_error(self):
-        code, _ = run_main(["set-explanation-lang", "  "])
-        self.assertEqual(code, 1)
+    def test_set_unknown_key_is_error(self):
+        self.assertEqual(run_main(["set", "learning_language", "German"])[0], 1)
+
+    def test_set_empty_value_is_error(self):
+        self.assertEqual(run_main(["set", "native_language", "   "])[0], 1)
+
+
+class ReadyTest(ConfigCliTestBase):
+    def test_not_ready_on_missing_or_partial(self):
+        self.assertFalse(core.config_ready())
+        self._write_config({"native_language": "Ukrainian"})
+        self.assertFalse(core.config_ready())
+
+    def test_ready_when_both_set(self):
+        self._configure()
+        self.assertTrue(core.config_ready())
+
+    def test_load_config_exposes_exactly_the_known_keys(self):
+        self._write_config({"native_language": "Ukrainian",
+                            "explanation_language": "English",
+                            "learning_language": "stale"})
+        cfg = core.load_config()
+        self.assertEqual(set(cfg), {"native_language", "explanation_language"})
+        self.assertTrue(core.config_ready())
+
+    def test_load_config_blank_for_malformed_values(self):
+        self._write_config({"native_language": 7})
+        self.assertEqual(core.load_config()["native_language"], "")
 
 
 class UnknownCommandTest(ConfigCliTestBase):
     def test_no_args_is_error(self):
-        code, _ = run_main([])
-        self.assertEqual(code, 1)
+        self.assertEqual(run_main([])[0], 1)
 
     def test_unknown_command_is_error(self):
-        code, _ = run_main(["bogus"])
-        self.assertEqual(code, 1)
+        self.assertEqual(run_main(["bogus", "native_language"])[0], 1)
 
 
 if __name__ == "__main__":

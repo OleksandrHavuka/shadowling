@@ -6,7 +6,7 @@ import os
 import re
 import sys
 
-from core import data_dir, last_assistant_text, load_config, register_script_path
+from core import config_ready, data_dir, last_assistant_text, load_config
 
 FIELDS = ["word", "translation", "remaining", "status"]
 START_REMAINING = 10
@@ -14,7 +14,7 @@ STEM_MIN_LEN = 4
 
 
 def csv_path():
-    return os.environ.get("SHADOWLING_CSV") or os.path.join(data_dir(), "words.csv")
+    return os.path.join(data_dir(), "words.csv")
 
 
 def load_rows(path):
@@ -104,6 +104,8 @@ def list_active():
 
 
 def scan(stdin_text):
+    if not config_ready():
+        return []
     try:
         data = json.loads(stdin_text) if stdin_text.strip() else {}
     except (json.JSONDecodeError, AttributeError):
@@ -132,10 +134,10 @@ def scan(stdin_text):
     return changed
 
 
-def gloss_rules(native_language, learning_language):
-    """Build the glossing instruction for the configured language pair."""
+def gloss_rules(native_language):
+    """Build the glossing instruction for the configured native language."""
     return (
-        "VOCAB GLOSSING: The user is learning {learning} vocabulary. For each "
+        "VOCAB GLOSSING: The user is learning new vocabulary. For each "
         "active word listed below, the FIRST time that word appears in any reply "
         "you write to the user, append its {native} translation inline in "
         "parentheses immediately after the word (write the word, then its "
@@ -152,15 +154,17 @@ def gloss_rules(native_language, learning_language):
         "none of these words, omit the block entirely. The active words "
         "(word = translation, remaining shown) are in the <active_words> tag "
         "below."
-    ).format(native=native_language, learning=learning_language)
+    ).format(native=native_language)
 
 
 def inject(event="SessionStart"):
+    cfg = load_config()
+    if not config_ready(cfg):
+        return ""
     rows = list_active()
     if not rows:
         return ""
-    cfg = load_config()
-    rules = gloss_rules(cfg["native_language"], cfg["learning_language"])
+    rules = gloss_rules(cfg["native_language"])
     word_lines = "\n".join(
         "- {0} = {1} (remaining {2})".format(
             r["word"], r["translation"], r["remaining"])
@@ -181,13 +185,16 @@ def inject(event="SessionStart"):
 
 
 def main(argv):
-    register_script_path()
     if not argv:
         print("usage: vocab.py {add|remove|list-active|inject|scan} ...",
               file=sys.stderr)
         return 1
     cmd = argv[0]
     if cmd == "add":
+        if not config_ready():
+            print("shadowling is not configured — run /shadowling:setup",
+                  file=sys.stderr)
+            return 1
         pairs = argv[1:]
         if not pairs or len(pairs) % 2 != 0:
             print('usage: vocab.py add "<word>" "<translation>" ['

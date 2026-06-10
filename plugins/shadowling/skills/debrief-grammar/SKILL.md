@@ -16,8 +16,9 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK grammar: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
-   language to WRITE EXPLANATIONS IN (it always prints one; default `English`).
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
+   `ERROR grammar: not configured — run /shadowling:setup` and STOP.
    Write `problem` and `rule` in THAT language only — no other-language glosses.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar select`. Collect the
    existing `slug` values — this is your dedup context.

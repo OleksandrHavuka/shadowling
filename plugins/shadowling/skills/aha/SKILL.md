@@ -17,9 +17,10 @@ out each phrase and the user's hunch yourself.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
-   language to WRITE EXPLANATIONS IN (it always prints one; default `English`). Write
-   `meaning` and `takeaway` in THAT language.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), tell
+   the user to run `/shadowling:setup` first and STOP. Write `meaning` and
+   `takeaway` in THAT language.
 2. For EACH expression the user brought:
    a. If it is literal / there is nothing to explain → say so to the user and DO NOT
       record it.

@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 """core.py - shared infrastructure for shadowling scripts (stdlib only, Python 3.9+).
 
-Home-directory resolution, config loading, transcript reading, and the
-`.script_path` registration used by both `vocab.py` (glossing) and `capture.py`
-(English-correction collection).
+Home-directory resolution, config loading, and transcript reading, shared by
+`vocab.py` (glossing) and `capture.py` (English-correction collection).
 """
 import json
 import os
 import re
 from datetime import datetime
 
-DEFAULT_CONFIG = {"native_language": "Ukrainian", "learning_language": "English",
-                  "explanation_language": "English"}
+CONFIG_KEYS = ("native_language", "explanation_language")
 
 
 def data_dir():
@@ -20,7 +18,7 @@ def data_dir():
 
 
 def config_path():
-    return os.environ.get("SHADOWLING_CONFIG") or os.path.join(data_dir(), "config.json")
+    return os.path.join(data_dir(), "config.json")
 
 
 def raw_config():
@@ -34,14 +32,19 @@ def raw_config():
 
 
 def load_config():
-    """Read config.json, falling back to DEFAULT_CONFIG for missing/bad values."""
-    cfg = dict(DEFAULT_CONFIG)
+    """Exactly CONFIG_KEYS, each "" when missing/malformed. No defaults."""
     data = raw_config()
-    for key in DEFAULT_CONFIG:
+    cfg = {}
+    for key in CONFIG_KEYS:
         value = data.get(key)
-        if isinstance(value, str) and value.strip():
-            cfg[key] = value.strip()
+        cfg[key] = value.strip() if isinstance(value, str) else ""
     return cfg
+
+
+def config_ready(cfg=None):
+    """The whole-plugin gate: True iff every CONFIG_KEYS value is non-empty."""
+    cfg = load_config() if cfg is None else cfg
+    return all(cfg.get(key) for key in CONFIG_KEYS)
 
 
 def save_config(values):
@@ -100,21 +103,6 @@ def last_assistant_text(transcript_path):
 
 def last_user_text(transcript_path):
     return _last_message_text(transcript_path, "user")
-
-
-def register_script_path():
-    """Record this script's absolute path (in `.script_path`) so slash commands can
-    locate the plugin's scripts. Hooks get `${CLAUDE_PLUGIN_ROOT}`; command bodies
-    don't, so they read this file and resolve their target as
-    `dirname(.script_path)/<script>.py`.
-    """
-    try:
-        path = os.path.join(data_dir(), ".script_path")
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(os.path.abspath(__file__))
-    except OSError:
-        pass
 
 
 def today():

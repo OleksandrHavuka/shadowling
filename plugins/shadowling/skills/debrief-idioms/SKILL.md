@@ -15,8 +15,9 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`. If it prints
    `<messages></messages>` (empty), print `OK idioms: nothing found` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" explanation-lang` for the
-   language to WRITE EXPLANATIONS IN (it always prints one; default `English`).
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
+   `ERROR idioms: not configured — run /shadowling:setup` and STOP.
    The `meaning` is written in THAT language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms select`. Collect the
    existing `idiom` values — your dedup context.

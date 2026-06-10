@@ -13,7 +13,7 @@ import os
 import sys
 from datetime import datetime
 
-from core import data_dir, last_user_text, register_script_path, today
+from core import config_ready, data_dir, last_user_text, today
 from jsonl import append as jsonl_append, read as jsonl_read
 
 MIN_LETTERS = 8  # below this we can't judge language reliably / not worth logging
@@ -24,8 +24,7 @@ COMMAND_WRAPPERS = ("<command-", "<local-command-")
 
 
 def buffer_path():
-    return os.environ.get("SHADOWLING_BUFFER") or os.path.join(
-        data_dir(), "buffer.jsonl")
+    return os.path.join(data_dir(), "buffer.jsonl")
 
 
 def messages_log_path():
@@ -59,6 +58,8 @@ def capture(stdin_text):
     messages.log.jsonl (Tier 0), so the corpus is complete regardless of whether a
     review ever runs.
     """
+    if not config_ready():
+        return False
     try:
         data = json.loads(stdin_text) if stdin_text.strip() else {}
     except (json.JSONDecodeError, AttributeError, TypeError):
@@ -115,7 +116,6 @@ def paths():
 
 
 def main(argv):
-    register_script_path()
     if not argv:
         print("usage: capture.py {capture|pending-count|messages|clear|paths} ...",
               file=sys.stderr)
