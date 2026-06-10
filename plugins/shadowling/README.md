@@ -72,14 +72,14 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 
 | Command | Effect |
 |---|---|
-| `/shadowling:setup` | Set your native language (run once). |
+| `/shadowling:setup` | Set both languages (run once; required before anything else works). |
 | `/loot <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/drop <word>[, ...]` | Stop tracking and delete word(s). |
 | `/debrief` | Review your buffered English messages into per-category frequency docs (grammar / rephrasings / idioms / verbs). |
 | `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to `decode.md`. |
 | `/vipe` | Dev: wipe the `/debrief` product/log docs for a clean test run (keeps config, words, buffer, raw corpus). |
 
-Run **`/shadowling:setup`** once to set your native language; the answer is saved
+Run **`/shadowling:setup`** once to set both languages; the answers are saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
 `/shadowling:loot`.)
 
@@ -87,27 +87,23 @@ to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
 
 ## Configuration
 
-Config lives at `~/.shadowling/config.json`:
+Config lives at `~/.shadowling/config.json` and has exactly two keys — **both
+required, no defaults**. Run `/shadowling:setup` once to set them; until then
+the plugin politely refuses to work (hooks stay silent, skills point you to
+setup).
 
 ```json
 {
   "native_language": "Ukrainian",
-  "learning_language": "English",
   "explanation_language": "English"
 }
 ```
 
-- `native_language` — the language words are translated **into** (the gloss). This
-  is the one that matters; change it to learn with a different native language. Set
-  it with `/shadowling:setup`.
-- `explanation_language` — the language `/debrief` and `/aha` write their
-  **explanations** in (meanings, takeaways, corrections). Defaults to English; set
-  it with `config.py set-explanation-lang "<language>"`.
-- `learning_language` — cosmetic framing in the instruction ("learning English
-  vocabulary"). Matching is literal, so this doesn't affect behavior.
+- `native_language` — the language words and corrections are translated **into**.
+- `explanation_language` — the language `/debrief` and `/aha` write meanings,
+  rules, and takeaways in.
 
-Missing or malformed values fall back to the defaults above. See
-`config.example.json`.
+See `config.example.json`.
 
 ---
 
@@ -165,7 +161,7 @@ It's a two-phase, **silent** model:
    parallel, each with its own context window, so the buffer, the existing entries,
    and the reasoning never pollute your current conversation; only a short summary
    comes back. Each specialist reads the buffer and writes two things per category
-   (its explanations written in your `explanation_language`, English by default):
+   (its explanations written in your `explanation_language`):
 
    | Category | Frequency product (markdown) | Findings log (append-only JSONL) |
    |---|---|---|
@@ -205,8 +201,8 @@ Claude — seeing the conversation for context — gives a verdict and teaches i
 Comparing against your hunch, it points out exactly where your literal read went
 wrong. Each call writes the deduped product `decode.md` (your "what trips me most"
 ranking) and appends the verbatim submission — your hunch and where it appeared — to
-`decode.log.jsonl`; explanations follow your `explanation_language` (English by
-default). Literal phrases and bare unknown words aren't recorded — for a single
+`decode.log.jsonl`; explanations follow your `explanation_language`. Literal
+phrases and bare unknown words aren't recorded — for a single
 unknown word it points you at `/loot` instead.
 
 ---
