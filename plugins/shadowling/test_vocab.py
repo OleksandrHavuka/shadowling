@@ -20,21 +20,14 @@ def run_main(argv):
 
 class VocabTestBase(unittest.TestCase):
     def setUp(self):
-        fd, self.csv_path = tempfile.mkstemp(suffix=".csv")
-        os.close(fd)
-        os.remove(self.csv_path)  # start with NO file so load_rows() == []
-        os.environ["SHADOWLING_CSV"] = self.csv_path
-        os.environ.pop("SHADOWLING_CONFIG", None)  # tests default unless set explicitly
-        # isolate data_dir() into a temp home so main()/register never touch ~/.shadowling
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
+        self.csv_path = os.path.join(self.home, "words.csv")
+        core.save_config({"native_language": "Ukrainian",
+                          "explanation_language": "English"})
 
     def tearDown(self):
-        os.environ.pop("SHADOWLING_CSV", None)
-        os.environ.pop("SHADOWLING_CONFIG", None)
         os.environ.pop("SHADOWLING_HOME", None)
-        if os.path.exists(self.csv_path):
-            os.remove(self.csv_path)
         shutil.rmtree(self.home, ignore_errors=True)
 
     def rows_by_word(self):
@@ -368,75 +361,31 @@ class InjectTest(VocabTestBase):
         self.assertIn("throughput", words)
         self.assertIn("remaining 10", words)
 
-    def test_inject_uses_configured_languages(self):
-        cfg = self.csv_path + ".config.json"
-        with open(cfg, "w", encoding="utf-8") as f:
-            json.dump({"native_language": "Spanish",
-                       "learning_language": "German"}, f)
-        os.environ["SHADOWLING_CONFIG"] = cfg
-        try:
-            vocab.add("throughput", "rendimiento")
-            ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
-            self.assertIn("Spanish", ctx)
-            self.assertIn("German", ctx)
-        finally:
-            os.remove(cfg)
-
-
-class ConfigTest(VocabTestBase):
-    def _write(self, data):
-        cfg = self.csv_path + ".config.json"
-        with open(cfg, "w", encoding="utf-8") as f:
-            f.write(data)
-        os.environ["SHADOWLING_CONFIG"] = cfg
-        return cfg
-
-    def test_defaults_when_no_config_file(self):
-        os.environ["SHADOWLING_CONFIG"] = self.csv_path + ".missing.json"
-        cfg = core.load_config()
-        self.assertEqual(cfg["native_language"], "Ukrainian")
-        self.assertEqual(cfg["learning_language"], "English")
-
-    def test_reads_values_from_file(self):
-        path = self._write('{"native_language": "Spanish"}')
-        try:
-            cfg = core.load_config()
-            self.assertEqual(cfg["native_language"], "Spanish")
-            # unspecified key keeps its default
-            self.assertEqual(cfg["learning_language"], "English")
-        finally:
-            os.remove(path)
-
-    def test_bad_json_falls_back_to_defaults(self):
-        path = self._write("not valid json {{")
-        try:
-            cfg = core.load_config()
-            self.assertEqual(cfg["native_language"], "Ukrainian")
-        finally:
-            os.remove(path)
+    def test_inject_uses_configured_native_language(self):
+        core.save_config({"native_language": "Spanish"})
+        vocab.add("throughput", "rendimiento")
+        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("Spanish", ctx)
 
 
 class DataDirTest(unittest.TestCase):
     def setUp(self):
-        self._saved = {k: os.environ.get(k)
-                       for k in ("SHADOWLING_HOME", "SHADOWLING_CSV", "SHADOWLING_CONFIG")}
-        for k in self._saved:
-            os.environ.pop(k, None)
+        self._home = os.environ.pop("SHADOWLING_HOME", None)
 
     def tearDown(self):
-        for k, v in self._saved.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
+        if self._home is None:
+            os.environ.pop("SHADOWLING_HOME", None)
+        else:
+            os.environ["SHADOWLING_HOME"] = self._home
 
     def test_default_data_dir_is_dot_shadowling(self):
         self.assertEqual(core.data_dir(), os.path.expanduser("~/.shadowling"))
-        self.assertEqual(
-            vocab.csv_path(),
-            os.path.join(os.path.expanduser("~/.shadowling"), "words.csv"))
+        self.assertEqual(vocab.csv_path(),
+                         os.path.expanduser("~/.shadowling/words.csv"))
+        self.assertEqual(core.config_path(),
+                         os.path.expanduser("~/.shadowling/config.json"))
 
-    def test_shadowling_home_override(self):
+    def test_env_home_overrides_everything(self):
         os.environ["SHADOWLING_HOME"] = "/tmp/shadowling_home"
         self.assertEqual(core.data_dir(), "/tmp/shadowling_home")
         self.assertEqual(vocab.csv_path(), "/tmp/shadowling_home/words.csv")
@@ -450,6 +399,32 @@ class DataDirTest(unittest.TestCase):
             self.assertTrue(os.path.exists(nested))
         finally:
             shutil.rmtree(d)
+
+
+class GateTest(VocabTestBase):
+    def _unconfigure(self):
+        os.remove(os.path.join(self.home, "config.json"))
+
+    def test_add_refuses_without_config(self):
+        self._unconfigure()
+        code, _ = run_main(["add", "hello", "привіт"])
+        self.assertEqual(code, 1)
+        self.assertEqual(vocab.load_rows(vocab.csv_path()), [])
+
+    def test_inject_silent_without_config(self):
+        vocab.add("hello", "привіт")
+        self._unconfigure()
+        self.assertEqual(vocab.inject(), "")
+
+    def test_scan_noop_without_config(self):
+        vocab.add("throughput", "пропускна здатність")
+        self._unconfigure()
+        tpath = os.path.join(self.home, "t.jsonl")
+        with open(tpath, "w", encoding="utf-8") as f:
+            f.write(json.dumps({"type": "assistant", "message": {"content": [
+                {"type": "text", "text": "improved throughput a lot"}]}}) + "\n")
+        self.assertEqual(vocab.scan(json.dumps({"transcript_path": tpath})), [])
+        self.assertEqual(vocab.load_rows(vocab.csv_path())[0]["remaining"], "10")
 
 
 if __name__ == "__main__":
