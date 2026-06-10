@@ -6,9 +6,10 @@ A Claude Code plugin marketplace. It currently hosts a single plugin:
 
 Passive language learning for non-native developers. Collect words with `/vocab`
 and Claude appends a translation in your native language inline in its replies,
-until you've seen each word enough times to have learned it. And `/en-review`
-quietly turns the English you write into personal correction docs — grammar,
-natural phrasing, idioms, and irregular verbs. Works for any native language.
+until you've seen each word enough times to have learned it. `/debrief` quietly
+turns the English you write into personal correction docs — grammar, natural
+phrasing, idioms, and irregular verbs — while `/aha` explains expressions you can't
+read literally. Works for any native language.
 
 → Full documentation: [`plugins/shadowling/README.md`](plugins/shadowling/README.md)
 
