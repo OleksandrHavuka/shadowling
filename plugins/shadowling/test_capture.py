@@ -50,59 +50,38 @@ class CaptureTestBase(unittest.TestCase):
         finally:
             os.remove(tpath)
 
-
-class IsEnglishTest(unittest.TestCase):
-    def test_english_sentence_is_english(self):
-        self.assertTrue(capture.is_english("I have went to the store yesterday"))
-
-    def test_ukrainian_sentence_is_not_english(self):
-        self.assertFalse(capture.is_english("я пішов до магазину вчора зранку"))
-
-    def test_mixed_mostly_cyrillic_is_not_english(self):
-        self.assertFalse(capture.is_english("деплой пройшов але був downtime"))
-
-    def test_too_short_is_not_english(self):
-        self.assertFalse(capture.is_english("ok thx"))
-
-
-class BufferPathTest(CaptureTestBase):
-    def test_default_buffer_filename(self):
-        self.assertTrue(capture.buffer_path().endswith("/buffer.jsonl"))
+    def _rows(self):
+        return capture.query(
+            "SELECT id, ts, text, langs, processed_at FROM messages ORDER BY id")
 
 
 class CaptureTest(CaptureTestBase):
-    def test_english_message_buffered(self):
+    def test_english_message_stored(self):
         self.assertTrue(self._capture_text("Despite the delay we have finished it"))
-        rows = capture._read_buffer()
+        rows = self._rows()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0]["text"], "Despite the delay we have finished it")
-        self.assertIn("ts", rows[0])
+        self.assertIsNone(rows[0]["langs"])
+        self.assertIsNone(rows[0]["processed_at"])
 
-    def test_ukrainian_message_not_buffered(self):
-        self.assertFalse(self._capture_text("привіт як справи сьогодні зранку"))
-        self.assertEqual(capture._read_buffer(), [])
+    def test_ukrainian_message_stored_too(self):
+        # language-blind capture: non-English is no longer discarded
+        self.assertTrue(self._capture_text("привіт як справи сьогодні зранку"))
+        self.assertEqual(len(self._rows()), 1)
 
-    def test_slash_command_not_buffered(self):
+    def test_mixed_message_stored(self):
+        self.assertTrue(self._capture_text("деплой пройшов але був downtime"))
+        self.assertEqual(len(self._rows()), 1)
+
+    def test_too_short_not_stored(self):
+        self.assertFalse(self._capture_text("ok thx"))
+        self.assertEqual(self._rows(), [])
+
+    def test_slash_command_not_stored(self):
         self.assertFalse(self._capture_text("/drop throughput please now"))
-        self.assertEqual(capture._read_buffer(), [])
+        self.assertEqual(self._rows(), [])
 
-    def test_same_text_twice_not_duplicated(self):
-        self.assertTrue(self._capture_text("This is a perfectly normal sentence"))
-        self.assertFalse(self._capture_text("This is a perfectly normal sentence"))
-        self.assertEqual(len(capture._read_buffer()), 1)
-
-    def test_slash_command_body_is_meta_not_buffered(self):
-        tpath = make_multi_user_transcript([
-            {"text": "Turn the user's buffered English messages into curated docs",
-             "isMeta": True},
-        ])
-        try:
-            self.assertFalse(capture.capture(self._stdin(tpath)))
-        finally:
-            os.remove(tpath)
-        self.assertEqual(capture._read_buffer(), [])
-
-    def test_command_marker_wrapper_not_buffered(self):
+    def test_command_marker_wrapper_not_stored(self):
         tpath = make_multi_user_transcript([
             {"text": "<command-message>shadowling:debrief</command-message>\n"
                      "<command-name>debrief</command-name>"},
@@ -111,7 +90,7 @@ class CaptureTest(CaptureTestBase):
             self.assertFalse(capture.capture(self._stdin(tpath)))
         finally:
             os.remove(tpath)
-        self.assertEqual(capture._read_buffer(), [])
+        self.assertEqual(self._rows(), [])
 
     def test_meta_message_skipped_falls_back_to_real_one(self):
         tpath = make_multi_user_transcript([
@@ -123,9 +102,14 @@ class CaptureTest(CaptureTestBase):
             self.assertTrue(capture.capture(self._stdin(tpath)))
         finally:
             os.remove(tpath)
-        rows = capture._read_buffer()
+        rows = self._rows()
         self.assertEqual(len(rows), 1)
         self.assertIn("real english sentence", rows[0]["text"])
+
+    def test_same_text_twice_not_duplicated(self):
+        self.assertTrue(self._capture_text("This is a perfectly normal sentence"))
+        self.assertFalse(self._capture_text("This is a perfectly normal sentence"))
+        self.assertEqual(len(self._rows()), 1)
 
     def test_bad_stdin_never_raises(self):
         self.assertFalse(capture.capture("not json"))
@@ -135,57 +119,135 @@ class CaptureTest(CaptureTestBase):
         self.assertFalse(capture.capture(
             json.dumps({"transcript_path": "/no/such.jsonl"})))
 
-
-class CorpusTest(CaptureTestBase):
-    def test_capture_appends_to_messages_log(self):
-        self._capture_text("I have went to the store and buyed milk today")
-        log = jsonl.read(capture.messages_log_path())
-        self.assertEqual(len(log), 1)
-        self.assertEqual(log[0]["text"],
-                         "I have went to the store and buyed milk today")
-        self.assertIn("ts", log[0])
-        self.assertIn("date", log[0])
-
-    def test_duplicate_capture_not_logged_twice(self):
-        self._capture_text("This is a perfectly normal english sentence here")
-        self._capture_text("This is a perfectly normal english sentence here")
-        self.assertEqual(len(jsonl.read(capture.messages_log_path())), 1)
+    def test_capture_noop_without_config(self):
+        os.remove(os.path.join(self.home, "config.json"))
+        self.assertFalse(
+            self._capture_text("This is a perfectly fine English sentence"))
 
 
-class MessagesTest(CaptureTestBase):
-    def test_empty_buffer_returns_empty_block(self):
-        self.assertEqual(capture.messages(), "<messages></messages>")
-
-    def test_messages_lists_buffered_entries(self):
-        self._capture_text("First normal english sentence here please now")
-        block = capture.messages()
-        self.assertIn("<messages>", block)
-        self.assertIn("First normal english sentence", block)
-        self.assertIn("<m ts=", block)
-
-    def test_messages_xml_escapes_text(self):
-        capture._append_buffer({"ts": "t", "text": "a < b & c > d here"})
-        block = capture.messages()
-        self.assertIn("a &lt; b &amp; c &gt; d here", block)
-
-
-class CountAndClearTest(CaptureTestBase):
-    def test_pending_count(self):
-        self.assertEqual(capture.pending_count(), 0)
+class TagTest(CaptureTestBase):
+    def setUp(self):
+        super().setUp()
         self._capture_text("First normal english sentence here please")
-        self._capture_text("Second different english sentence over here")
+        self._capture_text("друге повідомлення суто українською мовою")
+
+    def test_tag_single_and_multi_code(self):
+        ok, errors = capture.tag(["1=en", "2=en,uk"])
+        self.assertEqual((ok, errors), (2, []))
+        rows = self._rows()
+        self.assertEqual(json.loads(rows[0]["langs"]), ["en"])
+        self.assertEqual(json.loads(rows[1]["langs"]), ["en", "uk"])
+
+    def test_tag_unknown_id_reported(self):
+        ok, errors = capture.tag(["999=en"])
+        self.assertEqual(ok, 0)
+        self.assertTrue(any("999" in e for e in errors))
+
+    def test_tag_malformed_rejected(self):
+        for bad in ["1", "1=", "1=ENGLISH", "1=e", "x=en"]:
+            ok, errors = capture.tag([bad])
+            self.assertEqual(ok, 0, bad)
+            self.assertTrue(errors, bad)
+        self.assertIsNone(self._rows()[0]["langs"])
+
+    def test_tag_und_is_valid(self):
+        ok, errors = capture.tag(["1=und"])
+        self.assertEqual((ok, errors), (1, []))
+
+
+class MessagesSlicesTest(CaptureTestBase):
+    def setUp(self):
+        super().setUp()
+        self._capture_text("First normal english sentence here please")
+        self._capture_text("друге повідомлення суто українською мовою")
+        self._capture_text("third message чи mixed повідомлення разом")
+        capture.tag(["1=en", "2=uk"])  # row 3 left untagged
+
+    def test_messages_lists_all_unprocessed_with_attrs(self):
+        block = capture.messages()
+        self.assertIn('<m id="1"', block)
+        self.assertIn('<m id="3"', block)
+        self.assertIn("&quot;en&quot;", block)   # langs attr carries JSON, escaped
+        self.assertIn('langs=""', block)          # untagged row → empty attr
+
+    def test_untagged_slice_and_limit(self):
+        block = capture.messages(untagged=True)
+        self.assertIn('<m id="3"', block)
+        self.assertNotIn('<m id="1"', block)
+        capture.tag(["3=en,uk"])
+        self.assertEqual(capture.messages(untagged=True), "<messages></messages>")
+
+    def test_lang_slice_includes_mixed(self):
+        capture.tag(["3=en,uk"])
+        block = capture.messages(lang="en")
+        self.assertIn('<m id="1"', block)
+        self.assertIn('<m id="3"', block)   # mixed row contains en
+        self.assertNotIn('<m id="2"', block)
+
+    def test_limit(self):
+        block = capture.messages(untagged=True, limit=0)
+        self.assertEqual(block, "<messages></messages>")
+
+    def test_xml_escapes_text(self):
+        self._capture_text("a < b & c > d here in this sentence")
+        block = capture.messages()
+        self.assertIn("a &lt; b &amp; c &gt; d", block)
+
+
+class MarkProcessedTest(CaptureTestBase):
+    def setUp(self):
+        super().setUp()
+        self._capture_text("First normal english sentence here please")
+        self._capture_text("друге повідомлення суто українською мовою")
+
+    def test_marks_tagged_only_and_keeps_untagged(self):
+        capture.tag(["1=en"])  # row 2 untagged (mid-debrief capture)
+        out = capture.mark_processed()
+        self.assertEqual(out, "processed 1, kept 1 untagged")
+        rows = self._rows()
+        self.assertIsNotNone(rows[0]["processed_at"])
+        self.assertIsNone(rows[1]["processed_at"])
+
+    def test_processed_rows_leave_listings_but_stay_in_table(self):
+        capture.tag(["1=en", "2=uk"])
+        capture.mark_processed()
+        self.assertEqual(capture.messages(), "<messages></messages>")
+        self.assertEqual(capture.pending_count(), 0)
+        self.assertEqual(len(self._rows()), 2)  # history kept (via query)
+
+    def test_pending_count_counts_unprocessed(self):
         self.assertEqual(capture.pending_count(), 2)
 
-    def test_clear_empties_buffer(self):
-        self._capture_text("A normal english sentence to be cleared soon")
-        self.assertEqual(len(capture._read_buffer()), 1)
-        self.assertEqual(capture.clear(), "cleared")
-        self.assertEqual(capture._read_buffer(), [])
 
-    def test_clear_keeps_corpus(self):
-        self._capture_text("A normal english sentence to be cleared soon")
-        capture.clear()
-        self.assertEqual(len(jsonl.read(capture.messages_log_path())), 1)
+class QueryTest(CaptureTestBase):
+    def test_query_is_read_only(self):
+        self._capture_text("First normal english sentence here please")
+        with self.assertRaises(Exception):
+            capture.query("DELETE FROM messages")
+        self.assertEqual(len(self._rows()), 1)
+
+
+class MigrationTest(CaptureTestBase):
+    def test_imports_both_legacy_files_once(self):
+        with open(os.path.join(self.home, "messages.log.jsonl"), "w",
+                  encoding="utf-8") as f:
+            f.write(json.dumps({"date": "2026-06-01", "ts": "2026-06-01T10:00:00",
+                                "text": "old corpus english message here"}) + "\n")
+        with open(os.path.join(self.home, "buffer.jsonl"), "w",
+                  encoding="utf-8") as f:
+            f.write(json.dumps({"ts": "2026-06-09T10:00:00",
+                                "text": "old buffered message awaiting debrief"}) + "\n")
+        self.assertEqual(capture.pending_count(), 1)  # first DB touch migrates
+        rows = self._rows()
+        self.assertEqual(len(rows), 2)
+        by_text = {r["text"]: r for r in rows}
+        self.assertIsNotNone(
+            by_text["old corpus english message here"]["processed_at"])
+        self.assertIsNone(
+            by_text["old buffered message awaiting debrief"]["processed_at"])
+        self.assertFalse(os.path.exists(os.path.join(self.home, "buffer.jsonl")))
+        self.assertFalse(
+            os.path.exists(os.path.join(self.home, "messages.log.jsonl")))
 
 
 class MainTest(CaptureTestBase):
@@ -198,19 +260,13 @@ class MainTest(CaptureTestBase):
             capture.sys.stdin = old
         self.assertEqual(ret, 0)
 
-    def test_messages_via_main(self):
-        self.assertEqual(capture.main(["messages"]), 0)
+    def test_tag_via_main_reports_errors_with_exit_1(self):
+        self._capture_text("First normal english sentence here please")
+        self.assertEqual(capture.main(["tag", "1=en"]), 0)
+        self.assertEqual(capture.main(["tag", "999=en"]), 1)
 
     def test_unknown_command_returns_one(self):
         self.assertEqual(capture.main(["bogus"]), 1)
-
-
-class CaptureGateTest(CaptureTestBase):
-    def test_capture_noop_without_config(self):
-        os.remove(os.path.join(self.home, "config.json"))
-        self.assertFalse(
-            self._capture_text("This is a perfectly fine English sentence"))
-        self.assertEqual(capture._read_buffer(), [])
 
 
 if __name__ == "__main__":
