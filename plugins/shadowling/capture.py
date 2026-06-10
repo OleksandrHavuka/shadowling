@@ -24,7 +24,7 @@ COMMAND_WRAPPERS = ("<command-", "<local-command-")
 
 
 def buffer_path():
-    return os.environ.get("SHADOWLING_EN_BUFFER") or os.path.join(
+    return os.environ.get("SHADOWLING_BUFFER") or os.path.join(
         data_dir(), "buffer.jsonl")
 
 
