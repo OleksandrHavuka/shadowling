@@ -451,18 +451,6 @@ class DataDirTest(unittest.TestCase):
         finally:
             shutil.rmtree(d)
 
-    def test_main_registers_script_path(self):
-        d = tempfile.mkdtemp()
-        try:
-            os.environ["SHADOWLING_HOME"] = d
-            vocab.main(["list-active"])  # any command triggers registration
-            registered = os.path.join(d, ".script_path")
-            self.assertTrue(os.path.exists(registered))
-            with open(registered, encoding="utf-8") as f:
-                self.assertEqual(f.read(), os.path.abspath(core.__file__))
-        finally:
-            shutil.rmtree(d)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """core.py - shared infrastructure for shadowling scripts (stdlib only, Python 3.9+).
 
-Home-directory resolution, config loading, transcript reading, and the
-`.script_path` registration used by both `vocab.py` (glossing) and `capture.py`
-(English-correction collection).
+Home-directory resolution, config loading, and transcript reading, shared by
+`vocab.py` (glossing) and `capture.py` (English-correction collection).
 """
 import json
 import os
@@ -100,21 +99,6 @@ def last_assistant_text(transcript_path):
 
 def last_user_text(transcript_path):
     return _last_message_text(transcript_path, "user")
-
-
-def register_script_path():
-    """Record this script's absolute path (in `.script_path`) so slash commands can
-    locate the plugin's scripts. Hooks get `${CLAUDE_PLUGIN_ROOT}`; command bodies
-    don't, so they read this file and resolve their target as
-    `dirname(.script_path)/<script>.py`.
-    """
-    try:
-        path = os.path.join(data_dir(), ".script_path")
-        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(os.path.abspath(__file__))
-    except OSError:
-        pass
 
 
 def today():

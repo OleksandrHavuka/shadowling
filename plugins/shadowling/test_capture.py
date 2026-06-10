@@ -203,10 +203,6 @@ class MainTest(CaptureTestBase):
     def test_unknown_command_returns_one(self):
         self.assertEqual(capture.main(["bogus"]), 1)
 
-    def test_main_registers_script_path(self):
-        capture.main(["pending-count"])
-        self.assertTrue(os.path.exists(os.path.join(self.home, ".script_path")))
-
 
 if __name__ == "__main__":
     unittest.main()

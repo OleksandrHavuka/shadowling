@@ -6,7 +6,7 @@ import os
 import re
 import sys
 
-from core import data_dir, last_assistant_text, load_config, register_script_path
+from core import data_dir, last_assistant_text, load_config
 
 FIELDS = ["word", "translation", "remaining", "status"]
 START_REMAINING = 10
@@ -181,7 +181,6 @@ def inject(event="SessionStart"):
 
 
 def main(argv):
-    register_script_path()
     if not argv:
         print("usage: vocab.py {add|remove|list-active|inject|scan} ...",
               file=sys.stderr)
