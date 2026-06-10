@@ -1,10 +1,10 @@
 ---
-name: decode
-description: "Decode an English expression you can't read literally — get a verdict (memorize vs learnable rule) + how to read it, saved to decode.md. Usage: /decode <phrase> [+ your hunch]"
+name: aha
+description: "Explain an English expression you can't read literally — get a verdict (memorize vs learnable rule) + how to read it, saved to decode.md. Usage: /aha <phrase> [+ your hunch]"
 allowed-tools: Bash(python3 */db.py*) Bash(python3 */config.py*)
 ---
 
-You help the user DECODE English they can't read literally (something with a
+You help the user EXPLAIN English they can't read literally (something with a
 non-literal / native meaning). You run in the MAIN agent, so you already see this
 conversation — use it for context. The plugin's scripts live at
 `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so each command starts with
@@ -12,7 +12,7 @@ conversation — use it for context. The plugin's scripts live at
 
 Input: the user passes, in free text, one or more English expressions they couldn't
 read, optionally with their own hunch at the meaning (e.g.
-`/decode "it cost an arm and a leg" — I thought it's about an arm and a leg`). Parse
+`/aha "it cost an arm and a leg" — I thought it's about an arm and a leg`). Parse
 out each phrase and the user's hunch yourself.
 
 Steps:
@@ -21,7 +21,7 @@ Steps:
    language to WRITE EXPLANATIONS IN (it always prints one; default `English`). Write
    `meaning` and `takeaway` in THAT language.
 2. For EACH expression the user brought:
-   a. If it is literal / there is nothing to decode → say so to the user and DO NOT
+   a. If it is literal / there is nothing to explain → say so to the user and DO NOT
       record it.
    b. If it is just an unknown single word (not an idiom, not a grammar pattern) →
       explain it and suggest `/vocab <word>`; DO NOT record a decode row.
