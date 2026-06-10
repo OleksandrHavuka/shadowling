@@ -127,5 +127,47 @@ class VerbsRecordTest(RecordTestBase):
         self.assertEqual(log[0]["example_fix"], "I have went → I have gone")
 
 
+class DecodeRecordTest(RecordTestBase):
+    def test_fixed_record_inserts_product_and_log(self):
+        from models.decode import Decode
+        self.assertEqual(models.RECORDERS["decode"](
+            "break-the-ice", "fixed", "break the ice",
+            "to start a conversation in an awkward situation",
+            "memorize: set phrase", "maybe physically break ice?",
+            "at a party someone said it"), "inserted")
+        row = Decode.select("break-the-ice")
+        self.assertEqual(row["counter"], "1")
+        self.assertEqual(row["type"], "fixed")
+        self.assertEqual(row["expression"], "break the ice")
+        self.assertEqual(row["meaning"],
+                         "to start a conversation in an awkward situation")
+        self.assertEqual(row["takeaway"], "memorize: set phrase")
+        self.assertTrue(row["created_at"])
+        self.assertTrue(row["updated_at"])
+        log = self._log("decode.log.jsonl")
+        self.assertEqual(len(log), 1)
+        self.assertEqual(log[0]["your_read"], "maybe physically break ice?")
+        self.assertEqual(log[0]["context"], "at a party someone said it")
+        self.assertIn("date", log[0])
+
+    def test_method_increments_by_rule_across_phrases(self):
+        from models.decode import Decode
+        # Different phrasings of the same rule slug → one row, counter climbs.
+        self.assertEqual(models.RECORDERS["decode"](
+            "Present Perfect Passive", "method", "it has been done",
+            "a completed action where the doer is unimportant",
+            "rule: has/have + been + V3", "thought it was 'has did'",
+            "ctx1"), "inserted")
+        self.assertEqual(models.RECORDERS["decode"](
+            "present-perfect-passive", "method", "the form has been submitted",
+            "a completed action where the doer is unimportant",
+            "rule: has/have + been + V3", "thought 'has submit'",
+            "ctx2"), "incremented")
+        row = Decode.select("present-perfect-passive")
+        self.assertEqual(row["counter"], "2")
+        self.assertEqual(row["expression"], "the form has been submitted")  # latest
+        self.assertEqual(len(self._log("decode.log.jsonl")), 2)
+
+
 if __name__ == "__main__":
     unittest.main()
