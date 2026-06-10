@@ -107,7 +107,7 @@ Env overrides (used by tests and smoke runs):
 | `SHADOWLING_HOME`     | the whole data dir              |
 | `SHADOWLING_CONFIG`   | path to `config.json`           |
 | `SHADOWLING_CSV`      | path to `words.csv`             |
-| `SHADOWLING_EN_BUFFER`| path to the buffer (`buffer.jsonl`) |
+| `SHADOWLING_BUFFER`   | path to the buffer (`buffer.jsonl`) |
 
 ## Notes
 
