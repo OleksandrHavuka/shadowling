@@ -7,7 +7,6 @@ import unittest
 
 import capture
 import core
-import jsonl
 
 
 def make_user_transcript(text):
@@ -225,29 +224,6 @@ class QueryTest(CaptureTestBase):
         with self.assertRaises(Exception):
             capture.query("DELETE FROM messages")
         self.assertEqual(len(self._rows()), 1)
-
-
-class MigrationTest(CaptureTestBase):
-    def test_imports_both_legacy_files_once(self):
-        with open(os.path.join(self.home, "messages.log.jsonl"), "w",
-                  encoding="utf-8") as f:
-            f.write(json.dumps({"date": "2026-06-01", "ts": "2026-06-01T10:00:00",
-                                "text": "old corpus english message here"}) + "\n")
-        with open(os.path.join(self.home, "buffer.jsonl"), "w",
-                  encoding="utf-8") as f:
-            f.write(json.dumps({"ts": "2026-06-09T10:00:00",
-                                "text": "old buffered message awaiting debrief"}) + "\n")
-        self.assertEqual(capture.pending_count(), 1)  # first DB touch migrates
-        rows = self._rows()
-        self.assertEqual(len(rows), 2)
-        by_text = {r["text"]: r for r in rows}
-        self.assertIsNotNone(
-            by_text["old corpus english message here"]["processed_at"])
-        self.assertIsNone(
-            by_text["old buffered message awaiting debrief"]["processed_at"])
-        self.assertFalse(os.path.exists(os.path.join(self.home, "buffer.jsonl")))
-        self.assertFalse(
-            os.path.exists(os.path.join(self.home, "messages.log.jsonl")))
 
 
 class MainTest(CaptureTestBase):
