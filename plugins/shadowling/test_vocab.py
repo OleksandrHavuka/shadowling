@@ -6,6 +6,7 @@ import shutil
 import tempfile
 import unittest
 
+import appdb
 import core
 import vocab
 
@@ -22,7 +23,6 @@ class VocabTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
-        self.csv_path = os.path.join(self.home, "words.csv")
         core.save_config({"native_language": "Ukrainian",
                           "explanation_language": "English"})
 
@@ -31,7 +31,19 @@ class VocabTestBase(unittest.TestCase):
         shutil.rmtree(self.home, ignore_errors=True)
 
     def rows_by_word(self):
-        return {r["word"]: r for r in vocab.load_rows(vocab.csv_path())}
+        return {r["word"]: r for r in appdb.query("SELECT * FROM vocab")}
+
+    def _set(self, word, **cols):
+        """Force a vocab row's state directly (replaces the old CSV poke)."""
+        con = appdb.connect()
+        try:
+            with con:
+                for col, val in cols.items():
+                    con.execute(
+                        "UPDATE vocab SET {0} = ? WHERE word = ?".format(col),
+                        (val, word))
+        finally:
+            con.close()
 
 
 class AddTest(VocabTestBase):
@@ -40,19 +52,22 @@ class AddTest(VocabTestBase):
         self.assertEqual(action, "add")
         self.assertEqual(row["word"], "throughput")  # stored lowercased
         self.assertEqual(row["translation"], "пропускна здатність")
-        self.assertEqual(row["remaining"], "10")
+        self.assertEqual(row["remaining"], 10)
         self.assertEqual(row["status"], "active")
+
+    def test_rows_persist_in_sqlite(self):
+        vocab.add("throughput", "пропускна здатність")
+        rows = self.rows_by_word()
+        self.assertEqual(rows["throughput"]["remaining"], 10)
+        self.assertEqual(rows["throughput"]["status"], "active")
 
     def test_add_existing_active_refreshes_translation_keeps_remaining(self):
         vocab.add("throughput", "old")
-        # simulate prior exposure
-        rows = vocab.load_rows(vocab.csv_path())
-        rows[0]["remaining"] = "7"
-        vocab.save_rows(vocab.csv_path(), rows)
+        self._set("throughput", remaining=7)  # simulate prior exposure
         action, row = vocab.add("throughput", "new translation")
         self.assertEqual(action, "refresh")
         self.assertEqual(row["translation"], "new translation")
-        self.assertEqual(row["remaining"], "7")  # unchanged
+        self.assertEqual(row["remaining"], 7)  # unchanged
         self.assertEqual(row["status"], "active")
 
     def test_add_identity_translation_is_untranslated_and_not_saved(self):
@@ -67,13 +82,10 @@ class AddTest(VocabTestBase):
 
     def test_add_existing_learned_resets_to_10_active(self):
         vocab.add("throughput", "t")
-        rows = vocab.load_rows(vocab.csv_path())
-        rows[0]["remaining"] = "0"
-        rows[0]["status"] = "learned"
-        vocab.save_rows(vocab.csv_path(), rows)
+        self._set("throughput", remaining=0, status="learned")
         action, row = vocab.add("throughput", "t2")
         self.assertEqual(action, "relearn")
-        self.assertEqual(row["remaining"], "10")
+        self.assertEqual(row["remaining"], 10)
         self.assertEqual(row["status"], "active")
         self.assertEqual(row["translation"], "t2")
 
@@ -163,11 +175,7 @@ class ListActiveTest(VocabTestBase):
     def test_list_active_excludes_learned(self):
         vocab.add("alpha", "а")
         vocab.add("beta", "б")
-        rows = vocab.load_rows(vocab.csv_path())
-        for r in rows:
-            if r["word"] == "beta":
-                r["status"] = "learned"
-        vocab.save_rows(vocab.csv_path(), rows)
+        self._set("beta", status="learned")
         words = [r["word"] for r in vocab.list_active()]
         self.assertEqual(words, ["alpha"])
 
@@ -195,7 +203,7 @@ class ScanTest(VocabTestBase):
         finally:
             os.remove(tpath)
         self.assertEqual(changed, ["throughput"])
-        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], "9")
+        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 9)
 
     def test_scan_ignores_absent_word(self):
         vocab.add("throughput", "п")
@@ -205,28 +213,23 @@ class ScanTest(VocabTestBase):
         finally:
             os.remove(tpath)
         self.assertEqual(changed, [])
-        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], "10")
+        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 
     def test_scan_graduates_at_zero(self):
         vocab.add("throughput", "п")
-        rows = vocab.load_rows(vocab.csv_path())
-        rows[0]["remaining"] = "1"
-        vocab.save_rows(vocab.csv_path(), rows)
+        self._set("throughput", remaining=1)
         tpath = make_transcript("throughput throughput")  # still one decrement
         try:
             vocab.scan(self._stdin(tpath))
         finally:
             os.remove(tpath)
         row = self.rows_by_word()["throughput"]
-        self.assertEqual(row["remaining"], "0")
+        self.assertEqual(row["remaining"], 0)
         self.assertEqual(row["status"], "learned")
 
     def test_scan_skips_learned_words(self):
         vocab.add("throughput", "п")
-        rows = vocab.load_rows(vocab.csv_path())
-        rows[0]["status"] = "learned"
-        rows[0]["remaining"] = "0"
-        vocab.save_rows(vocab.csv_path(), rows)
+        self._set("throughput", status="learned", remaining=0)
         tpath = make_transcript("throughput throughput")
         try:
             changed = vocab.scan(self._stdin(tpath))
@@ -260,23 +263,6 @@ class ScanTest(VocabTestBase):
     def test_scan_missing_transcript_path_returns_empty(self):
         self.assertEqual(vocab.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), [])
 
-    def test_scan_corrupt_remaining_does_not_raise_and_skips_row(self):
-        # Fix 1: corrupt 'remaining' must not cause scan() to raise
-        vocab.add("throughput", "п")
-        rows = vocab.load_rows(vocab.csv_path())
-        rows[0]["remaining"] = "oops"  # corrupt value
-        vocab.save_rows(vocab.csv_path(), rows)
-        tpath = make_transcript("This improves throughput under load.")
-        try:
-            result = vocab.scan(self._stdin(tpath))
-        finally:
-            os.remove(tpath)
-        # Must not raise, and the corrupt row must NOT appear in changed list
-        self.assertNotIn("throughput", result)
-        # The row must remain unchanged (remaining still "oops")
-        row = self.rows_by_word()["throughput"]
-        self.assertEqual(row["remaining"], "oops")
-
     def test_scan_main_bad_stdin_returns_zero(self):
         # Hook path must never crash even on completely invalid stdin
         import io
@@ -308,11 +294,7 @@ class InjectTest(VocabTestBase):
     def test_inject_excludes_learned_words(self):
         vocab.add("alpha", "а")
         vocab.add("beta", "б")
-        rows = vocab.load_rows(vocab.csv_path())
-        for r in rows:
-            if r["word"] == "beta":
-                r["status"] = "learned"
-        vocab.save_rows(vocab.csv_path(), rows)
+        self._set("beta", status="learned")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("alpha", ctx)
         self.assertNotIn("beta", ctx)
@@ -380,25 +362,13 @@ class DataDirTest(unittest.TestCase):
 
     def test_default_data_dir_is_dot_shadowling(self):
         self.assertEqual(core.data_dir(), os.path.expanduser("~/.shadowling"))
-        self.assertEqual(vocab.csv_path(),
-                         os.path.expanduser("~/.shadowling/words.csv"))
         self.assertEqual(core.config_path(),
                          os.path.expanduser("~/.shadowling/config.json"))
 
     def test_env_home_overrides_everything(self):
         os.environ["SHADOWLING_HOME"] = "/tmp/shadowling_home"
         self.assertEqual(core.data_dir(), "/tmp/shadowling_home")
-        self.assertEqual(vocab.csv_path(), "/tmp/shadowling_home/words.csv")
         self.assertEqual(core.config_path(), "/tmp/shadowling_home/config.json")
-
-    def test_save_rows_creates_missing_dir(self):
-        d = tempfile.mkdtemp()
-        try:
-            nested = os.path.join(d, "sub", "words.csv")
-            vocab.save_rows(nested, [])
-            self.assertTrue(os.path.exists(nested))
-        finally:
-            shutil.rmtree(d)
 
 
 class GateTest(VocabTestBase):
@@ -409,7 +379,7 @@ class GateTest(VocabTestBase):
         self._unconfigure()
         code, _ = run_main(["add", "hello", "привіт"])
         self.assertEqual(code, 1)
-        self.assertEqual(vocab.load_rows(vocab.csv_path()), [])
+        self.assertEqual(self.rows_by_word(), {})
 
     def test_inject_silent_without_config(self):
         vocab.add("hello", "привіт")
@@ -424,7 +394,7 @@ class GateTest(VocabTestBase):
             f.write(json.dumps({"type": "assistant", "message": {"content": [
                 {"type": "text", "text": "improved throughput a lot"}]}}) + "\n")
         self.assertEqual(vocab.scan(json.dumps({"transcript_path": tpath})), [])
-        self.assertEqual(vocab.load_rows(vocab.csv_path())[0]["remaining"], "10")
+        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 
 
 if __name__ == "__main__":
