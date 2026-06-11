@@ -2,6 +2,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 from models.grammar import Grammar
 
@@ -48,6 +49,28 @@ class InsertSelectTest(ModelTestBase):
         self._insert("s1")
         self.assertEqual(Grammar.drop(), "dropped")
         self.assertEqual(Grammar.select(), [])
+
+
+class LifecycleAndOrderingTest(ModelTestBase):
+    def test_created_fixed_while_updated_advances_across_dates(self):
+        # The core of the lifecycle fields: created_at pins to the FIRST
+        # incident's date, updated_at tracks the LATEST. today() is constant
+        # within a run, so the two dates must be injected to prove it.
+        with mock.patch("models.base.today", return_value="2026-06-01"):
+            self._insert("s1", "a", "b")
+        with mock.patch("models.base.today", return_value="2026-06-09"):
+            self._insert("s1", "c", "d")
+        row = Grammar.select("s1")
+        self.assertEqual(row["counter"], 2)
+        self.assertEqual(row["created_at"], "2026-06-01")  # fixed at first
+        self.assertEqual(row["updated_at"], "2026-06-09")  # advances to latest
+        self.assertEqual(row["last example"], "c → d")     # latest incident wins
+
+    def test_equal_counters_break_ties_by_most_recent_incident(self):
+        self._insert("older")
+        self._insert("newer")  # same counter (1); higher last_id ranks first
+        self.assertEqual([r["slug"] for r in Grammar.select()],
+                         ["newer", "older"])
 
 
 if __name__ == "__main__":
