@@ -1,94 +1,82 @@
+import contextlib
 import io
 import os
 import shutil
 import tempfile
 import unittest
-from contextlib import redirect_stdout
 
 import db
-import models
-from models.base import Model
 
 
-class Widget(Model):
-    file = "widgets.md"
-    columns = ["sku", "counter", "name"]
-    key = "sku"
-    counter = "counter"
+def run_main(argv):
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        code = db.main(argv)
+    return code, buf.getvalue()
 
 
-class DbTest(unittest.TestCase):
+class DbCliTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
-        models.REGISTRY["widget"] = Widget
 
     def tearDown(self):
         os.environ.pop("SHADOWLING_HOME", None)
-        models.REGISTRY.pop("widget", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
-    def _run(self, argv):
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            code = db.main(argv)
-        return code, buf.getvalue()
 
-    def test_upsert_maps_positional_args_skipping_counter(self):
-        code, out = self._run(["widget", "upsert", "A", "Gadget"])
+class RecordSelectTest(DbCliTestBase):
+    def test_record_then_select_roundtrip(self):
+        code, out = run_main(["grammar", "record", "s1", "p", "a", "b", "r"])
+        self.assertEqual((code, out.strip()), (0, "inserted"))
+        code, out = run_main(["grammar", "select", "s1"])
         self.assertEqual(code, 0)
-        self.assertIn("inserted", out)
-        self.assertEqual(Widget.select("A"),
-                         {"sku": "A", "counter": "1", "name": "Gadget"})
+        self.assertIn('"counter": 1', out)
+        self.assertIn('"last example": "a → b"', out)
 
-    def test_select_prints_json_rows(self):
-        Widget.insert({"sku": "A", "name": "Gadget"})
-        code, out = self._run(["widget", "select", "A"])
+    def test_record_wrong_arity_is_error(self):
+        code, _ = run_main(["grammar", "record", "only-one-arg"])
+        self.assertEqual(code, 1)
+
+    def test_select_all_prints_one_json_per_row(self):
+        run_main(["grammar", "record", "s1", "p", "a", "b", "r"])
+        run_main(["grammar", "record", "s2", "p", "c", "d", "r"])
+        code, out = run_main(["grammar", "select"])
         self.assertEqual(code, 0)
-        self.assertIn('"name": "Gadget"', out)
-        self.assertIn('"counter": "1"', out)
-
-    def test_unknown_repo_exits_nonzero(self):
-        code, _ = self._run(["nope", "select"])
-        self.assertEqual(code, 1)
-
-    def test_unique_violation_exits_nonzero(self):
-        self._run(["widget", "insert", "A", "Gadget"])
-        code, _ = self._run(["widget", "insert", "A", "Other"])
-        self.assertEqual(code, 1)
+        self.assertEqual(len(out.strip().splitlines()), 2)
 
 
-class RecordTest(unittest.TestCase):
-    def setUp(self):
-        self.calls = []
-        models.RECORDERS["faux"] = lambda *a: self.calls.append(a) or "inserted"
-
-    def tearDown(self):
-        models.RECORDERS.pop("faux", None)
-
-    def _run(self, argv):
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            code = db.main(argv)
-        return code, buf.getvalue()
-
-    def test_record_dispatches_positional_args(self):
-        code, out = self._run(["faux", "record", "a", "b", "c"])
+class ExportTest(DbCliTestBase):
+    def test_export_renders_markdown_table(self):
+        run_main(["grammar", "record", "s1", "p", "a", "b", "r"])
+        code, out = run_main(["grammar", "export"])
         self.assertEqual(code, 0)
-        self.assertIn("inserted", out)
-        self.assertEqual(self.calls, [("a", "b", "c")])
+        lines = out.strip().splitlines()
+        self.assertTrue(lines[0].startswith("| slug |"))
+        self.assertTrue(lines[1].startswith("| ---"))
+        self.assertIn("| s1 |", lines[2])
 
-    def test_unknown_recorder_exits_nonzero(self):
-        code, _ = self._run(["nope", "record", "x"])
-        self.assertEqual(code, 1)
+    def test_export_escapes_pipes_and_newlines(self):
+        run_main(["grammar", "record", "s1", "p | q", "a\nb", "c", "r"])
+        _, out = run_main(["grammar", "export"])
+        self.assertIn("p \\| q", out)
+        self.assertNotIn("a\nb", out)
 
-    def test_record_arity_error_exits_nonzero(self):
-        models.RECORDERS["strict"] = lambda x, y: "inserted"
-        try:
-            code, _ = self._run(["strict", "record", "only-one-arg"])
-        finally:
-            models.RECORDERS.pop("strict", None)
-        self.assertEqual(code, 1)
+    def test_export_empty(self):
+        code, out = run_main(["grammar", "export"])
+        self.assertEqual((code, out.strip()), (0, "(empty)"))
+
+
+class DropAndErrorsTest(DbCliTestBase):
+    def test_drop(self):
+        run_main(["grammar", "record", "s1", "p", "a", "b", "r"])
+        self.assertEqual(run_main(["grammar", "drop"])[1].strip(), "dropped")
+        self.assertEqual(run_main(["grammar", "select"])[1].strip(), "")
+
+    def test_unknown_repo_and_op(self):
+        self.assertEqual(run_main(["nosuch", "select"])[0], 1)
+        self.assertEqual(run_main(["grammar", "bogus"])[0], 1)
+        self.assertEqual(run_main([])[0], 1)
 
 
 if __name__ == "__main__":

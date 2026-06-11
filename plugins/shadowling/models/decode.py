@@ -1,39 +1,28 @@
-"""models/decode.py - decode product (Tier 2) + record fan-out (Tier 1).
+"""models/decode.py - comprehension-gap incidents (append-only) + record fan-out.
 
-User-initiated `/decode`: a phrase you couldn't read literally, classified as a
-`fixed` expression (memorize) or a `method`/grammar pattern (learnable). The product
-(decode.md) is the deduped "what trips me most" ranking; the log (decode.log.jsonl)
-keeps every verbatim submission (your hunch + context). For `method` the key is the
-rule, so one rule aggregates across different phrases.
-"""
-import os
-
-from core import data_dir, slugify, today
-from jsonl import append as jsonl_append
+User-initiated /aha: a phrase that couldn't be read literally, classified as a
+`fixed` expression (memorize) or a `method`/grammar pattern (learnable). For
+`method` the key is the rule, so one rule aggregates across phrases."""
+from core import slugify
 
 from . import register
 from .base import Model
 
 
 class Decode(Model):
-    file = "decode.md"
-    columns = ["slug", "type", "expression", "meaning", "takeaway",
-               "created_at", "updated_at", "counter"]
+    table = "decode"
+    view = "decode_ranked"
     key = "slug"
-    counter = "counter"
-    created = "created_at"
-    updated = "updated_at"
+    insert_cols = ["slug", "type", "expression", "meaning", "takeaway",
+                   "your_read", "context"]
 
 
 def record(slug, kind, expression, meaning, takeaway, your_read, context):
-    slug = slugify(slug)
-    result = Decode.upsert({"slug": slug, "type": kind, "expression": expression,
-                            "meaning": meaning, "takeaway": takeaway})
-    jsonl_append(os.path.join(data_dir(), "decode.log.jsonl"),
-                 {"date": today(), "slug": slug, "type": kind,
-                  "expression": expression, "meaning": meaning,
-                  "your_read": your_read, "context": context, "takeaway": takeaway})
-    return result
+    n = Decode.insert({"slug": slugify(slug), "type": kind,
+                       "expression": expression, "meaning": meaning,
+                       "takeaway": takeaway, "your_read": your_read,
+                       "context": context})
+    return "inserted" if n == 1 else "incremented"
 
 
 register("decode", Decode, record)
