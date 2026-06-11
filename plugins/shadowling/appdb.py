@@ -165,7 +165,7 @@ def connect():
     return con
 
 
-def query(sql):
+def query(sql, params=()):
     """Escape hatch: run a statement on a READ-ONLY connection (URI mode=ro);
     any write fails at the connection level. Returns a list of dicts. The DB is
     materialized first (connect) so a read on a never-opened home still works."""
@@ -174,6 +174,6 @@ def query(sql):
     con = sqlite3.connect(uri, uri=True)
     try:
         con.row_factory = sqlite3.Row
-        return [dict(r) for r in con.execute(sql)]
+        return [dict(r) for r in con.execute(sql, params)]
     finally:
         con.close()
