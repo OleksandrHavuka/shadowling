@@ -10,20 +10,19 @@ plugins/shadowling/
   config.py          # plugin-wide language config CLI (get / set)
   vocab.py           # vocab store (add / remove / list-active) + glossing hooks (inject / scan)
   capture.py         # message capture + sqlite store (tag / slices / mark-processed / ro query)
-  jsonl.py           # append-only JSONL helper
-  mddb.py            # markdown-table CRUD primitives
-  db.py              # CLI over models/ (e.g. `db.py decode record ...`)
-  models/            # product models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
+  appdb.py           # single sqlite home: connect(), MIGRATIONS (user_version), ranked views, ro query
+  db.py              # CLI over models/ (record / select / export / drop)
+  models/            # incident models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
   skills/            # skill bodies:
                      #   loot/, drop/          — fork: translate+add / remove terms
                      #   setup/                — main: ask + set the plugin language
                      #   debrief/              — main: orchestrate triage + five specialists
                      #   debrief-triage/       — fork: tag each message's language(s)
-                     #   debrief-{grammar,rephrasing,idioms,verbs,friction}/ — fork: analyze batch slice → docs
+                     #   debrief-{grammar,rephrasing,idioms,verbs,friction}/ — fork: analyze batch slice → datasets
                      #   aha/                  — main: explain expressions you can't read literally
-                     #   vipe/                 — dev: wipe debrief docs for a clean test run
+                     #   vipe/                 — dev: drop the six category datasets for a clean test run
   hooks/hooks.json   # UserPromptSubmit (inject) + Stop (scan, capture)
-  test_*.py          # capture, config, core, db, jsonl, mddb, models, record, vocab
+  test_*.py          # appdb, capture, config, core, db, models, record, vocab
 ```
 
 ## Apply local changes
@@ -82,10 +81,14 @@ python3 plugins/shadowling/capture.py mark-processed   # stamp tagged rows
 python3 plugins/shadowling/capture.py query "SELECT id, langs, processed_at FROM messages ORDER BY id DESC LIMIT 5"
 ```
 
-`/aha` and `/debrief` products go through the `db.py` record CLI:
+`/aha` and `/debrief` incidents go through the `db.py` CLI (record / select /
+export), and any view is queryable read-only via `capture.py query`:
 
 ```
-python3 plugins/shadowling/db.py decode record "<slug>" "<type>" "<expression>" "<meaning>" "<takeaway>" "<your hunch>" "<context>"
+python3 plugins/shadowling/db.py grammar record "article-omission" "drops 'the'" "I went to store" "I went to the store" "use the"
+python3 plugins/shadowling/db.py grammar select            # ranked view, JSON per row
+python3 plugins/shadowling/db.py grammar export            # same, as a markdown table
+python3 plugins/shadowling/capture.py query "SELECT slug, counter FROM grammar_ranked"
 ```
 
 ## Data & env overrides
@@ -94,17 +97,24 @@ Real data lives in `~/.shadowling/`:
 
 | File                  | What                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
+| `shadowling.db`       | everything: message store (captured messages, language tags, processed stamps), the six category incident datasets + their `*_ranked` views, and the `vocab` table |
 | `config.json`         | `native_language` / `explanation_language` — both required (whole-plugin gate)|
-| `words.csv`           | vocab list (word, translation, remaining, status)                          |
-| `shadowling.db`       | sqlite message store — captured messages, language tags, processed stamps   |
-| `grammar.md` etc.     | `/debrief` correction products (+ matching `*.log.jsonl` findings; incl. `friction.md` / `friction.log.jsonl`) |
-| `decode.md`           | `/aha` comprehension product (+ `decode.log.jsonl`)                        |
 
 Env overrides (used by tests and smoke runs):
 
 | Var                   | Overrides                       |
 | --------------------- | ------------------------------- |
 | `SHADOWLING_HOME`     | the whole data dir              |
+
+## Schema changes
+
+All data lives in `shadowling.db`, owned by `appdb.py`. To evolve the schema,
+**append** a migration callable to `MIGRATIONS` — never edit a shipped one. The
+runner keys off `PRAGMA user_version`, takes an automatic `.bak` backup before
+upgrading, and applies each pending step in a transaction that also bumps the
+version. The `*_ranked` views are derived code (not migrated): `connect()`
+recreates a view only when its definition in code differs from the stored one.
+See `.claude/skills/shadowling-db` for the full conventions.
 
 ## Notes
 

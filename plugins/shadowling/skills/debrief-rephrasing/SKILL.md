@@ -1,6 +1,6 @@
 ---
 name: debrief-rephrasing
-description: "Specialist: extract naturalness/phrasing fixes from the buffered English into rephrasings.md + rephrasings.log.jsonl. Usually invoked by /debrief."
+description: "Specialist: extract naturalness/phrasing fixes from the buffered English into the rephrasing dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet

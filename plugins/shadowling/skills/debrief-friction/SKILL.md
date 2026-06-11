@@ -1,6 +1,6 @@
 ---
 name: debrief-friction
-description: "Specialist: turn code-switching (bailing from English into the native language) into friction.md + friction.log.jsonl, auto-looting vocabulary gaps. Usually invoked by /debrief."
+description: "Specialist: turn code-switching (bailing from English into the native language) into the friction dataset, auto-looting vocabulary gaps. Usually invoked by /debrief."
 context: fork
 agent: claude
 allowed-tools: Bash(python3 */capture.py*) Bash(python3 */db.py*) Bash(python3 */config.py*) Bash(python3 */vocab.py*)

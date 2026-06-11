@@ -27,7 +27,8 @@ transaction, and bumps `user_version` atomically.
 
 ## Views are derived code, not schema
 
-`*_ranked` views are dropped and recreated on EVERY `connect()`. Changing a
+`*_ranked` views are ensured current on EVERY `connect()` (recreated whenever
+the definition in code differs from `sqlite_master`). Changing a
 ranking/aggregation = edit the view definition in `appdb.py`; no migration,
 no version bump. Products (counters, created/updated, latest example) are
 COMPUTED from incident rows — never stored.

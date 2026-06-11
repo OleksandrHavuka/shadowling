@@ -1,6 +1,6 @@
 ---
 name: debrief-verbs
-description: "Specialist: collect misused/noteworthy irregular verbs from the buffered English into irregular_verbs.md + irregular_verbs.log.jsonl. Usually invoked by /debrief."
+description: "Specialist: collect misused/noteworthy irregular verbs from the buffered English into the irregular-verbs dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet
