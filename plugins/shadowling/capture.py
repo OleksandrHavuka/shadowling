@@ -11,14 +11,14 @@ specialists read deterministic slices via `messages --lang/--untagged`. The
 read-only `query` verb is the escape hatch for ad-hoc analysis.
 """
 import json
-import os
 import re
 import sqlite3
 import sys
 from contextlib import closing
 from datetime import datetime
 
-from core import config_ready, data_dir, last_user_text
+from appdb import connect, db_path, query  # noqa: F401  (query re-exported for CLI/tests)
+from core import config_ready, last_user_text
 
 MIN_LETTERS = 8  # below this it's not analyzable prose / not worth logging
 
@@ -29,51 +29,8 @@ COMMAND_WRAPPERS = ("<command-", "<local-command-")
 LANG_CODE = re.compile(r"^[a-z]{2,3}$")  # ISO-style; "und" fits too
 
 
-def db_path():
-    return os.path.join(data_dir(), "shadowling.db")
-
-
 def _now():
     return datetime.now().isoformat(timespec="seconds")
-
-
-def _migrate_legacy(con):
-    """One-time import of the pre-sqlite JSONL files, then remove them."""
-    from jsonl import read as jsonl_read
-    legacy_corpus = os.path.join(data_dir(), "messages.log.jsonl")
-    legacy_buffer = os.path.join(data_dir(), "buffer.jsonl")
-    if os.path.exists(legacy_corpus):  # already-debriefed history
-        stamp = _now()
-        for rec in jsonl_read(legacy_corpus):
-            con.execute(
-                "INSERT INTO messages(ts, text, processed_at) VALUES (?, ?, ?)",
-                (rec.get("ts", ""), rec.get("text", ""), stamp))
-        os.remove(legacy_corpus)
-    if os.path.exists(legacy_buffer):  # still awaiting a debrief
-        for rec in jsonl_read(legacy_buffer):
-            con.execute("INSERT INTO messages(ts, text) VALUES (?, ?)",
-                        (rec.get("ts", ""), rec.get("text", "")))
-        os.remove(legacy_buffer)
-
-
-def _db():
-    path = db_path()
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    con = sqlite3.connect(path)
-    con.row_factory = sqlite3.Row
-    con.execute("PRAGMA journal_mode=WAL")
-    fresh = con.execute("SELECT 1 FROM sqlite_master WHERE type='table' "
-                        "AND name='messages'").fetchone() is None
-    con.execute("""CREATE TABLE IF NOT EXISTS messages(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        ts TEXT NOT NULL,
-        text TEXT NOT NULL,
-        langs TEXT CHECK (langs IS NULL OR json_valid(langs)),
-        processed_at TEXT)""")
-    if fresh:
-        with con:
-            _migrate_legacy(con)
-    return con
 
 
 def _enough_letters(text):
@@ -95,7 +52,7 @@ def capture(stdin_text):
         return False
     if not _enough_letters(text):
         return False
-    with closing(_db()) as con, con:
+    with closing(connect()) as con, con:
         last = con.execute(
             "SELECT text FROM messages ORDER BY id DESC LIMIT 1").fetchone()
         if last is not None and last["text"] == text:
@@ -108,7 +65,7 @@ def capture(stdin_text):
 # --- working-batch reads (processed_at IS NULL) ------------------------------
 
 def pending_count():
-    with closing(_db()) as con:
+    with closing(connect()) as con:
         return con.execute("SELECT COUNT(*) FROM messages "
                            "WHERE processed_at IS NULL").fetchone()[0]
 
@@ -133,7 +90,7 @@ def messages(lang=None, untagged=False, limit=None):
     if limit is not None:
         sql += " LIMIT ?"
         params.append(limit)
-    with closing(_db()) as con:
+    with closing(connect()) as con:
         rows = con.execute(sql, params).fetchall()
     if not rows:
         return "<messages></messages>"
@@ -159,7 +116,7 @@ def tag(pairs):
             continue
         updates.append((json.dumps(codes), int(id_part)))
     ok = 0
-    with closing(_db()) as con, con:
+    with closing(connect()) as con, con:
         for langs_json, mid in updates:
             cur = con.execute("UPDATE messages SET langs=? WHERE id=?",
                               (langs_json, mid))
@@ -172,7 +129,7 @@ def tag(pairs):
 
 def mark_processed():
     """Stamp tagged+unprocessed rows; untagged rows stay for the next batch."""
-    with closing(_db()) as con, con:
+    with closing(connect()) as con, con:
         cur = con.execute("UPDATE messages SET processed_at=? "
                           "WHERE langs IS NOT NULL AND processed_at IS NULL",
                           (_now(),))
@@ -182,16 +139,6 @@ def mark_processed():
 
 
 # --- escape hatch -------------------------------------------------------------
-
-def query(sql):
-    """Run a SELECT against a READ-ONLY connection; returns a list of dicts."""
-    with closing(_db()):  # ensure the store + schema exist before opening ro
-        pass
-    uri = "file:{0}?mode=ro".format(db_path())
-    with closing(sqlite3.connect(uri, uri=True)) as con:
-        con.row_factory = sqlite3.Row
-        return [dict(r) for r in con.execute(sql)]
-
 
 def paths():
     return "db: " + db_path()
