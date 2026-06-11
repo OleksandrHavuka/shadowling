@@ -1,35 +1,21 @@
-"""models/rephrasing.py - rephrasing product (Tier 2) + record fan-out (Tier 1).
-
-CLI/registry name is `rephrasing`; the files are `rephrasings.md` /
-`rephrasings.log.jsonl`.
-"""
-import os
-
-from core import data_dir, slugify, today
-from jsonl import append as jsonl_append
+"""models/rephrasing.py - naturalness incidents (append-only) + record fan-out."""
+from core import slugify
 
 from . import register
 from .base import Model
 
 
 class Rephrasing(Model):
-    file = "rephrasings.md"
-    columns = ["slug", "problem", "your phrasing", "natural phrasing",
-               "created_at", "updated_at", "counter"]
+    table = "rephrasing"
+    view = "rephrasing_ranked"
     key = "slug"
-    counter = "counter"
-    created = "created_at"
-    updated = "updated_at"
+    insert_cols = ["slug", "problem", "yours", "natural", "why"]
 
 
 def record(slug, problem, yours, natural, why):
-    slug = slugify(slug)
-    result = Rephrasing.upsert({"slug": slug, "problem": problem,
-                                "your phrasing": yours, "natural phrasing": natural})
-    jsonl_append(os.path.join(data_dir(), "rephrasings.log.jsonl"),
-                 {"date": today(), "slug": slug,
-                  "yours": yours, "natural": natural, "why": why})
-    return result
+    n = Rephrasing.insert({"slug": slugify(slug), "problem": problem,
+                           "yours": yours, "natural": natural, "why": why})
+    return "inserted" if n == 1 else "incremented"
 
 
 register("rephrasing", Rephrasing, record)

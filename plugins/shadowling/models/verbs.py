@@ -1,33 +1,19 @@
-"""models/verbs.py - irregular-verbs product (Tier 2) + record fan-out (Tier 1).
-
-Natural key: the verb base form. Files: irregular_verbs.md / irregular_verbs.log.jsonl.
-"""
-import os
-
-from core import data_dir, today
-from jsonl import append as jsonl_append
-
+"""models/verbs.py - irregular-verb incidents (append-only) + record fan-out."""
 from . import register
-from .base import Model
+from .base import Model, norm_key
 
 
 class Verbs(Model):
-    file = "irregular_verbs.md"
-    columns = ["verb", "past", "past participle", "last example",
-               "created_at", "updated_at", "counter"]
+    table = "verbs"
+    view = "verbs_ranked"
     key = "verb"
-    counter = "counter"
-    created = "created_at"
-    updated = "updated_at"
+    insert_cols = ["verb", "past", "participle", "example_fix"]
 
 
 def record(verb, past, participle, example_fix):
-    result = Verbs.upsert({"verb": verb, "past": past, "past participle": participle,
-                           "last example": example_fix})
-    jsonl_append(os.path.join(data_dir(), "irregular_verbs.log.jsonl"),
-                 {"date": today(), "base": verb, "past": past,
-                  "participle": participle, "example_fix": example_fix})
-    return result
+    n = Verbs.insert({"verb": norm_key(verb), "past": past,
+                      "participle": participle, "example_fix": example_fix})
+    return "inserted" if n == 1 else "incremented"
 
 
 register("verbs", Verbs, record)

@@ -1,34 +1,21 @@
-"""models/grammar.py - grammar product (Tier 2, markdown) + record fan-out.
-
-`record` writes the deduped product row (grammar.md) and appends the verbatim
-instance to the per-instance findings dataset (grammar.log.jsonl, Tier 1).
-"""
-import os
-
-from core import data_dir, slugify, today
-from jsonl import append as jsonl_append
+"""models/grammar.py - grammar incidents (append-only) + record fan-out."""
+from core import slugify
 
 from . import register
 from .base import Model
 
 
 class Grammar(Model):
-    file = "grammar.md"
-    columns = ["slug", "problem", "last example", "created_at", "updated_at", "counter"]
+    table = "grammar"
+    view = "grammar_ranked"
     key = "slug"
-    counter = "counter"
-    created = "created_at"
-    updated = "updated_at"
+    insert_cols = ["slug", "problem", "original", "fixed", "rule"]
 
 
 def record(slug, problem, original, fixed, rule):
-    slug = slugify(slug)
-    result = Grammar.upsert({"slug": slug, "problem": problem,
-                             "last example": "{0} → {1}".format(original, fixed)})
-    jsonl_append(os.path.join(data_dir(), "grammar.log.jsonl"),
-                 {"date": today(), "slug": slug,
-                  "original": original, "fixed": fixed, "rule": rule})
-    return result
+    n = Grammar.insert({"slug": slugify(slug), "problem": problem,
+                        "original": original, "fixed": fixed, "rule": rule})
+    return "inserted" if n == 1 else "incremented"
 
 
 register("grammar", Grammar, record)
