@@ -71,6 +71,11 @@ class MigrationRunnerTest(AppDbTestBase):
         appdb.connect().close()
         self.assertEqual(stat.S_IMODE(os.stat(appdb.db_path()).st_mode), 0o600)
 
+    def test_fresh_db_makes_no_backup(self):
+        # A brand-new db has no prior data — backing it up would be pointless.
+        appdb.connect().close()
+        self.assertFalse(os.path.exists(appdb.db_path() + ".bak"))
+
 
 class ViewsTest(AppDbTestBase):
     def test_all_views_exist_and_query(self):
