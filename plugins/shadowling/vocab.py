@@ -1,36 +1,14 @@
 #!/usr/bin/env python3
 """vocab.py - vocabulary glossing store for shadowling (stdlib only, Python 3.9+)."""
-import csv
 import json
-import os
 import re
 import sys
 
-from core import config_ready, data_dir, last_assistant_text, load_config
+from appdb import connect
+from core import config_ready, last_assistant_text, load_config
 
-FIELDS = ["word", "translation", "remaining", "status"]
 START_REMAINING = 10
 STEM_MIN_LEN = 4
-
-
-def csv_path():
-    return os.path.join(data_dir(), "words.csv")
-
-
-def load_rows(path):
-    if not os.path.exists(path):
-        return []
-    with open(path, newline="", encoding="utf-8") as f:
-        return [dict(r) for r in csv.DictReader(f)]
-
-
-def save_rows(path, rows):
-    os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=FIELDS)
-        writer.writeheader()
-        for r in rows:
-            writer.writerow({k: r[k] for k in FIELDS})
 
 
 def _norm(s):
@@ -47,40 +25,43 @@ def add(word, translation):
             "word": word, "translation": translation,
             "remaining": "-", "status": "-",
         }
-    path = csv_path()
-    rows = load_rows(path)
-    for r in rows:
-        if r["word"] == word:
-            if r["status"] == "learned":
-                r["remaining"] = str(START_REMAINING)
-                r["status"] = "active"
-                r["translation"] = translation
+    con = connect()
+    try:
+        row = con.execute("SELECT * FROM vocab WHERE word = ?",
+                          (word,)).fetchone()
+        with con:
+            if row is None:
+                con.execute(
+                    "INSERT INTO vocab(word, translation, remaining, status)"
+                    " VALUES (?, ?, ?, 'active')",
+                    (word, translation, START_REMAINING))
+                action = "add"
+            elif row["status"] == "learned":
+                con.execute(
+                    "UPDATE vocab SET translation = ?, remaining = ?,"
+                    " status = 'active' WHERE word = ?",
+                    (translation, START_REMAINING, word))
                 action = "relearn"
             else:
-                r["translation"] = translation
+                con.execute("UPDATE vocab SET translation = ? WHERE word = ?",
+                            (translation, word))
                 action = "refresh"
-            save_rows(path, rows)
-            return action, r
-    row = {
-        "word": word,
-        "translation": translation,
-        "remaining": str(START_REMAINING),
-        "status": "active",
-    }
-    rows.append(row)
-    save_rows(path, rows)
-    return "add", row
+        new = con.execute("SELECT * FROM vocab WHERE word = ?",
+                          (word,)).fetchone()
+        return action, dict(new)
+    finally:
+        con.close()
 
 
 def remove(word):
     word = word.strip().lower()
-    path = csv_path()
-    rows = load_rows(path)
-    kept = [r for r in rows if r["word"] != word]
-    if len(kept) == len(rows):
-        return False
-    save_rows(path, kept)
-    return True
+    con = connect()
+    try:
+        with con:
+            cur = con.execute("DELETE FROM vocab WHERE word = ?", (word,))
+        return cur.rowcount > 0
+    finally:
+        con.close()
 
 
 def build_pattern(word):
@@ -100,7 +81,12 @@ def word_in_text(word, text):
 
 
 def list_active():
-    return [r for r in load_rows(csv_path()) if r["status"] == "active"]
+    con = connect()
+    try:
+        return [dict(r) for r in con.execute(
+            "SELECT * FROM vocab WHERE status = 'active' ORDER BY rowid")]
+    finally:
+        con.close()
 
 
 def scan(stdin_text):
@@ -113,25 +99,24 @@ def scan(stdin_text):
     text = last_assistant_text(data.get("transcript_path", ""))
     if not text:
         return []
-    path = csv_path()
-    rows = load_rows(path)
     changed = []
-    for r in rows:
-        if r["status"] != "active":
-            continue
-        if word_in_text(r["word"], text):
-            try:
-                remaining = int(r["remaining"]) - 1
-            except (ValueError, TypeError):
-                continue
-            if remaining <= 0:
-                remaining = 0
-                r["status"] = "learned"
-            r["remaining"] = str(remaining)
-            changed.append(r["word"])
-    if changed:
-        save_rows(path, rows)
-    return changed
+    con = connect()
+    try:
+        rows = con.execute(
+            "SELECT * FROM vocab WHERE status = 'active'").fetchall()
+        with con:
+            for r in rows:
+                if not word_in_text(r["word"], text):
+                    continue
+                remaining = max(r["remaining"] - 1, 0)
+                status = "learned" if remaining == 0 else "active"
+                con.execute(
+                    "UPDATE vocab SET remaining = ?, status = ? WHERE word = ?",
+                    (remaining, status, r["word"]))
+                changed.append(r["word"])
+        return changed
+    finally:
+        con.close()
 
 
 def gloss_rules(native_language):
