@@ -19,16 +19,21 @@ def _cell(value):
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def export_md(model):
-    rows = model.select()
-    if not rows:
-        return "(empty)"
+def render_md(rows):
+    """rows: non-empty list of dicts (same keys) -> markdown table string."""
     headers = list(rows[0].keys())
     out = ["| " + " | ".join(headers) + " |",
            "| " + " | ".join("---" for _ in headers) + " |"]
     for r in rows:
         out.append("| " + " | ".join(_cell(r[h]) for h in headers) + " |")
     return "\n".join(out)
+
+
+def export_md(model):
+    rows = model.select()
+    if not rows:
+        return "(empty)"
+    return render_md(rows)
 
 
 def main(argv):

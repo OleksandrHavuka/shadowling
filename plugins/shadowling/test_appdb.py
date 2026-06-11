@@ -109,6 +109,17 @@ class QueryTest(AppDbTestBase):
         with self.assertRaises(sqlite3.Error):
             appdb.query("DELETE FROM grammar")
 
+    def test_query_binds_params(self):
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute("INSERT INTO grammar(date, slug) VALUES ('d', 's1')")
+                con.execute("INSERT INTO grammar(date, slug) VALUES ('d', 's2')")
+        finally:
+            con.close()
+        rows = appdb.query("SELECT slug FROM grammar WHERE slug = ?", ("s2",))
+        self.assertEqual(rows, [{"slug": "s2"}])
+
 
 if __name__ == "__main__":
     unittest.main()
