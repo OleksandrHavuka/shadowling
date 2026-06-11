@@ -146,12 +146,15 @@ def connect():
     path = db_path()
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
     con = sqlite3.connect(path)
+    # Size BEFORE WAL setup writes the header: 0 for a brand-new file, >0 only
+    # for a pre-existing db that has real data worth protecting on upgrade.
+    preexisting = os.path.getsize(path)
     con.row_factory = sqlite3.Row
     con.execute("PRAGMA journal_mode=WAL")
     con.execute("PRAGMA busy_timeout=5000")
     version = con.execute("PRAGMA user_version").fetchone()[0]
     if version < len(MIGRATIONS):
-        if os.path.getsize(path) > 0:
+        if preexisting > 0:
             shutil.copy(path, path + ".bak")  # one cheap insurance per upgrade
         for i in range(version, len(MIGRATIONS)):
             with con:  # step + version bump are atomic; a failed step retries
