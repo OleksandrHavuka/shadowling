@@ -1,6 +1,6 @@
 ---
 name: debrief-idioms
-description: "Specialist: collect apt idioms from the buffered English into idioms.md + idioms.log.jsonl. Usually invoked by /debrief."
+description: "Specialist: collect apt idioms from the buffered English into the idioms dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet

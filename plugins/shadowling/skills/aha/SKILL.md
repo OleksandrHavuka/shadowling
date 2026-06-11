@@ -1,6 +1,6 @@
 ---
 name: aha
-description: "Explain an English expression you can't read literally — get a verdict (memorize vs learnable rule) + how to read it, saved to decode.md. Usage: /aha <phrase> [+ your hunch]"
+description: "Explain an English expression you can't read literally — get a verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. Usage: /aha <phrase> [+ your hunch]"
 allowed-tools: Bash(python3 */db.py*) Bash(python3 */config.py*)
 ---
 

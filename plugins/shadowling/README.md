@@ -75,9 +75,9 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/shadowling:setup` | Set both languages (run once; required before anything else works). |
 | `/loot <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/drop <word>[, ...]` | Stop tracking and delete word(s). |
-| `/debrief` | Review your captured messages into per-category frequency docs (grammar / rephrasings / idioms / verbs / friction). |
-| `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to `decode.md`. |
-| `/vipe` | Dev: wipe the `/debrief` product/log docs for a clean test run (keeps config, words, message store). |
+| `/debrief` | Review your captured messages into per-category frequency datasets (grammar / rephrasings / idioms / verbs / friction). |
+| `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. |
+| `/vipe` | Dev: wipe the six category datasets for a clean test run (keeps config, vocab, message store). |
 
 Run **`/shadowling:setup`** once to set both languages; the answers are saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
@@ -111,7 +111,7 @@ See `config.example.json`.
 
 ```
 /loot throughput
-   └─ Claude translates → vocab.py add → ~/.shadowling/words.csv
+   └─ Claude translates → vocab.py add → vocab table in ~/.shadowling/shadowling.db
         throughput, rendimiento, remaining=10, active
 
 (before every reply)  UserPromptSubmit hook → vocab.py inject
@@ -162,32 +162,34 @@ It's a two-phase, **silent** model:
    parallel, each with its own context window, so the batch, the existing
    entries, and the reasoning never pollute your current conversation; only a
    short summary comes back. Each specialist reads its slice of the batch and
-   writes two things per category (explanations written in your
+   appends to one append-only dataset per category (explanations written in your
    `explanation_language`):
 
-   | Category | Frequency product (markdown) | Findings log (append-only JSONL) |
-   |---|---|---|
-   | grammar | `grammar.md` | `grammar.log.jsonl` |
-   | rephrasing | `rephrasings.md` | `rephrasings.log.jsonl` |
-   | idioms | `idioms.md` | `idioms.log.jsonl` |
-   | irregular verbs | `irregular_verbs.md` | `irregular_verbs.log.jsonl` |
-   | friction (code-switching) | `friction.md` | `friction.log.jsonl` |
+   | Category | Dataset |
+   |---|---|
+   | grammar | `grammar` (ranking: `grammar_ranked`) |
+   | rephrasing | `rephrasing` (ranking: `rephrasing_ranked`) |
+   | idioms | `idioms` (ranking: `idioms_ranked`) |
+   | irregular verbs | `verbs` (ranking: `verbs_ranked`) |
+   | friction (code-switching) | `friction` (ranking: `friction_ranked`) |
 
    If all of them succeed, the batch is marked processed (and kept as history).
 
-Each product is a markdown table keyed on a stable column with a `counter`: a
-recurring mistake bumps its counter instead of adding a row, so the table doubles
-as a frequency ranking of your weak spots. The matching `*.log.jsonl` keeps every
-verbatim instance, append-only, for deeper study.
+Each category is an **append-only incident table** — one row per occurrence,
+nothing overwritten. The matching `*_ranked` **view** computes the frequency
+ranking on the fly (a `counter` per stable key, plus the latest example), so a
+recurring mistake climbs the ranking while every verbatim instance stays
+queryable. `python3 <plugin>/db.py <category> export` renders any ranking as a
+markdown table.
 
-Everything stays local — the message store and docs live in `~/.shadowling/`, no
+Everything stays local — it all lives in `~/.shadowling/shadowling.db`, no
 network calls.
 
 The friction specialist deserves a note: it watches for **code-switching** —
 the moments you bail from English into your native language. Native words
 dropped mid-English-sentence are treated as an implicit `/loot` (the English
 equivalent goes straight into your vocabulary), and recurring bail-out zones
-are ranked in `friction.md` with a type verdict: `lexical`, `phrasal`,
+are ranked in the friction dataset with a type verdict: `lexical`, `phrasal`,
 `structural`, `topical`, or `register`.
 
 ---
@@ -209,10 +211,10 @@ Claude — seeing the conversation for context — gives a verdict and teaches i
   different phrases that trip you on it.
 
 Comparing against your hunch, it points out exactly where your literal read went
-wrong. Each call writes the deduped product `decode.md` (your "what trips me most"
-ranking) and appends the verbatim submission — your hunch and where it appeared — to
-`decode.log.jsonl`; explanations follow your `explanation_language`. Literal
-phrases and bare unknown words aren't recorded — for a single
+wrong. Each call appends the verbatim submission — your hunch and where it
+appeared — to the append-only `decode` dataset; the `decode_ranked` view is your
+"what trips me most" ranking. Explanations follow your `explanation_language`.
+Literal phrases and bare unknown words aren't recorded — for a single
 unknown word it points you at `/loot` instead.
 
 ---
@@ -221,15 +223,12 @@ unknown word it points you at `/loot` instead.
 
 | Path | What |
 |---|---|
-| `~/.shadowling/words.csv` | your vocabulary (`word,translation,remaining,status`) |
+| `~/.shadowling/shadowling.db` | everything: message store (language tags, processed flags), the six category incident datasets with their computed rankings, and your vocabulary |
 | `~/.shadowling/config.json` | language settings |
-| `~/.shadowling/shadowling.db` | sqlite message store: every captured message, language tags, processed flags (your queryable history) |
-| `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.md` | per-category frequency products from `/debrief` |
-| `~/.shadowling/{grammar,rephrasings,idioms,irregular_verbs}.log.jsonl` | append-only findings datasets from `/debrief` |
-| `~/.shadowling/friction.md` | code-switching product from `/debrief` — typed ranking of zones where you bail out of English |
-| `~/.shadowling/friction.log.jsonl` | append-only log of every friction incident |
-| `~/.shadowling/decode.md` | comprehension product from `/aha` — deduped ranking of expressions you couldn't read literally |
-| `~/.shadowling/decode.log.jsonl` | append-only log of every `/aha` submission (your hunch + context) |
+
+Want a human-readable table? `python3 <plugin>/db.py <category> export` prints
+any category's ranking as markdown (categories: grammar, rephrasing, idioms,
+verbs, decode, friction).
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
 updates. Override the location with the `SHADOWLING_HOME` environment variable.
@@ -269,9 +268,10 @@ claude plugin validate . --strict                 # validate the manifest
 ```
 
 The tool is dependency-free stdlib Python: `core.py` (shared infra), `config.py`
-(plugin-wide language config), `vocab.py` (glossing), `capture.py` (message
-capture + sqlite store), `jsonl.py` (append-only log helper), and the markdown data layer
-(`mddb.py`, `db.py` CLI, `models/`) plus tests.
+(plugin-wide language config), `appdb.py` (the single sqlite home: connection,
+`user_version` migrations, ranked views, read-only query), `vocab.py` (glossing),
+`capture.py` (message capture), and the sqlite data layer (`db.py` CLI, `models/`)
+plus tests.
 
 ---
 

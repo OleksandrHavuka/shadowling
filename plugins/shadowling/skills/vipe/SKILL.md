@@ -1,21 +1,22 @@
 ---
 name: vipe
-description: "Dev: wipe the debrief product/log docs from SHADOWLING_HOME for a clean test run; keeps config.json, words.csv, and the sqlite message store. Usage: /vipe"
+description: "Dev: wipe the six category datasets (incident tables) for a clean test run; keeps config, vocab, and the message store. Usage: /vipe"
 disable-model-invocation: true
-allowed-tools: Bash(rm -fv "${SHADOWLING_HOME:-$HOME/.shadowling}"/*)
+allowed-tools: Bash(python3 */db.py*)
 ---
 
-Dev utility — clears the debrief product/log docs so you can re-test from a clean
-slate. Keeps `config.json`, `words.csv`, and the sqlite message store
-`shadowling.db` (your captured-message history and processed flags survive).
-Deletion is an explicit list of file names (brace expansion), never a wildcard
-or `rm -rf`.
+Dev utility — empties the six category incident tables so you can re-test from
+a clean slate. Keeps `config.json`, the `vocab` table, and the `messages`
+store. Deletion goes through the data layer only — never touch files or run
+raw SQL.
 
-Run EXACTLY this one command and print its output, then STOP:
+Run EXACTLY these six commands and print their combined output, then STOP:
 
 ```
-rm -fv "${SHADOWLING_HOME:-$HOME/.shadowling}"/{grammar.md,rephrasings.md,idioms.md,irregular_verbs.md,grammar.log.jsonl,rephrasings.log.jsonl,idioms.log.jsonl,irregular_verbs.log.jsonl,friction.md,friction.log.jsonl}
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar drop
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing drop
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms drop
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" verbs drop
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" decode drop
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" friction drop
 ```
-
-`-f` keeps it quiet on files that don't exist; `-v` lists what was actually removed.
-To wipe a new generated file later, add its name to the brace list.

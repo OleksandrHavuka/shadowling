@@ -1,6 +1,6 @@
 ---
 name: debrief-grammar
-description: "Specialist: extract grammar errors from the buffered English into grammar.md + grammar.log.jsonl. Usually invoked by /debrief."
+description: "Specialist: extract grammar errors from the buffered English into the grammar dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet
