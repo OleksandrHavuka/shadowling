@@ -107,5 +107,73 @@ class UsageTest(SqlTestBase):
         self.assertIn("error:", err)
 
 
+class WriteTest(SqlTestBase):
+    def test_delete_with_write_flag(self):
+        self.seed("s1", "s2")
+        code, out, _ = run_main(["--write", "DELETE FROM grammar WHERE slug = ?", "s1"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "1 row(s) affected")
+        self.assertEqual(self.count(), 1)
+
+    def test_write_takes_snapshot_with_private_perms(self):
+        self.seed("s1")
+        run_main(["--write", "DELETE FROM grammar WHERE slug = ?", "s1"])
+        snaps = self.backups()
+        self.assertEqual(len(snaps), 1)
+        bdir = os.path.join(self.home, "backups")
+        self.assertEqual(stat.S_IMODE(os.stat(bdir).st_mode), 0o700)
+        spath = os.path.join(bdir, snaps[0])
+        self.assertEqual(stat.S_IMODE(os.stat(spath).st_mode), 0o600)
+        # the snapshot is a valid db holding the PRE-write state
+        con = sqlite3.connect(spath)
+        try:
+            self.assertEqual(
+                con.execute("SELECT COUNT(*) FROM grammar").fetchone()[0], 1)
+        finally:
+            con.close()
+
+    def test_returning_rows_printed_as_json(self):
+        self.seed("s1")
+        code, out, _ = run_main(
+            ["--write", "DELETE FROM grammar WHERE slug = ? RETURNING slug", "s1"])
+        self.assertEqual(code, 0)
+        self.assertEqual(json.loads(out.strip()), {"slug": "s1"})
+
+    def test_ddl_prints_ok(self):
+        code, out, _ = run_main(["--write", "CREATE TABLE scratch(x)"])
+        self.assertEqual((code, out.strip()), (0, "ok"))
+
+    def test_failing_write_rolls_back_and_exits_1(self):
+        self.seed("s1")
+        code, _, err = run_main(
+            ["--write", "INSERT INTO grammar(date, slug) VALUES (NULL, 'x')"])
+        self.assertEqual(code, 1)
+        self.assertIn("error:", err)
+        self.assertEqual(self.count(), 1)            # rolled back
+        self.assertEqual(len(self.backups()), 1)     # snapshot precedes execute
+
+
+class RotationTest(SqlTestBase):
+    def test_keeps_last_10(self):
+        self.seed("s1")
+        for _ in range(12):
+            run_main(["backup"])
+        self.assertEqual(len(self.backups()), 10)
+
+
+class BackupVerbTest(SqlTestBase):
+    def test_backup_prints_valid_snapshot_path(self):
+        code, out, _ = run_main(["backup"])
+        self.assertEqual(code, 0)
+        path = out.strip()
+        self.assertTrue(os.path.exists(path))
+        con = sqlite3.connect(path)
+        try:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0],
+                             len(appdb.MIGRATIONS))
+        finally:
+            con.close()
+
+
 if __name__ == "__main__":
     unittest.main()

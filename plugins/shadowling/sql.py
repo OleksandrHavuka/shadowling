@@ -30,11 +30,47 @@ USAGE = "usage: sql.py [--md|--write] \"<SQL>\" [param ...] | sql.py backup"
 
 
 def snapshot(con):
-    raise NotImplementedError  # Task 3
+    """Consistent point-in-time copy via the sqlite online backup API into
+    <data_dir>/backups/shadowling-<stamp>.db; prunes to the newest KEEP."""
+    bdir = os.path.join(data_dir(), "backups")
+    os.makedirs(bdir, exist_ok=True)
+    os.chmod(bdir, 0o700)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    path = os.path.join(bdir, "shadowling-{0}.db".format(stamp))
+    n = 2
+    while os.path.exists(path):  # two snapshots within one second
+        path = os.path.join(bdir, "shadowling-{0}-{1}.db".format(stamp, n))
+        n += 1
+    dest = sqlite3.connect(path)
+    try:
+        con.backup(dest)
+    finally:
+        dest.close()
+    os.chmod(path, 0o600)
+    snaps = sorted(f for f in os.listdir(bdir)
+                   if f.startswith("shadowling-") and f.endswith(".db"))
+    for name in snaps[:-KEEP]:
+        os.remove(os.path.join(bdir, name))
+    return path
 
 
 def run_write(sql_text, params):
-    raise NotImplementedError  # Task 3
+    con = connect()
+    try:
+        snapshot(con)  # insurance BEFORE the mutation, success or not
+        with con:  # atomic: commit on success, rollback on exception
+            cur = con.execute(sql_text, params)
+            rows = cur.fetchall() if cur.description is not None else None
+        if rows is not None:
+            for r in rows:
+                print(json.dumps(dict(r), ensure_ascii=False))
+        elif cur.rowcount < 0:  # DDL has no meaningful rowcount
+            print("ok")
+        else:
+            print("{0} row(s) affected".format(cur.rowcount))
+        return 0
+    finally:
+        con.close()
 
 
 def main(argv):
