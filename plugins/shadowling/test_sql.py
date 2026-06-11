@@ -132,6 +132,11 @@ class WriteTest(SqlTestBase):
         finally:
             con.close()
 
+    def test_write_announces_target_db_on_stderr(self):
+        self.seed("s1")
+        _, _, err = run_main(["--write", "DELETE FROM grammar WHERE slug = ?", "s1"])
+        self.assertIn("db: " + os.path.join(self.home, "shadowling.db"), err)
+
     def test_returning_rows_printed_as_json(self):
         self.seed("s1")
         code, out, _ = run_main(

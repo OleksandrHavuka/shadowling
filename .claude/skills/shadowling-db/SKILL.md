@@ -58,5 +58,10 @@ MCP / raw `sqlite3` use. Raw `sqlite3` against the live db is forbidden
   surgery (deduping a corrupted row, fixing a bad tag). Auto-snapshots to
   `<data_dir>/backups/` (keep last 10) before executing.
 - Manual snapshot before risky experiments: `python3 sql.py backup`.
+- Temp-home testing: `export SHADOWLING_HOME=$(mktemp -d)` and EVERY command
+  that depends on it MUST run in the SAME Bash invocation — env vars do not
+  survive across calls; a lost SHADOWLING_HOME silently retargets every
+  command at the real `~/.shadowling`. `sql.py --write` announces its target
+  (`db: <path>` on stderr) — verify it before trusting a destructive demo.
 - Restore: `cp <data_dir>/backups/<snap>.db <data_dir>/shadowling.db`
   (remove the `-wal`/`-shm` siblings first).

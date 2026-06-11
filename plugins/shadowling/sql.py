@@ -20,7 +20,7 @@ import sqlite3
 import sys
 from datetime import datetime
 
-from appdb import connect, query
+from appdb import connect, db_path, query
 from core import data_dir
 from db import render_md
 
@@ -55,6 +55,9 @@ def snapshot(con):
 
 
 def run_write(sql_text, params):
+    # Announce the target on stderr: a lost SHADOWLING_HOME silently retargets
+    # writes at the real db — make that visible before the mutation runs.
+    print("db: " + db_path(), file=sys.stderr)
     con = connect()
     try:
         snapshot(con)  # insurance BEFORE the mutation, success or not
