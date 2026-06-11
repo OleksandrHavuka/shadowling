@@ -8,8 +8,8 @@ description: Use when changing shadowling's sqlite schema or data layer — addi
 One sqlite database (`~/.shadowling/shadowling.db`), stdlib `sqlite3` only.
 `plugins/shadowling/appdb.py` owns the connection (`connect()`: WAL,
 `busy_timeout=5000`, `row_factory=Row`, migration runner, view recreation).
-Never open the DB another way; ad-hoc read-only analysis goes through
-`capture.py query "<SELECT …>"`.
+Never open the DB another way; ad-hoc reads and dev surgery go through
+`sql.py` (capture.py's `query` verb remains for the debrief pipeline).
 
 ## Schema changes: MIGRATIONS only
 
@@ -43,3 +43,20 @@ COMPUTED from incident rows — never stored.
 - IDs: semantic slugs where meaning matters, bare `INTEGER PRIMARY KEY`
   where mechanics matter. No readable-ID generators.
 - Always parameterized queries (`?`), transactions via `with con:`.
+
+## Ad-hoc queries & dev surgery (sql.py)
+
+`plugins/shadowling/sql.py` is the dev console — the replacement for any DB
+MCP / raw `sqlite3` use. Raw `sqlite3` against the live db is forbidden
+(WAL-consistency + perms).
+
+- Prefer data-layer verbs first: `db.py <cat> record/select/export/drop`,
+  `vocab.py add/remove`, `capture.py tag/mark-processed`.
+- Any read: `python3 sql.py "<SELECT …>" [param …]` (JSON per row) or
+  `--md` (markdown table). Params bind to `?` — never inline values.
+- Mutations: `python3 sql.py --write "<SQL>" [param …]` — LAST resort for
+  surgery (deduping a corrupted row, fixing a bad tag). Auto-snapshots to
+  `<data_dir>/backups/` (keep last 10) before executing.
+- Manual snapshot before risky experiments: `python3 sql.py backup`.
+- Restore: `cp <data_dir>/backups/<snap>.db <data_dir>/shadowling.db`
+  (remove the `-wal`/`-shm` siblings first).

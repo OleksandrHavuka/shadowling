@@ -12,6 +12,7 @@ plugins/shadowling/
   capture.py         # message capture + sqlite store (tag / slices / mark-processed / ro query)
   appdb.py           # single sqlite home: connect(), MIGRATIONS (user_version), ranked views, ro query
   db.py              # CLI over models/ (record / select / export / drop)
+  sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup verb
   models/            # incident models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
   skills/            # skill bodies:
                      #   loot/, drop/          — fork: translate+add / remove terms
@@ -91,6 +92,15 @@ python3 plugins/shadowling/db.py grammar export            # same, as a markdown
 python3 plugins/shadowling/capture.py query "SELECT slug, counter FROM grammar_ranked"
 ```
 
+Ad-hoc SQL (dev console; ro unless `--write`, which snapshots first):
+
+```
+python3 plugins/shadowling/sql.py "SELECT slug, counter FROM grammar_ranked"
+python3 plugins/shadowling/sql.py --md "SELECT * FROM vocab"
+python3 plugins/shadowling/sql.py --write "DELETE FROM messages WHERE id = ?" 3
+python3 plugins/shadowling/sql.py backup
+```
+
 ## Data & env overrides
 
 Real data lives in `~/.shadowling/`:
@@ -99,6 +109,7 @@ Real data lives in `~/.shadowling/`:
 | --------------------- | -------------------------------------------------------------------------- |
 | `shadowling.db`       | everything: message store (captured messages, language tags, processed stamps), the six category incident datasets + their `*_ranked` views, and the `vocab` table |
 | `config.json`         | `native_language` / `explanation_language` — both required (whole-plugin gate)|
+| `backups/`            | rotating pre-write snapshots from `sql.py` (keep last 10, dev tool only) |
 
 Env overrides (used by tests and smoke runs):
 
