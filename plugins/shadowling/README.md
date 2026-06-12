@@ -23,8 +23,8 @@ your native language.
 
 ## What it looks like
 
-Examples here translate into Spanish, but you set your own native language in one
-step.
+Examples here learn English glossed into Spanish, but you set your own languages
+in one step.
 
 You add a word once:
 

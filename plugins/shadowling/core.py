@@ -10,10 +10,11 @@ import re
 from datetime import datetime
 
 # first_language = the learner's native/mother tongue (translations go INTO it);
-# explanation_language = the language corrections/explanations are written in;
 # learning_language = the language the learner is studying (the prose that gets
-#   analyzed/drilled; never assume a specific one — English is no longer baked in).
-CONFIG_KEYS = ("first_language", "explanation_language", "learning_language")
+#   analyzed/drilled; never assume a specific one — English is no longer baked in);
+# explanation_language = the language corrections/explanations are written in.
+# Order matches /shadowling:setup's questions and the documented config.json.
+CONFIG_KEYS = ("first_language", "learning_language", "explanation_language")
 
 
 def data_dir():
