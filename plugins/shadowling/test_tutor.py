@@ -40,7 +40,7 @@ class TutorTestBase(unittest.TestCase):
             with con:
                 for _ in range(n):
                     con.execute(
-                        "INSERT INTO grammar(date, slug, problem, original,"
+                        "INSERT INTO grammar(created_at, slug, problem, original,"
                         " fixed, rule) VALUES ('2026-06-12', ?, 'p',"
                         " 'I went to store', 'I went to the store', 'use the')",
                         (slug,))

@@ -52,7 +52,8 @@ class CaptureTestBase(unittest.TestCase):
 
     def _rows(self):
         return capture.query(
-            "SELECT id, ts, text, langs, processed_at FROM messages ORDER BY id")
+            "SELECT id, created_at, text, langs, processed_at FROM messages"
+            " ORDER BY id")
 
 
 class CaptureTest(CaptureTestBase):

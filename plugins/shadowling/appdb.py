@@ -107,7 +107,36 @@ def _migration_2(con):
     """)
 
 
-MIGRATIONS = [_migration_1, _migration_2]
+def _migration_3(con):
+    """Column-naming unification. One creation-time column name (created_at)
+    across every table; the learner's-version column unified to learner_wrote;
+    vocab gains audit stamps. The views are dropped first so RENAME COLUMN can't
+    trip on a view reference — _ensure_views() rebuilds them from code on the
+    same connect. Incident + vocab data is preserved (RENAME/ADD keep rows)."""
+    con.executescript("""
+        DROP VIEW IF EXISTS grammar_ranked;
+        DROP VIEW IF EXISTS rephrasing_ranked;
+        DROP VIEW IF EXISTS idioms_ranked;
+        DROP VIEW IF EXISTS verbs_ranked;
+        DROP VIEW IF EXISTS decode_ranked;
+        DROP VIEW IF EXISTS friction_ranked;
+        ALTER TABLE messages RENAME COLUMN ts TO created_at;
+        ALTER TABLE grammar RENAME COLUMN date TO created_at;
+        ALTER TABLE rephrasing RENAME COLUMN date TO created_at;
+        ALTER TABLE idioms RENAME COLUMN date TO created_at;
+        ALTER TABLE verbs RENAME COLUMN date TO created_at;
+        ALTER TABLE decode RENAME COLUMN date TO created_at;
+        ALTER TABLE friction RENAME COLUMN date TO created_at;
+        ALTER TABLE rephrasing RENAME COLUMN yours TO learner_wrote;
+        ALTER TABLE idioms RENAME COLUMN you_wrote TO learner_wrote;
+        ALTER TABLE decode RENAME COLUMN your_read TO learner_wrote;
+        ALTER TABLE friction RENAME COLUMN you_reached_for TO learner_wrote;
+        ALTER TABLE vocab ADD COLUMN created_at TEXT;
+        ALTER TABLE vocab ADD COLUMN updated_at TEXT;
+    """)
+
+
+MIGRATIONS = [_migration_1, _migration_2, _migration_3]
 
 # --- views: derived code, never migrated --------------------------------------
 # The MAX(id) bare-column idiom makes non-aggregated columns come from the
@@ -117,35 +146,35 @@ VIEWS = {
     "grammar_ranked": (
         ' SELECT slug, problem,'
         ' original || \' → \' || fixed AS "last example",'
-        ' MIN(date) AS created_at, MAX(date) AS updated_at,'
+        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM grammar GROUP BY slug ORDER BY counter DESC, last_id DESC'),
     "rephrasing_ranked": (
-        ' SELECT slug, problem, yours AS "your phrasing",'
+        ' SELECT slug, problem, learner_wrote AS "you wrote",'
         ' "natural" AS "natural phrasing",'
-        ' MIN(date) AS created_at, MAX(date) AS updated_at,'
+        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM rephrasing GROUP BY slug ORDER BY counter DESC, last_id DESC'),
     "idioms_ranked": (
-        ' SELECT idiom, meaning, you_wrote AS "last example",'
-        ' MIN(date) AS created_at, MAX(date) AS updated_at,'
+        ' SELECT idiom, meaning, learner_wrote AS "you wrote",'
+        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM idioms GROUP BY idiom ORDER BY counter DESC, last_id DESC'),
     "verbs_ranked": (
         ' SELECT verb, past, participle AS "past participle",'
-        ' example_fix AS "last example",'
-        ' MIN(date) AS created_at, MAX(date) AS updated_at,'
+        ' example_fix AS "example fix",'
+        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM verbs GROUP BY verb ORDER BY counter DESC, last_id DESC'),
     "decode_ranked": (
         ' SELECT slug, type, expression, meaning, takeaway,'
-        ' MIN(date) AS created_at, MAX(date) AS updated_at,'
+        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM decode GROUP BY slug ORDER BY counter DESC, last_id DESC'),
     "friction_ranked": (
-        ' SELECT slug, type, zone, you_reached_for AS "you reached for",'
+        ' SELECT slug, type, zone, learner_wrote AS "you reached for",'
         ' natural_english AS "natural english",'
-        ' MIN(date) AS created_at, MAX(date) AS updated_at,'
+        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM friction GROUP BY slug ORDER BY counter DESC, last_id DESC'),
 }

@@ -58,8 +58,9 @@ def capture(stdin_text):
             "SELECT text FROM messages ORDER BY id DESC LIMIT 1").fetchone()
         if last is not None and last["text"] == text:
             return False  # guard against repeated Stop on the same turn
-        con.execute("INSERT INTO messages(ts, text, session_id) VALUES (?, ?, ?)",
-                    (_now(), text, data.get("session_id")))
+        con.execute(
+            "INSERT INTO messages(created_at, text, session_id)"
+            " VALUES (?, ?, ?)", (_now(), text, data.get("session_id")))
     return True
 
 
@@ -89,7 +90,7 @@ def _xml(s):
 
 def messages(lang=None, untagged=False, limit=None, session=None):
     """Unprocessed rows as an XML block; optionally sliced."""
-    sql = ("SELECT id, ts, text, langs FROM messages "
+    sql = ("SELECT id, created_at, text, langs FROM messages "
            "WHERE processed_at IS NULL AND kind IS NULL")
     params = []
     if session:
@@ -111,8 +112,9 @@ def messages(lang=None, untagged=False, limit=None, session=None):
         return "<messages></messages>"
     out = ["<messages>"]
     for r in rows:
-        out.append('  <m id="{0}" ts="{1}" langs="{2}">{3}</m>'.format(
-            r["id"], _xml(r["ts"]), _xml(r["langs"] or ""), _xml(r["text"])))
+        out.append('  <m id="{0}" created_at="{1}" langs="{2}">{3}</m>'.format(
+            r["id"], _xml(r["created_at"]), _xml(r["langs"] or ""),
+            _xml(r["text"])))
     out.append("</messages>")
     return "\n".join(out)
 
