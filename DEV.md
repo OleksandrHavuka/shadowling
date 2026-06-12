@@ -64,9 +64,9 @@ home so you never touch real data. Language now lives in `config.py`:
 
 ```
 export SHADOWLING_HOME=/tmp/sl
-python3 plugins/shadowling/config.py set native_language Spanish
+python3 plugins/shadowling/config.py set first_language Spanish
 python3 plugins/shadowling/config.py set explanation_language Spanish
-python3 plugins/shadowling/config.py get native_language        # exit 1 + setup hint until BOTH keys are set
+python3 plugins/shadowling/config.py get first_language         # exit 1 + setup hint until BOTH keys are set
 python3 plugins/shadowling/vocab.py add hello hola "machine learning" "aprendizaje automatico"
 python3 plugins/shadowling/vocab.py list-active
 python3 plugins/shadowling/vocab.py remove hello ghost
@@ -121,7 +121,7 @@ Real data lives in `~/.shadowling/`:
 | File                  | What                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
 | `shadowling.db`       | everything: message store (captured messages, language tags, processed stamps), the six category incident datasets + their `*_ranked` views, and the `vocab` table + tutor attempts/mastery |
-| `config.json`         | `native_language` / `explanation_language` — both required (whole-plugin gate)|
+| `config.json`         | `first_language` / `explanation_language` — both required (whole-plugin gate)|
 | `backups/`            | rotating pre-write snapshots from `sql.py` (keep last 10, dev tool only) |
 
 Env overrides (used by tests and smoke runs):

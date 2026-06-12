@@ -32,7 +32,7 @@ class CaptureTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
-        core.save_config({"native_language": "Ukrainian",
+        core.save_config({"first_language": "Ukrainian",
                           "explanation_language": "English"})
 
     def tearDown(self):

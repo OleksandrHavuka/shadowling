@@ -9,7 +9,9 @@ import os
 import re
 from datetime import datetime
 
-CONFIG_KEYS = ("native_language", "explanation_language")
+# first_language = the learner's native/mother tongue (translations go INTO it);
+# explanation_language = the language corrections/explanations are written in.
+CONFIG_KEYS = ("first_language", "explanation_language")
 
 
 def data_dir():

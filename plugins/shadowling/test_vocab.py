@@ -24,7 +24,7 @@ class VocabTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
-        core.save_config({"native_language": "Ukrainian",
+        core.save_config({"first_language": "Ukrainian",
                           "explanation_language": "English"})
 
     def tearDown(self):
@@ -356,8 +356,8 @@ class InjectTest(VocabTestBase):
         self.assertIn("throughput", words)
         self.assertIn("remaining 10", words)
 
-    def test_inject_uses_configured_native_language(self):
-        core.save_config({"native_language": "Spanish"})
+    def test_inject_uses_configured_first_language(self):
+        core.save_config({"first_language": "Spanish"})
         vocab.add("throughput", "rendimiento")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Spanish", ctx)

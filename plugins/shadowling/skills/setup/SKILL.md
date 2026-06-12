@@ -14,7 +14,7 @@ Steps:
 
 1. Ask the user with `AskUserQuestion`: "What's your native language — the one
    words and corrections are translated INTO?"
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" set native_language "<answer>"`.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" set first_language "<answer>"`.
 3. Ask the user with `AskUserQuestion`: "What language should explanations
    (meanings, rules, takeaways) be written in?" Offer `English` and the answer
    from step 1 as the options.
