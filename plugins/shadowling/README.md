@@ -295,6 +295,9 @@ The tool is dependency-free stdlib Python: `core.py` (shared infra), `config.py`
 `capture.py` (message capture), and the sqlite data layer (`db.py` CLI, `models/`)
 plus tests.
 
+See **[docs/ENGINEERING.md](docs/ENGINEERING.md)** for the design principles, the
+guarantees behind them, and a reproducible end-to-end traceability proof.
+
 ---
 
 ## License
