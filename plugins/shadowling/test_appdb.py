@@ -98,6 +98,14 @@ class Migration2Test(AppDbTestBase):
                 "PRAGMA table_info(messages)")}
             self.assertIn("session_id", cols)
             self.assertIn("kind", cols)
+            acols = {r["name"] for r in con.execute(
+                "PRAGMA table_info(attempts)")}
+            self.assertIn("created_at", acols)     # event-log creation stamp
+            self.assertNotIn("ts", acols)          # renamed from ts
+            mcols = {r["name"] for r in con.execute(
+                "PRAGMA table_info(mastery)")}
+            self.assertIn("created_at", mcols)
+            self.assertIn("updated_at", mcols)     # mutable scheduling state
         finally:
             con.close()
 

@@ -14,7 +14,7 @@ scheduling state (sanctioned exception, like vocab).
 import json
 import os
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from appdb import connect, query
 from core import today
@@ -34,6 +34,12 @@ KINDS = {
 
 def _today():
     return today()
+
+
+def _now():
+    # full ISO timestamp for the event log (attempts) + mutable mastery stamps,
+    # matching capture._now(); _today() stays for date-only scheduling math.
+    return datetime.now().isoformat(timespec="seconds")
 
 
 def _due(box, today_str):
@@ -65,13 +71,15 @@ def record(kind, key, exercise, verdict, answer):
     if verdict not in VERDICTS:
         raise ValueError("unknown verdict: " + verdict)
     t = _today()
+    now = _now()
     con = connect()
     try:
         with con:
             con.execute(
-                "INSERT INTO attempts(ts, session_id, item_kind, item_key,"
-                " exercise, answer, verdict) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (t, os.environ.get("CLAUDE_CODE_SESSION_ID"), kind, key,
+                "INSERT INTO attempts(created_at, session_id, item_kind,"
+                " item_key, exercise, answer, verdict)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (now, os.environ.get("CLAUDE_CODE_SESSION_ID"), kind, key,
                  exercise, answer, verdict))
             row = con.execute(
                 "SELECT box FROM mastery WHERE item_kind=? AND item_key=?",
@@ -80,12 +88,13 @@ def record(kind, key, exercise, verdict, answer):
                             verdict) if row else _next_box(1, verdict)
             con.execute(
                 "INSERT INTO mastery(item_kind, item_key, box, due_date,"
-                " last_verdict, counter_seen) VALUES (?, ?, ?, ?, ?, ?)"
+                " last_verdict, counter_seen, created_at, updated_at)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 " ON CONFLICT(item_kind, item_key) DO UPDATE SET box=?,"
-                " due_date=?, last_verdict=?, counter_seen=?",
+                " due_date=?, last_verdict=?, counter_seen=?, updated_at=?",
                 (kind, key, box, _due(box, t), verdict,
-                 _counter(con, kind, key),
-                 box, _due(box, t), verdict, _counter(con, kind, key)))
+                 _counter(con, kind, key), now, now,
+                 box, _due(box, t), verdict, _counter(con, kind, key), now))
             if kind == "vocab" and verdict == "fail":
                 con.execute(  # relearn: back into the glossing loop
                     "UPDATE vocab SET remaining = 10, status = 'active'"

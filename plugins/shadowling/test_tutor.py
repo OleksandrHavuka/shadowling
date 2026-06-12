@@ -83,6 +83,25 @@ class RecordTest(TutorTestBase):
         self.assertEqual(m["due_date"], "2026-06-15")  # +3 days (box 2)
         self.assertEqual(m["counter_seen"], 1)
 
+    def test_attempt_created_at_full_ts_and_mastery_stamps(self):
+        self.seed_grammar()
+        with mock.patch("tutor._today", return_value="2026-06-12"), \
+                mock.patch("tutor._now", return_value="2026-06-12T09:00:00"):
+            run_main(["record", "grammar", "article-omission", "fix", "pass"],
+                     stdin_text="x")
+        a = appdb.query("SELECT * FROM attempts")[0]
+        self.assertEqual(a["created_at"], "2026-06-12T09:00:00")  # full ISO ts
+        m = self.mastery("grammar", "article-omission")
+        self.assertEqual(m["created_at"], "2026-06-12T09:00:00")
+        self.assertEqual(m["updated_at"], "2026-06-12T09:00:00")  # equal on insert
+        with mock.patch("tutor._today", return_value="2026-06-12"), \
+                mock.patch("tutor._now", return_value="2026-06-12T10:30:00"):
+            run_main(["record", "grammar", "article-omission", "fix", "pass"],
+                     stdin_text="y")
+        m2 = self.mastery("grammar", "article-omission")
+        self.assertEqual(m2["created_at"], "2026-06-12T09:00:00")   # pinned
+        self.assertEqual(m2["updated_at"], "2026-06-12T10:30:00")   # bumped
+
     def test_leitner_transitions(self):
         self.seed_grammar()
         def rec(verdict):
@@ -140,7 +159,8 @@ class DeckTest(TutorTestBase):
             with con:
                 con.execute(
                     "INSERT INTO mastery(item_kind, item_key, box, due_date,"
-                    " last_verdict, counter_seen) VALUES (?, ?, ?, ?, 'pass', ?)",
+                    " last_verdict, counter_seen, created_at, updated_at)"
+                    " VALUES (?, ?, ?, ?, 'pass', ?, 't', 't')",
                     (kind, key, box, due, counter_seen))
         finally:
             con.close()
@@ -210,10 +230,12 @@ class StatsTest(TutorTestBase):
             with con:
                 con.execute(
                     "INSERT INTO mastery(item_kind, item_key, box, due_date,"
-                    " last_verdict) VALUES ('grammar','s1',1,'2026-06-12','fail')")
+                    " last_verdict, created_at, updated_at)"
+                    " VALUES ('grammar','s1',1,'2026-06-12','fail','t','t')")
                 con.execute(
                     "INSERT INTO mastery(item_kind, item_key, box, due_date,"
-                    " last_verdict) VALUES ('grammar','s2',2,'2026-06-13','pass')")
+                    " last_verdict, created_at, updated_at)"
+                    " VALUES ('grammar','s2',2,'2026-06-13','pass','t','t')")
         finally:
             con.close()
         with mock.patch("tutor._today", return_value="2026-06-12"):
