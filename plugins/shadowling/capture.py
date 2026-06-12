@@ -16,6 +16,7 @@ import sqlite3
 import sys
 from contextlib import closing
 from datetime import datetime
+from difflib import SequenceMatcher
 
 from appdb import connect, db_path, query  # noqa: F401  (query re-exported for CLI/tests)
 from core import config_ready, last_user_text
@@ -158,6 +159,49 @@ def mark_processed(session=None):
     return "processed {0}, kept {1} untagged".format(cur.rowcount, kept)
 
 
+# --- drill filtering (tutor answers must not enter the analysis corpus) -----
+
+DRILL_SIMILARITY = 0.90  # gate threshold; width characterized in MarkDrillsTest
+
+
+def _similarity(a, b):
+    # casefold: ratio() is case-sensitive. " ".join(split()) collapses every
+    # whitespace run (incl. newlines/tabs) to a single space and strips the
+    # ends, so spacing drift in a re-typed answer doesn't sink the score.
+    # autojunk=False: the default heuristic degrades on long strings (frequent
+    # chars become junk).
+    a = " ".join(a.casefold().split())
+    b = " ".join(b.casefold().split())
+    return SequenceMatcher(None, a, b, autojunk=False).ratio()
+
+
+def mark_drills():
+    """Stamp unprocessed messages that match a recorded tutor answer for the
+    SAME session (kind='drill'). Deterministic: machine-recorded session ids +
+    a fixed similarity threshold; no LLM judgment, no prose markers."""
+    with closing(connect()) as con:
+        con.create_function("similarity", 2, _similarity)
+        with con:
+            cur = con.execute(
+                "UPDATE messages SET kind = 'drill' "
+                "WHERE processed_at IS NULL AND kind IS NULL "
+                "AND session_id IS NOT NULL "
+                "AND EXISTS (SELECT 1 FROM attempts a "
+                "            WHERE a.session_id = messages.session_id "
+                "              AND similarity(a.answer, messages.text) >= ?)",
+                (DRILL_SIMILARITY,))
+            marked = cur.rowcount
+        unmatched = con.execute(
+            "SELECT COUNT(*) FROM attempts a "
+            "WHERE a.session_id IS NOT NULL "
+            "AND NOT EXISTS (SELECT 1 FROM messages m "
+            "                WHERE m.session_id = a.session_id "
+            "                  AND similarity(a.answer, m.text) >= ?)",
+            (DRILL_SIMILARITY,)).fetchone()[0]
+    return "marked {0} drill answer(s); {1} attempt(s) unmatched".format(
+        marked, unmatched)
+
+
 # --- escape hatch -------------------------------------------------------------
 
 def paths():
@@ -214,6 +258,9 @@ def main(argv):
         if len(argv) >= 3 and argv[1] == "--session":
             session = argv[2]
         print(mark_processed(session=session))
+        return 0
+    if cmd == "mark-drills":
+        print(mark_drills())
         return 0
     if cmd == "query":
         if len(argv) != 2:
