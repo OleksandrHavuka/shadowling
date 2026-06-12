@@ -1,7 +1,7 @@
 """models/friction.py - code-switching incidents (append-only) + record fan-out.
 
-Places where the user bails from English into their native language, keyed by
-zone slug and classified by the five-value taxonomy
+Places where the user bails from the learning language into their native
+language, keyed by zone slug and classified by the five-value taxonomy
 (lexical/phrasal/structural/topical/register)."""
 from core import slugify
 

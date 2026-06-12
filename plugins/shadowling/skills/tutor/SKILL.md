@@ -1,6 +1,6 @@
 ---
 name: tutor
-description: "Drill your recorded English pains (friction phrasings, grammar fixes, irregular verbs, learned vocab) with spaced repetition. Usage: /tutor [size]"
+description: "Drill your recorded pains (friction phrasings, grammar fixes, irregular verbs, learned vocab) with spaced repetition. Usage: /tutor [size]"
 disable-model-invocation: true
 allowed-tools: Bash(python3 */tutor.py*) Bash(python3 */config.py*)
 ---
@@ -12,9 +12,10 @@ the user answers, you judge, repeat). The plugin's scripts live at
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`.
-   If it FAILS (non-zero exit), tell the user to run `/shadowling:setup` and
-   STOP. Write all feedback in THAT language.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` and
+   `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`.
+   If EITHER FAILS (non-zero exit), tell the user to run `/shadowling:setup` and
+   STOP. Write all feedback in the explanation language.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" deck` (add `--size <N>` if
    the user passed a number). If it prints nothing: say there is nothing due
    and nothing new — come back after a /debrief — and STOP.
@@ -31,9 +32,10 @@ Steps:
    - `grammar`/`fix` — ask to correct `original`. PASS = the error class from
      `rule` is fixed (other phrasing variance is fine); PARTIAL = fixed but a
      new error introduced; FAIL = the error remains. Show `fixed` + `rule`.
-   - `verbs`/`forms` — ask for past + past participle of `item_key`. PASS =
-     both exact; PARTIAL = one correct. Show the forms from `prompt_data`.
-   - `vocab`/`reverse` — ask: what is the English word for `translation`?
+   - `verbs`/`forms` — if `prompt_data` has a `context` excerpt, show it as the
+     setup, then ask for the past + past participle of `item_key`. PASS = both
+     exact; PARTIAL = one correct. Show the forms (and `correction`) from `prompt_data`.
+   - `vocab`/`reverse` — ask: what is the learning-language word for `translation`?
      PASS = the word; PARTIAL = minor misspelling. Show the word. (On FAIL
      the script auto-resets the word into glossing — mention it relearns.)
    Give ONE line of feedback per card, then move on. If the user asks to stop,

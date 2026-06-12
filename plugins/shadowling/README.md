@@ -1,8 +1,9 @@
 # shadowling
 
 **Learn vocabulary passively, while you work with Claude Code.** Most developers
-aren't native English speakers — shadowling turns your everyday Claude Code
-sessions into quiet vocabulary practice instead of a separate chore.
+work in a second language — shadowling turns your everyday Claude Code sessions
+into quiet vocabulary practice in the language you're learning, instead of a
+separate chore.
 
 Collect words you don't know yet with `/loot`. From then on, whenever one of
 those words appears in Claude's replies, Claude appends a translation in your
@@ -10,8 +11,8 @@ native language — inline and in a short summary at the bottom — until you've
 it enough times to have learned it. No flashcards, no separate app: you absorb
 terminology in the flow of your normal work.
 
-Works for **any** native language (set it once). English vocabulary → your
-language is the default.
+Works for **any** language pair (set it once): the language you're learning →
+your native language.
 
 <!-- Demo GIF — drop a ~10s recording at docs/demo.gif and uncomment:
 ![shadowling demo](docs/demo.gif)
@@ -64,7 +65,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
   context before each reply.
 - `Stop` → scans the reply you just received (counts exposures, graduates learned
   words) **and** quietly stores your messages (any language) for later review (see
-  [English corrections](#english-corrections-debrief)).
+  [writing corrections](#writing-corrections-debrief)).
 
 ---
 
@@ -72,15 +73,15 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 
 | Command | Effect |
 |---|---|
-| `/shadowling:setup` | Set both languages (run once; required before anything else works). |
+| `/shadowling:setup` | Set the three languages (run once; required before anything else works). |
 | `/loot <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/drop <word>[, ...]` | Stop tracking and delete word(s). |
 | `/debrief` | Review your captured messages into per-category frequency datasets (grammar / rephrasings / idioms / verbs / friction). |
 | `/tutor [size]` | Drill your recorded pains (friction phrasings, grammar, irregular verbs, learned vocab) with spaced repetition; ~8 cards by default. |
-| `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. |
+| `/aha <phrase> [+ your hunch]` | Explain an expression in the language you're learning that you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. |
 | `/vipe` | Dev: wipe the six category datasets for a clean test run (keeps config, vocab, message store). |
 
-Run **`/shadowling:setup`** once to set both languages; the answers are saved
+Run **`/shadowling:setup`** once to set the three languages; the answers are saved
 to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
 `/shadowling:loot`.)
 
@@ -88,7 +89,7 @@ to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
 
 ## Configuration
 
-Config lives at `~/.shadowling/config.json` and has exactly two keys — **both
+Config lives at `~/.shadowling/config.json` and has exactly three keys — **all
 required, no defaults**. Run `/shadowling:setup` once to set them; until then
 the plugin politely refuses to work (hooks stay silent, skills point you to
 setup).
@@ -96,11 +97,14 @@ setup).
 ```json
 {
   "first_language": "Ukrainian",
+  "learning_language": "English",
   "explanation_language": "English"
 }
 ```
 
 - `first_language` — your native language; the one words and corrections are translated **into**.
+- `learning_language` — the language you're studying; the one your messages are
+  analyzed and drilled in.
 - `explanation_language` — the language `/debrief` and `/aha` write meanings,
   rules, and takeaways in.
 
@@ -144,7 +148,7 @@ punctuation (e.g. `C++`) are matched too.
 
 ---
 
-## English corrections (`/debrief`)
+## Writing corrections (`/debrief`)
 
 Beyond single words, shadowling can quietly build a **personal dataset of how you
 (a non-native) phrase things vs. how natives say it** — so you can study it later.
@@ -187,9 +191,10 @@ Everything stays local — it all lives in `~/.shadowling/shadowling.db`, no
 network calls.
 
 The friction specialist deserves a note: it watches for **code-switching** —
-the moments you bail from English into your native language. Native words
-dropped mid-English-sentence are treated as an implicit `/loot` (the English
-equivalent goes straight into your vocabulary), and recurring bail-out zones
+the moments you bail from the language you're learning into your native language.
+Native words dropped mid-sentence are treated as an implicit `/loot` (the
+learning-language equivalent goes straight into your vocabulary), and recurring
+bail-out zones
 are ranked in the friction dataset with a type verdict: `lexical`, `phrasal`,
 `structural`, `topical`, or `register`.
 
@@ -197,9 +202,9 @@ are ranked in the friction dataset with a type verdict: `lexical`, `phrasal`,
 
 ## Comprehension help (`/aha`)
 
-The flip side of `/debrief`: instead of fixing English you *wrote*, `/aha` explains
-English you *read* but couldn't decode literally — idioms, set phrases, and grammar
-patterns whose meaning isn't the sum of the words.
+The flip side of `/debrief`: instead of fixing the language you *wrote*, `/aha`
+explains text you *read* but couldn't decode literally — idioms, set phrases, and
+grammar patterns whose meaning isn't the sum of the words.
 
 Run `/aha <phrase>`, optionally with your own hunch at what it means
 (e.g. `/aha "it cost an arm and a leg" — I thought it's about an arm and a leg`).

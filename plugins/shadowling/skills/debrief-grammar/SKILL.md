@@ -1,6 +1,6 @@
 ---
 name: debrief-grammar
-description: "Specialist: extract grammar errors from the buffered English into the grammar dataset. Usually invoked by /debrief."
+description: "Specialist: extract grammar errors from your buffered writing into the grammar dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet
@@ -18,14 +18,17 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang en`. If it prints
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` for the
+   language you analyze, and `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If EITHER FAILS (non-zero exit),
+   print `ERROR grammar: not configured — run /shadowling:setup` and STOP.
+   Write `problem` and `rule` in the explanation language only — no other-language glosses.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang <code>`,
+   where `<code>` is the lowercase ISO 639-1 code of the learning language
+   (English → `en`, German → `de`, Spanish → `es`, …). If it prints
    `<messages></messages>` (empty), print `OK grammar: nothing found` and STOP.
-   If a listed message turns out not to be English prose (a mis-tag), skip it —
-   never analyze non-English text.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
-   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
-   `ERROR grammar: not configured — run /shadowling:setup` and STOP.
-   Write `problem` and `rule` in THAT language only — no other-language glosses.
+   If a listed message turns out not to be learning-language prose (a mis-tag),
+   skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar select`. Collect the
    existing `slug` values — this is your dedup context.
 4. Read every `<m>` message and find GRAMMAR errors only (articles, prepositions,

@@ -24,8 +24,8 @@ Loop until done:
    If it prints `<messages></messages>`, the loop is DONE.
 2. For EACH `<m>` decide the language code(s) of its PROSE as lowercase ISO-ish
    codes (`en`, `uk`, `de`, ...). Code snippets, file paths, CLI commands, and
-   tech identifiers do NOT make a message English — judge only the human prose
-   around them. A message mixing two languages gets both codes (e.g. `en,uk`).
+   tech identifiers do NOT count as prose — judge only the language of the human
+   prose around them. A message mixing two languages gets both codes (e.g. `en,uk`).
    If there is no judgeable prose, use `und`.
 3. ONE batch call tagging everything you just read:
    `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" tag "<id>=<code[,code]>" "<id>=<code[,code]>" ...`
