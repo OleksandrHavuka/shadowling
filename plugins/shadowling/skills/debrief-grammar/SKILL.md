@@ -12,9 +12,13 @@ one-line status returns to the caller. The plugin's scripts live at
 `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so each command starts with
 `python3` (e.g. `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages`).
 
+The session to analyze arrives as your invocation argument — a session id
+string. Use it as `<session-id>` in the commands below; analyze ONLY that
+session.
+
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --lang en`. If it prints
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang en`. If it prints
    `<messages></messages>` (empty), print `OK grammar: nothing found` and STOP.
    If a listed message turns out not to be English prose (a mis-tag), skip it —
    never analyze non-English text.

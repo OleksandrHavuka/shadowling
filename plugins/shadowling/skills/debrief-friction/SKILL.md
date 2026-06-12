@@ -14,12 +14,16 @@ clean vocabulary gaps.
 The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly
 so each command starts with `python3`.
 
+The session to analyze arrives as your invocation argument — a session id
+string. Use it as `<session-id>` in the commands below; analyze ONLY that
+session.
+
 Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
    for the language to WRITE the `zone` descriptions IN. If it FAILS (non-zero
    exit), print `ERROR friction: not configured — run /shadowling:setup` and STOP.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages` — the full
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>"` — the full
    batch with `langs` attributes. If empty, print `OK friction: nothing found`
    and STOP.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" friction select` (existing

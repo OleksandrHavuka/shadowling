@@ -14,9 +14,13 @@ script stamps them. Never rewrite, quote back, or "fix" message text.
 The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly
 so each command starts with `python3`.
 
+The session to analyze arrives as your invocation argument — a session id
+string. Use it as `<session-id>` in the commands below; analyze ONLY that
+session.
+
 Loop until done:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --untagged --limit 200`.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --untagged --limit 200`.
    If it prints `<messages></messages>`, the loop is DONE.
 2. For EACH `<m>` decide the language code(s) of its PROSE as lowercase ISO-ish
    codes (`en`, `uk`, `de`, ...). Code snippets, file paths, CLI commands, and
