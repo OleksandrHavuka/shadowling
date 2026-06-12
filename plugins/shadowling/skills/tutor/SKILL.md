@@ -24,7 +24,7 @@ Steps:
    `printf '%s' "<their reply>" | python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" record <item_kind> <item_key> <exercise> <verdict>`
    Exercises and verdicts:
    - `friction`/`production` — ask: how would you say (prompt_data
-     `you_reached_for`, mention the zone)? PASS = conveys the meaning of
+     `learner_wrote`, mention the zone)? PASS = conveys the meaning of
      `natural_english` in a natural register (word-for-word identity NOT
      required); PARTIAL = understandable but unnatural; FAIL = bailed, empty,
      or wrong meaning. Always show `natural_english` after judging.

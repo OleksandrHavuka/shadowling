@@ -43,6 +43,23 @@ COMPUTED from incident rows — never stored.
   (box/due_date — scheduling state). `attempts` is append-only like the
   incident tables; its `answer` is stored VERBATIM (it doubles as the
   mark-drills registry).
+
+## Column naming convention (since migration 3)
+
+- **`created_at`** is the row-creation column on EVERY table — full ISO
+  datetime on the event logs (`messages`, `attempts`) and on `vocab`/`mastery`;
+  **date-only** (`YYYY-MM-DD`, via `core.today()`) on the six daily incident
+  tables, whose frequency product wants days, not seconds.
+- **`updated_at`** is STORED only where a row mutates: `vocab` and `mastery`.
+  The incident tables expose it as the view's `MAX(created_at)` (a product, not
+  a stored column — see the doctrine above); `messages` uses `processed_at` for
+  its one lifecycle event; append-only `attempts` has no `updated_at`.
+- **`learner_wrote`** is the canonical "what the learner produced" column on
+  `rephrasing`/`idioms`/`decode`/`friction` (the views still alias it to a
+  category-readable header: "you wrote" / "you reached for"). `grammar` keeps
+  its matched `original`/`fixed` pair.
+- Suffix rule: `_at` = full ISO datetime, a bare date (`due_date`) = `YYYY-MM-DD`.
+  The retired names `ts` and `date` must not come back.
 - IDs: semantic slugs where meaning matters, bare `INTEGER PRIMARY KEY`
   where mechanics matter. No readable-ID generators.
 - Always parameterized queries (`?`), transactions via `with con:`.
