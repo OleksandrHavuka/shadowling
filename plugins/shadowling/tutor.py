@@ -96,12 +96,88 @@ def record(kind, key, exercise, verdict, answer):
         con.close()
 
 
+EXERCISES = {"friction": "production", "grammar": "fix",
+             "verbs": "forms", "vocab": "reverse"}
+
+PROMPT_SQL = {
+    "friction": "SELECT type, zone, you_reached_for, natural_english, context"
+                " FROM friction WHERE slug = ? ORDER BY id DESC LIMIT 1",
+    "grammar": "SELECT problem, original, fixed, rule"
+               " FROM grammar WHERE slug = ? ORDER BY id DESC LIMIT 1",
+    "verbs": "SELECT past, participle, example_fix"
+             " FROM verbs WHERE verb = ? ORDER BY id DESC LIMIT 1",
+    "vocab": "SELECT translation FROM vocab WHERE word = ?",
+}
+
+
+def _card(con, kind, key):
+    row = con.execute(PROMPT_SQL[kind], (key,)).fetchone()
+    return {"item_kind": kind, "item_key": key,
+            "exercise": EXERCISES[kind],
+            "prompt_data": dict(row) if row else {}}
+
+
 def deck(size=SIZE_DEFAULT):
-    raise NotImplementedError  # Task 5
+    t = _today()
+    con = connect()
+    try:
+        due = con.execute(
+            "SELECT item_kind, item_key, due_date, counter_seen FROM mastery"
+            " WHERE due_date <= ? ORDER BY due_date", (t,)).fetchall()
+        boosted, plain = [], []
+        for r in due:  # hot-zone boost: re-caught since the last drill
+            cur = _counter(con, r["item_kind"], r["item_key"])
+            hot = (cur is not None and r["counter_seen"] is not None
+                   and cur > r["counter_seen"])
+            (boosted if hot else plain).append((r["item_kind"], r["item_key"]))
+        picked = boosted + plain
+        # new items: in the ranked views / learned vocab, never attempted
+        new = []
+        for kind, (table, keycol, view) in KINDS.items():
+            if view is not None:
+                rows = con.execute(
+                    'SELECT "{0}" AS k FROM {1} WHERE "{0}" NOT IN'
+                    ' (SELECT item_key FROM mastery WHERE item_kind = ?)'
+                    ' ORDER BY counter DESC'.format(keycol, view),
+                    (kind,)).fetchall()
+            else:
+                rows = con.execute(
+                    "SELECT word AS k FROM vocab WHERE status = 'learned'"
+                    " AND word NOT IN (SELECT item_key FROM mastery"
+                    " WHERE item_kind = 'vocab')").fetchall()
+            new.extend((kind, r["k"]) for r in rows)
+        cards, per_kind = [], {}
+        pool = picked + new
+        kinds_available = {k for k, _ in pool}
+        cap = max(size // 2, 1)  # no kind hogs more than half the deck
+        for kind, key in pool:
+            if len(cards) >= size:
+                break
+            if per_kind.get(kind, 0) >= cap and len(kinds_available) > 1:
+                continue
+            per_kind[kind] = per_kind.get(kind, 0) + 1
+            cards.append(_card(con, kind, key))
+        return cards
+    finally:
+        con.close()
 
 
 def stats():
-    raise NotImplementedError  # Task 5
+    t = _today()
+    tomorrow = (date.fromisoformat(t) + timedelta(days=1)).isoformat()
+    con = connect()
+    try:
+        due_today = con.execute(
+            "SELECT COUNT(*) FROM mastery WHERE due_date <= ?", (t,)
+            ).fetchone()[0]
+        due_tomorrow = con.execute(
+            "SELECT COUNT(*) FROM mastery WHERE due_date = ?", (tomorrow,)
+            ).fetchone()[0]
+        tracked = con.execute("SELECT COUNT(*) FROM mastery").fetchone()[0]
+        return {"due_today": due_today, "due_tomorrow": due_tomorrow,
+                "tracked": tracked}
+    finally:
+        con.close()
 
 
 def main(argv):
