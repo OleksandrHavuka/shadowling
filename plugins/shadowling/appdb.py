@@ -136,7 +136,21 @@ def _migration_3(con):
     """)
 
 
-MIGRATIONS = [_migration_1, _migration_2, _migration_3]
+def _migration_4(con):
+    """Unify the "native-speaker / model phrasing" column. It was spelled two
+    ways — rephrasing."natural" (a SQL keyword) and friction.natural_english
+    (hardcodes a language) — both holding the same thing: how a native speaker
+    of the target language would say it. Now `native_phrase` in both. Views are
+    dropped first so RENAME can't trip on them; _ensure_views() rebuilds."""
+    con.executescript("""
+        DROP VIEW IF EXISTS rephrasing_ranked;
+        DROP VIEW IF EXISTS friction_ranked;
+        ALTER TABLE rephrasing RENAME COLUMN "natural" TO native_phrase;
+        ALTER TABLE friction RENAME COLUMN natural_english TO native_phrase;
+    """)
+
+
+MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4]
 
 # --- views: derived code, never migrated --------------------------------------
 # The MAX(id) bare-column idiom makes non-aggregated columns come from the
@@ -151,7 +165,7 @@ VIEWS = {
         ' FROM grammar GROUP BY slug ORDER BY counter DESC, last_id DESC'),
     "rephrasing_ranked": (
         ' SELECT slug, problem, learner_wrote AS "you wrote",'
-        ' "natural" AS "natural phrasing",'
+        ' native_phrase AS "native phrase",'
         ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM rephrasing GROUP BY slug ORDER BY counter DESC, last_id DESC'),
@@ -173,7 +187,7 @@ VIEWS = {
         ' FROM decode GROUP BY slug ORDER BY counter DESC, last_id DESC'),
     "friction_ranked": (
         ' SELECT slug, type, zone, learner_wrote AS "you reached for",'
-        ' natural_english AS "natural english",'
+        ' native_phrase AS "native phrase",'
         ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM friction GROUP BY slug ORDER BY counter DESC, last_id DESC'),

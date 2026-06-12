@@ -133,7 +133,8 @@ class Migration3Test(AppDbTestBase):
     def test_fresh_db_unified_columns(self):
         con = appdb.connect()
         try:
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 3)
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0],
+                             len(appdb.MIGRATIONS))
 
             def cols(t):
                 return {r["name"] for r in con.execute(
@@ -180,6 +181,42 @@ class Migration3Test(AppDbTestBase):
         row = appdb.query("SELECT word, created_at FROM vocab")[0]
         self.assertEqual(row["word"], "throughput")
         self.assertIsNone(row["created_at"])  # added column backfills NULL
+
+
+class Migration4Test(AppDbTestBase):
+    def test_fresh_db_unifies_native_phrase(self):
+        con = appdb.connect()
+        try:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0],
+                             len(appdb.MIGRATIONS))
+
+            def cols(t):
+                return {r["name"] for r in con.execute(
+                    "PRAGMA table_info({0})".format(t))}
+            for t in ("rephrasing", "friction"):
+                self.assertIn("native_phrase", cols(t))
+            self.assertNotIn("natural", cols("rephrasing"))
+            self.assertNotIn("natural_english", cols("friction"))
+        finally:
+            con.close()
+
+    def test_upgrade_preserves_native_phrase_data(self):
+        con = sqlite3.connect(appdb.db_path())
+        appdb._migration_1(con)
+        con.execute("PRAGMA user_version = 1")
+        con.execute('INSERT INTO rephrasing(date, slug, "natural")'
+                    " VALUES ('2026-06-01', 'r1', 'take a photo')")
+        con.execute("INSERT INTO friction(date, slug, natural_english)"
+                    " VALUES ('2026-06-01', 'f1', 'I see it differently')")
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays migrations 2, 3, 4 (RENAME preserves rows)
+        self.assertEqual(
+            appdb.query("SELECT native_phrase FROM rephrasing"),
+            [{"native_phrase": "take a photo"}])
+        self.assertEqual(
+            appdb.query("SELECT native_phrase FROM friction"),
+            [{"native_phrase": "I see it differently"}])
 
 
 class ViewsTest(AppDbTestBase):

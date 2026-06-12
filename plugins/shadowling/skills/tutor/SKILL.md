@@ -25,9 +25,9 @@ Steps:
    Exercises and verdicts:
    - `friction`/`production` — ask: how would you say (prompt_data
      `learner_wrote`, mention the zone)? PASS = conveys the meaning of
-     `natural_english` in a natural register (word-for-word identity NOT
+     `native_phrase` in a natural register (word-for-word identity NOT
      required); PARTIAL = understandable but unnatural; FAIL = bailed, empty,
-     or wrong meaning. Always show `natural_english` after judging.
+     or wrong meaning. Always show `native_phrase` after judging.
    - `grammar`/`fix` — ask to correct `original`. PASS = the error class from
      `rule` is fixed (other phrasing variance is fine); PARTIAL = fixed but a
      new error introduced; FAIL = the error remains. Show `fixed` + `rule`.
