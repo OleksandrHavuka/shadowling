@@ -39,7 +39,10 @@ COMPUTED from incident rows — never stored.
   INSERT per incident; never UPDATE/DELETE recorded text. Uniqueness lives in
   `GROUP BY` (keys pre-normalized: slugify / casefold).
 - Mutable state is the explicit exception: `vocab.remaining/status`,
-  `messages.langs/processed_at`.
+  `messages.langs/processed_at/kind`, and the tutor's `mastery` table
+  (box/due_date — scheduling state). `attempts` is append-only like the
+  incident tables; its `answer` is stored VERBATIM (it doubles as the
+  mark-drills registry).
 - IDs: semantic slugs where meaning matters, bare `INTEGER PRIMARY KEY`
   where mechanics matter. No readable-ID generators.
 - Always parameterized queries (`?`), transactions via `with con:`.

@@ -13,6 +13,7 @@ plugins/shadowling/
   appdb.py           # single sqlite home: connect(), MIGRATIONS (user_version), ranked views, ro query
   db.py              # CLI over models/ (record / select / export / drop)
   sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup verb
+  tutor.py           # spaced repetition: deck (due+new+hot-zone boost) / record (Leitner) / stats
   models/            # incident models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
   skills/            # skill bodies:
                      #   loot/, drop/          — fork: translate+add / remove terms
@@ -101,13 +102,25 @@ python3 plugins/shadowling/sql.py --write "DELETE FROM messages WHERE id = ?" 3
 python3 plugins/shadowling/sql.py backup
 ```
 
+Tutor + per-session debrief plumbing:
+
+```
+python3 plugins/shadowling/tutor.py deck --size 4          # today's cards, JSON per card
+printf '%s' "I went to the store" | python3 plugins/shadowling/tutor.py record grammar article-omission fix pass
+python3 plugins/shadowling/tutor.py stats
+python3 plugins/shadowling/capture.py sessions             # debrief worklist
+python3 plugins/shadowling/capture.py messages --session <id> --lang en
+python3 plugins/shadowling/capture.py mark-drills          # fence tutor answers
+python3 plugins/shadowling/capture.py mark-processed --session <id>
+```
+
 ## Data & env overrides
 
 Real data lives in `~/.shadowling/`:
 
 | File                  | What                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
-| `shadowling.db`       | everything: message store (captured messages, language tags, processed stamps), the six category incident datasets + their `*_ranked` views, and the `vocab` table |
+| `shadowling.db`       | everything: message store (captured messages, language tags, processed stamps), the six category incident datasets + their `*_ranked` views, and the `vocab` table + tutor attempts/mastery |
 | `config.json`         | `native_language` / `explanation_language` — both required (whole-plugin gate)|
 | `backups/`            | rotating pre-write snapshots from `sql.py` (keep last 10, dev tool only) |
 
