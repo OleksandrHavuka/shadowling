@@ -3,12 +3,18 @@
 import json
 import re
 import sys
+from datetime import datetime
 
 from appdb import connect
 from core import config_ready, last_assistant_text, load_config
 
 START_REMAINING = 10
 STEM_MIN_LEN = 4
+
+
+def _now():
+    # full ISO timestamp for the vocab audit stamps, matching capture._now().
+    return datetime.now().isoformat(timespec="seconds")
 
 
 def _norm(s):
@@ -25,6 +31,7 @@ def add(word, translation):
             "word": word, "translation": translation,
             "remaining": "-", "status": "-",
         }
+    now = _now()
     con = connect()
     try:
         row = con.execute("SELECT * FROM vocab WHERE word = ?",
@@ -32,19 +39,20 @@ def add(word, translation):
         with con:
             if row is None:
                 con.execute(
-                    "INSERT INTO vocab(word, translation, remaining, status)"
-                    " VALUES (?, ?, ?, 'active')",
-                    (word, translation, START_REMAINING))
+                    "INSERT INTO vocab(word, translation, remaining, status,"
+                    " created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
+                    (word, translation, START_REMAINING, now, now))
                 action = "add"
             elif row["status"] == "learned":
                 con.execute(
                     "UPDATE vocab SET translation = ?, remaining = ?,"
-                    " status = 'active' WHERE word = ?",
-                    (translation, START_REMAINING, word))
+                    " status = 'active', updated_at = ? WHERE word = ?",
+                    (translation, START_REMAINING, now, word))
                 action = "relearn"
             else:
-                con.execute("UPDATE vocab SET translation = ? WHERE word = ?",
-                            (translation, word))
+                con.execute(
+                    "UPDATE vocab SET translation = ?, updated_at = ?"
+                    " WHERE word = ?", (translation, now, word))
                 action = "refresh"
         new = con.execute("SELECT * FROM vocab WHERE word = ?",
                           (word,)).fetchone()
@@ -100,6 +108,7 @@ def scan(stdin_text):
     if not text:
         return []
     changed = []
+    now = _now()
     con = connect()
     try:
         rows = con.execute(
@@ -111,8 +120,9 @@ def scan(stdin_text):
                 remaining = max(r["remaining"] - 1, 0)
                 status = "learned" if remaining == 0 else "active"
                 con.execute(
-                    "UPDATE vocab SET remaining = ?, status = ? WHERE word = ?",
-                    (remaining, status, r["word"]))
+                    "UPDATE vocab SET remaining = ?, status = ?,"
+                    " updated_at = ? WHERE word = ?",
+                    (remaining, status, now, r["word"]))
                 changed.append(r["word"])
         return changed
     finally:

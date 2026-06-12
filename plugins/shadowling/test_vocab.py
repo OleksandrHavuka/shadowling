@@ -5,6 +5,7 @@ import os
 import shutil
 import tempfile
 import unittest
+from unittest import mock
 
 import appdb
 import core
@@ -79,6 +80,18 @@ class AddTest(VocabTestBase):
         action, _ = vocab.add("throughput", "   ")
         self.assertEqual(action, "untranslated")
         self.assertNotIn("throughput", self.rows_by_word())
+
+    def test_add_stamps_created_and_updated(self):
+        with mock.patch("vocab._now", return_value="2026-06-12T08:00:00"):
+            vocab.add("throughput", "переклад")
+        r = self.rows_by_word()["throughput"]
+        self.assertEqual(r["created_at"], "2026-06-12T08:00:00")
+        self.assertEqual(r["updated_at"], "2026-06-12T08:00:00")
+        with mock.patch("vocab._now", return_value="2026-06-12T09:30:00"):
+            vocab.add("throughput", "новий переклад")  # refresh
+        r2 = self.rows_by_word()["throughput"]
+        self.assertEqual(r2["created_at"], "2026-06-12T08:00:00")  # pinned
+        self.assertEqual(r2["updated_at"], "2026-06-12T09:30:00")  # bumped
 
     def test_add_existing_learned_resets_to_10_active(self):
         vocab.add("throughput", "t")

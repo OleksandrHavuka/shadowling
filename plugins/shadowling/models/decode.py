@@ -14,13 +14,13 @@ class Decode(Model):
     view = "decode_ranked"
     key = "slug"
     insert_cols = ["slug", "type", "expression", "meaning", "takeaway",
-                   "your_read", "context"]
+                   "learner_wrote", "context"]
 
 
-def record(slug, kind, expression, meaning, takeaway, your_read, context):
+def record(slug, kind, expression, meaning, takeaway, learner_wrote, context):
     n = Decode.insert({"slug": slugify(slug), "type": kind,
                        "expression": expression, "meaning": meaning,
-                       "takeaway": takeaway, "your_read": your_read,
+                       "takeaway": takeaway, "learner_wrote": learner_wrote,
                        "context": context})
     return "inserted" if n == 1 else "incremented"
 

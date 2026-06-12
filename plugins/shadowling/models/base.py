@@ -26,7 +26,7 @@ class Model:
     def insert(cls, values):
         """values: dict over insert_cols. Returns the incident count for the
         record's key AFTER the insert (1 = first occurrence)."""
-        cols = ["date"] + list(cls.insert_cols)
+        cols = ["created_at"] + list(cls.insert_cols)
         row = [today()] + [values[c] for c in cls.insert_cols]
         sql = "INSERT INTO {0}({1}) VALUES ({2})".format(
             cls.table,

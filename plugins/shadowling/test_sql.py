@@ -34,7 +34,7 @@ class SqlTestBase(unittest.TestCase):
             with con:
                 for s in slugs:
                     con.execute(
-                        "INSERT INTO grammar(date, slug, problem, original,"
+                        "INSERT INTO grammar(created_at, slug, problem, original,"
                         " fixed, rule) VALUES ('2026-06-11', ?, 'p', 'a', 'b', 'r')",
                         (s,))
         finally:
@@ -151,7 +151,7 @@ class WriteTest(SqlTestBase):
     def test_failing_write_rolls_back_and_exits_1(self):
         self.seed("s1")
         code, _, err = run_main(
-            ["--write", "INSERT INTO grammar(date, slug) VALUES (NULL, 'x')"])
+            ["--write", "INSERT INTO grammar(created_at, slug) VALUES (NULL, 'x')"])
         self.assertEqual(code, 1)
         self.assertIn("error:", err)
         self.assertEqual(self.count(), 1)            # rolled back

@@ -38,7 +38,7 @@ class GrammarRecordTest(RecordTestBase):
         self.assertEqual(incidents[0]["original"], "I went to store")
         self.assertEqual(incidents[0]["fixed"], "I went to the store")
         self.assertEqual(incidents[0]["rule"], "use the before specific nouns")
-        self.assertTrue(incidents[0]["date"])
+        self.assertTrue(incidents[0]["created_at"])
 
     def test_second_record_increments_and_appends(self):
         from models.grammar import Grammar
@@ -75,10 +75,10 @@ class RephrasingRecordTest(RecordTestBase):
             "inserted")
         row = Rephrasing.select("collocation-make-vs-take-photo")
         self.assertEqual(row["counter"], 1)
-        self.assertEqual(row["your phrasing"], "make a photo")
+        self.assertEqual(row["you wrote"], "make a photo")
         self.assertEqual(row["natural phrasing"], "take a photo")
         incidents = self._incidents("rephrasing")
-        self.assertEqual(incidents[0]["yours"], "make a photo")
+        self.assertEqual(incidents[0]["learner_wrote"], "make a photo")
         self.assertEqual(incidents[0]["natural"], "take a photo")
         self.assertEqual(incidents[0]["why"], "English uses 'take' with photo")
 
@@ -92,7 +92,7 @@ class IdiomsRecordTest(RecordTestBase):
         row = Idioms.select("break the ice")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["meaning"], "почати розмову")
-        self.assertEqual(row["last example"], "I wanted to broke the ice")
+        self.assertEqual(row["you wrote"], "I wanted to broke the ice")
         self.assertEqual(self._incidents("idioms")[0]["context"], "at a party")
 
     def test_same_idiom_case_and_spacing_increment(self):
@@ -113,7 +113,7 @@ class VerbsRecordTest(RecordTestBase):
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["past"], "went")
         self.assertEqual(row["past participle"], "gone")
-        self.assertEqual(row["last example"], "I have went → I have gone")
+        self.assertEqual(row["example fix"], "I have went → I have gone")
         self.assertEqual(self._incidents("verbs")[0]["example_fix"],
                          "I have went → I have gone")
 
@@ -140,7 +140,7 @@ class DecodeRecordTest(RecordTestBase):
         self.assertEqual(row["expression"], "break the ice")
         self.assertEqual(row["takeaway"], "memorize: set phrase")
         incidents = self._incidents("decode")
-        self.assertEqual(incidents[0]["your_read"], "maybe physically break ice?")
+        self.assertEqual(incidents[0]["learner_wrote"], "maybe physically break ice?")
         self.assertEqual(incidents[0]["context"], "at a party someone said it")
 
     def test_method_increments_by_rule_across_phrases(self):
