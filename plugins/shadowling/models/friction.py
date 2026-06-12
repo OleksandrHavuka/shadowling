@@ -14,13 +14,13 @@ class Friction(Model):
     view = "friction_ranked"
     key = "slug"
     insert_cols = ["slug", "type", "zone", "learner_wrote",
-                   "natural_english", "context"]
+                   "native_phrase", "context"]
 
 
-def record(slug, kind, zone, learner_wrote, natural_english, context):
+def record(slug, kind, zone, learner_wrote, native_phrase, context):
     n = Friction.insert({"slug": slugify(slug), "type": kind, "zone": zone,
                          "learner_wrote": learner_wrote,
-                         "natural_english": natural_english,
+                         "native_phrase": native_phrase,
                          "context": context})
     return "inserted" if n == 1 else "incremented"
 

@@ -109,7 +109,7 @@ EXERCISES = {"friction": "production", "grammar": "fix",
              "verbs": "forms", "vocab": "reverse"}
 
 PROMPT_SQL = {
-    "friction": "SELECT type, zone, learner_wrote, natural_english, context"
+    "friction": "SELECT type, zone, learner_wrote, native_phrase, context"
                 " FROM friction WHERE slug = ? ORDER BY id DESC LIMIT 1",
     "grammar": "SELECT problem, original, fixed, rule"
                " FROM grammar WHERE slug = ? ORDER BY id DESC LIMIT 1",

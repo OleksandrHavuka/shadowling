@@ -9,13 +9,13 @@ class Rephrasing(Model):
     table = "rephrasing"
     view = "rephrasing_ranked"
     key = "slug"
-    insert_cols = ["slug", "problem", "learner_wrote", "natural", "why"]
+    insert_cols = ["slug", "problem", "learner_wrote", "native_phrase", "why"]
 
 
-def record(slug, problem, learner_wrote, natural, why):
+def record(slug, problem, learner_wrote, native_phrase, why):
     n = Rephrasing.insert({"slug": slugify(slug), "problem": problem,
-                           "learner_wrote": learner_wrote, "natural": natural,
-                           "why": why})
+                           "learner_wrote": learner_wrote,
+                           "native_phrase": native_phrase, "why": why})
     return "inserted" if n == 1 else "incremented"
 
 

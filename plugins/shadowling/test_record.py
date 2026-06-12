@@ -76,10 +76,10 @@ class RephrasingRecordTest(RecordTestBase):
         row = Rephrasing.select("collocation-make-vs-take-photo")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["you wrote"], "make a photo")
-        self.assertEqual(row["natural phrasing"], "take a photo")
+        self.assertEqual(row["native phrase"], "take a photo")
         incidents = self._incidents("rephrasing")
         self.assertEqual(incidents[0]["learner_wrote"], "make a photo")
-        self.assertEqual(incidents[0]["natural"], "take a photo")
+        self.assertEqual(incidents[0]["native_phrase"], "take a photo")
         self.assertEqual(incidents[0]["why"], "English uses 'take' with photo")
 
 
@@ -172,7 +172,7 @@ class FrictionRecordTest(RecordTestBase):
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["type"], "register")
         self.assertEqual(row["you reached for"], "та ну, це ж очевидно неправильно")
-        self.assertEqual(row["natural english"],
+        self.assertEqual(row["native phrase"],
                          "I see it differently — here's my concern")
         self.assertEqual(self._incidents("friction")[0]["context"],
                          "review thread, switched mid-discussion")
