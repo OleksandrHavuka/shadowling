@@ -39,13 +39,14 @@ class CaptureTestBase(unittest.TestCase):
         os.environ.pop("SHADOWLING_HOME", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
-    def _stdin(self, transcript_path):
-        return json.dumps({"transcript_path": transcript_path})
+    def _stdin(self, transcript_path, session="sess-test"):
+        return json.dumps({"transcript_path": transcript_path,
+                           "session_id": session})
 
-    def _capture_text(self, text):
+    def _capture_text(self, text, session="sess-test"):
         tpath = make_user_transcript(text)
         try:
-            return capture.capture(self._stdin(tpath))
+            return capture.capture(self._stdin(tpath, session))
         finally:
             os.remove(tpath)
 
@@ -243,6 +244,76 @@ class MainTest(CaptureTestBase):
 
     def test_unknown_command_returns_one(self):
         self.assertEqual(capture.main(["bogus"]), 1)
+
+
+from contextlib import closing as _closing
+import appdb as _appdb
+
+
+def closing_con():
+    return _closing(_appdb.connect())
+
+
+class SessionVerbsTest(CaptureTestBase):
+    def setUp(self):
+        super().setUp()
+        self._capture_text("First normal english sentence here please", "sess-A")
+        self._capture_text("Second message in another working session", "sess-B")
+        self._capture_text("Third message back in the first session!", "sess-A")
+
+    def test_capture_stores_session_id(self):
+        rows = capture.query(
+            "SELECT session_id FROM messages ORDER BY id")
+        self.assertEqual([r["session_id"] for r in rows],
+                         ["sess-A", "sess-B", "sess-A"])
+
+    def test_sessions_lists_pending_per_session(self):
+        out = capture.sessions()
+        self.assertEqual(out, [{"session": "sess-A", "pending": 2},
+                               {"session": "sess-B", "pending": 1}])
+
+    def test_sessions_skips_drill_only_sessions(self):
+        capture.query  # ensure db exists
+        with closing_con() as con:
+            with con:
+                con.execute("UPDATE messages SET kind='drill' "
+                            "WHERE session_id='sess-B'")
+        self.assertEqual([s["session"] for s in capture.sessions()],
+                         ["sess-A"])
+
+    def test_messages_session_slice(self):
+        block = capture.messages(session="sess-A")
+        self.assertIn('<m id="1"', block)
+        self.assertIn('<m id="3"', block)
+        self.assertNotIn('<m id="2"', block)
+
+    def test_messages_excludes_drills(self):
+        with closing_con() as con:
+            with con:
+                con.execute("UPDATE messages SET kind='drill' WHERE id=1")
+        block = capture.messages(session="sess-A")
+        self.assertNotIn('<m id="1"', block)
+        self.assertIn('<m id="3"', block)
+
+    def test_pending_count_excludes_drills(self):
+        with closing_con() as con:
+            with con:
+                con.execute("UPDATE messages SET kind='drill' WHERE id=1")
+        self.assertEqual(capture.pending_count(), 2)
+
+    def test_mark_processed_session_scoped_and_stamps_drills(self):
+        capture.tag(["1=en", "2=en"])  # id 3 untagged
+        with closing_con() as con:
+            with con:
+                con.execute("UPDATE messages SET kind='drill', langs=NULL "
+                            "WHERE id=3")
+        out = capture.mark_processed(session="sess-A")
+        # id 1 (tagged, sess-A) + id 3 (drill, sess-A) stamped; id 2 stays
+        rows = capture.query(
+            "SELECT id, processed_at IS NOT NULL AS p FROM messages ORDER BY id")
+        self.assertEqual([(r["id"], r["p"]) for r in rows],
+                         [(1, 1), (2, 0), (3, 1)])
+        self.assertIn("processed 2", out)
 
 
 if __name__ == "__main__":

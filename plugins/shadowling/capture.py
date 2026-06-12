@@ -57,8 +57,8 @@ def capture(stdin_text):
             "SELECT text FROM messages ORDER BY id DESC LIMIT 1").fetchone()
         if last is not None and last["text"] == text:
             return False  # guard against repeated Stop on the same turn
-        con.execute("INSERT INTO messages(ts, text) VALUES (?, ?)",
-                    (_now(), text))
+        con.execute("INSERT INTO messages(ts, text, session_id) VALUES (?, ?, ?)",
+                    (_now(), text, data.get("session_id")))
     return True
 
 
@@ -67,7 +67,18 @@ def capture(stdin_text):
 def pending_count():
     with closing(connect()) as con:
         return con.execute("SELECT COUNT(*) FROM messages "
-                           "WHERE processed_at IS NULL").fetchone()[0]
+                           "WHERE processed_at IS NULL AND kind IS NULL"
+                           ).fetchone()[0]
+
+
+def sessions():
+    """Sessions that still need analysis (pending = unprocessed non-drill)."""
+    with closing(connect()) as con:
+        rows = con.execute(
+            "SELECT session_id AS session, COUNT(*) AS pending FROM messages "
+            "WHERE processed_at IS NULL AND kind IS NULL "
+            "GROUP BY session_id ORDER BY MIN(id)").fetchall()
+    return [dict(r) for r in rows]
 
 
 def _xml(s):
@@ -75,11 +86,14 @@ def _xml(s):
              .replace(">", "&gt;").replace('"', "&quot;"))
 
 
-def messages(lang=None, untagged=False, limit=None):
+def messages(lang=None, untagged=False, limit=None, session=None):
     """Unprocessed rows as an XML block; optionally sliced."""
     sql = ("SELECT id, ts, text, langs FROM messages "
-           "WHERE processed_at IS NULL")
+           "WHERE processed_at IS NULL AND kind IS NULL")
     params = []
+    if session:
+        sql += " AND session_id = ?"
+        params.append(session)
     if untagged:
         sql += " AND langs IS NULL"
     elif lang:
@@ -127,14 +141,20 @@ def tag(pairs):
     return ok, errors
 
 
-def mark_processed():
-    """Stamp tagged+unprocessed rows; untagged rows stay for the next batch."""
+def mark_processed(session=None):
+    """Stamp tagged+unprocessed rows (and drill rows — they are excluded from
+    analysis but must not stay pending forever); untagged natural rows stay."""
+    sql = ("UPDATE messages SET processed_at=? WHERE processed_at IS NULL "
+           "AND (langs IS NOT NULL OR kind = 'drill')")
+    params = [_now()]
+    if session:
+        sql += " AND session_id = ?"
+        params.append(session)
     with closing(connect()) as con, con:
-        cur = con.execute("UPDATE messages SET processed_at=? "
-                          "WHERE langs IS NOT NULL AND processed_at IS NULL",
-                          (_now(),))
+        cur = con.execute(sql, params)
         kept = con.execute("SELECT COUNT(*) FROM messages "
-                           "WHERE processed_at IS NULL").fetchone()[0]
+                           "WHERE processed_at IS NULL AND kind IS NULL"
+                           ).fetchone()[0]
     return "processed {0}, kept {1} untagged".format(cur.rowcount, kept)
 
 
@@ -146,8 +166,8 @@ def paths():
 
 def main(argv):
     if not argv:
-        print("usage: capture.py {capture|pending-count|messages|tag|"
-              "mark-processed|query|paths} ...", file=sys.stderr)
+        print("usage: capture.py {capture|pending-count|sessions|messages|tag|"
+              "mark-processed|mark-drills|query|paths} ...", file=sys.stderr)
         return 1
     cmd = argv[0]
     if cmd == "capture":
@@ -159,20 +179,26 @@ def main(argv):
     if cmd == "pending-count":
         print(pending_count())
         return 0
+    if cmd == "sessions":
+        for row in sessions():
+            print(json.dumps(row, ensure_ascii=False))
+        return 0
     if cmd == "messages":
-        lang, untagged, limit = None, False, None
+        lang, untagged, limit, session = None, False, None, None
         args, i = argv[1:], 0
         while i < len(args):
             if args[i] == "--untagged":
                 untagged, i = True, i + 1
             elif args[i] == "--lang" and i + 1 < len(args):
                 lang, i = args[i + 1], i + 2
+            elif args[i] == "--session" and i + 1 < len(args):
+                session, i = args[i + 1], i + 2
             elif args[i] == "--limit" and i + 1 < len(args) and args[i + 1].isdigit():
                 limit, i = int(args[i + 1]), i + 2
             else:
                 print("unknown option: " + args[i], file=sys.stderr)
                 return 1
-        print(messages(lang=lang, untagged=untagged, limit=limit))
+        print(messages(lang=lang, untagged=untagged, limit=limit, session=session))
         return 0
     if cmd == "tag":
         if not argv[1:]:
@@ -184,7 +210,10 @@ def main(argv):
             print(e, file=sys.stderr)
         return 1 if errors else 0
     if cmd == "mark-processed":
-        print(mark_processed())
+        session = None
+        if len(argv) >= 3 and argv[1] == "--session":
+            session = argv[2]
+        print(mark_processed(session=session))
         return 0
     if cmd == "query":
         if len(argv) != 2:
