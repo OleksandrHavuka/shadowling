@@ -87,7 +87,7 @@ def _migration_2(con):
         DELETE FROM messages;
         CREATE TABLE IF NOT EXISTS attempts(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts TEXT NOT NULL,
+            created_at TEXT NOT NULL,
             session_id TEXT,
             item_kind TEXT NOT NULL,
             item_key TEXT NOT NULL,
@@ -101,6 +101,8 @@ def _migration_2(con):
             due_date TEXT NOT NULL,
             last_verdict TEXT NOT NULL,
             counter_seen INTEGER,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL,
             PRIMARY KEY (item_kind, item_key));
     """)
 

@@ -321,9 +321,9 @@ class MarkDrillsTest(CaptureTestBase):
         with closing_con() as con:
             with con:
                 con.execute(
-                    "INSERT INTO attempts(ts, session_id, item_kind, item_key,"
-                    " exercise, answer, verdict) VALUES ('t', ?, 'grammar',"
-                    " 'k', 'fix', ?, 'pass')", (session, answer))
+                    "INSERT INTO attempts(created_at, session_id, item_kind,"
+                    " item_key, exercise, answer, verdict) VALUES ('t', ?,"
+                    " 'grammar', 'k', 'fix', ?, 'pass')", (session, answer))
 
     def test_exact_and_drifted_matches_marked(self):
         self._capture_text("I have gone to the gym", "sess-A")
