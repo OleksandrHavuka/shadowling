@@ -95,12 +95,12 @@ setup).
 
 ```json
 {
-  "native_language": "Ukrainian",
+  "first_language": "Ukrainian",
   "explanation_language": "English"
 }
 ```
 
-- `native_language` — the language words and corrections are translated **into**.
+- `first_language` — your native language; the one words and corrections are translated **into**.
 - `explanation_language` — the language `/debrief` and `/aha` write meanings,
   rules, and takeaways in.
 

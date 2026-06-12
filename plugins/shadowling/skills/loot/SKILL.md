@@ -12,13 +12,13 @@ are given — do NOT ask, do NOT block on typos.
 
 The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so
 each command starts with `python3` (e.g.
-`python3 "${CLAUDE_SKILL_DIR}/../../config.py" get native_language`).
+`python3 "${CLAUDE_SKILL_DIR}/../../config.py" get first_language`).
 
 Terms (comma-separated): `$ARGUMENTS`
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get native_language`. If it
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get first_language`. If it
    FAILS (non-zero exit), reply that shadowling is not configured — tell the user
    to run `/shadowling:setup` first — and stop.
 2. Split `$ARGUMENTS` on commas, trim each, drop empties. Keep multi-word phrases

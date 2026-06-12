@@ -129,8 +129,8 @@ def scan(stdin_text):
         con.close()
 
 
-def gloss_rules(native_language):
-    """Build the glossing instruction for the configured native language."""
+def gloss_rules(first_language):
+    """Build the glossing instruction for the learner's first (native) language."""
     return (
         "VOCAB GLOSSING: The user is learning new vocabulary. For each "
         "active word listed below, the FIRST time that word appears in any reply "
@@ -149,7 +149,7 @@ def gloss_rules(native_language):
         "none of these words, omit the block entirely. The active words "
         "(word = translation, remaining shown) are in the <active_words> tag "
         "below."
-    ).format(native=native_language)
+    ).format(native=first_language)
 
 
 def inject(event="SessionStart"):
@@ -159,7 +159,7 @@ def inject(event="SessionStart"):
     rows = list_active()
     if not rows:
         return ""
-    rules = gloss_rules(cfg["native_language"])
+    rules = gloss_rules(cfg["first_language"])
     word_lines = "\n".join(
         "- {0} = {1} (remaining {2})".format(
             r["word"], r["translation"], r["remaining"])
