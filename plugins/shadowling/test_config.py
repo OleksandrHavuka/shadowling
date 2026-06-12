@@ -33,7 +33,8 @@ class ConfigCliTestBase(unittest.TestCase):
 
     def _configure(self):
         self._write_config({"first_language": "Ukrainian",
-                            "explanation_language": "English"})
+                            "explanation_language": "English",
+                            "learning_language": "English"})
 
 
 class GetTest(ConfigCliTestBase):
@@ -57,16 +58,19 @@ class GetTest(ConfigCliTestBase):
 
     def test_get_unknown_key_is_error(self):
         self._configure()
-        self.assertEqual(run_main(["get", "learning_language"])[0], 1)
+        self.assertEqual(run_main(["get", "bogus_language"])[0], 1)
 
 
 class SetTest(ConfigCliTestBase):
     def test_set_persists_and_get_reads_it(self):
         self.assertEqual(run_main(["set", "first_language", "Spanish"])[0], 0)
         self.assertEqual(run_main(["set", "explanation_language", "German"])[0], 0)
+        self.assertEqual(run_main(["set", "learning_language", "French"])[0], 0)
         self.assertEqual(run_main(["get", "first_language"])[1].strip(), "Spanish")
         self.assertEqual(run_main(["get", "explanation_language"])[1].strip(),
                          "German")
+        self.assertEqual(run_main(["get", "learning_language"])[1].strip(),
+                         "French")
 
     def test_set_preserves_unknown_keys_in_file(self):
         self._write_config({"first_language": "Ukrainian",
@@ -79,7 +83,7 @@ class SetTest(ConfigCliTestBase):
         self.assertEqual(raw["first_language"], "Spanish")
 
     def test_set_unknown_key_is_error(self):
-        self.assertEqual(run_main(["set", "learning_language", "German"])[0], 1)
+        self.assertEqual(run_main(["set", "bogus_language", "German"])[0], 1)
 
     def test_set_empty_value_is_error(self):
         self.assertEqual(run_main(["set", "first_language", "   "])[0], 1)
@@ -91,16 +95,24 @@ class ReadyTest(ConfigCliTestBase):
         self._write_config({"first_language": "Ukrainian"})
         self.assertFalse(core.config_ready())
 
-    def test_ready_when_both_set(self):
+    def test_ready_when_all_set(self):
         self._configure()
         self.assertTrue(core.config_ready())
+
+    def test_not_ready_when_learning_language_missing(self):
+        # the new third key is part of the whole-plugin gate
+        self._write_config({"first_language": "Ukrainian",
+                            "explanation_language": "English"})
+        self.assertFalse(core.config_ready())
 
     def test_load_config_exposes_exactly_the_known_keys(self):
         self._write_config({"first_language": "Ukrainian",
                             "explanation_language": "English",
-                            "learning_language": "stale"})
+                            "learning_language": "Spanish",
+                            "future_key": "stale"})
         cfg = core.load_config()
-        self.assertEqual(set(cfg), {"first_language", "explanation_language"})
+        self.assertEqual(set(cfg), {"first_language", "explanation_language",
+                                    "learning_language"})
         self.assertTrue(core.config_ready())
 
     def test_load_config_blank_for_malformed_values(self):
