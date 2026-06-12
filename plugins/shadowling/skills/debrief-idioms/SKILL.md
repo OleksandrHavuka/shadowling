@@ -1,6 +1,6 @@
 ---
 name: debrief-idioms
-description: "Specialist: collect apt idioms from the buffered English into the idioms dataset. Usually invoked by /debrief."
+description: "Specialist: collect apt idioms from your buffered writing into the idioms dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet
@@ -17,14 +17,17 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang en`. If it prints
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` for the
+   language you analyze, and `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If EITHER FAILS (non-zero exit),
+   print `ERROR idioms: not configured — run /shadowling:setup` and STOP.
+   The `meaning` is written in the explanation language.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang <code>`,
+   where `<code>` is the lowercase ISO 639-1 code of the learning language
+   (English → `en`, German → `de`, Spanish → `es`, …). If it prints
    `<messages></messages>` (empty), print `OK idioms: nothing found` and STOP.
-   If a listed message turns out not to be English prose (a mis-tag), skip it —
-   never analyze non-English text.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
-   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
-   `ERROR idioms: not configured — run /shadowling:setup` and STOP.
-   The `meaning` is written in THAT language.
+   If a listed message turns out not to be learning-language prose (a mis-tag),
+   skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms select`. Collect the
    existing `idiom` values — your dedup context.
 4. Read every `<m>` message and find idioms / fixed expressions worth learning —
@@ -32,9 +35,9 @@ Steps:
    what they meant. The key is the idiom itself in its canonical dictionary form
    (lowercase, no surrounding punctuation, e.g. `break the ice`); reuse an existing
    key when it's the same idiom. Record each with ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms record "<idiom>" "<meaning>" "<context>" "<you wrote>"`
+   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms record "<idiom>" "<meaning>" "<context>" "<learner_wrote>"`
    where `meaning` is the meaning in the explanation language, `context` the situation,
-   `you wrote` the user's actual wording. Don't invent idioms. Backslash-escape
+   `learner_wrote` the user's actual wording. Don't invent idioms. Backslash-escape
    `\`, `"`, `` ` `` or `$` inside the quoted args.
 5. Print exactly one line and nothing else:
    `OK idioms: <N> incremented, <M> inserted` (or `OK idioms: nothing found`).

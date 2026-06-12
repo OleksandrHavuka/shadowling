@@ -1,6 +1,6 @@
 ---
 name: debrief-rephrasing
-description: "Specialist: extract naturalness/phrasing fixes from the buffered English into the rephrasing dataset. Usually invoked by /debrief."
+description: "Specialist: extract naturalness/phrasing fixes from your buffered writing into the rephrasing dataset. Usually invoked by /debrief."
 context: fork
 agent: claude
 model: sonnet
@@ -18,14 +18,17 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang en`. If it prints
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` for the
+   language you analyze, and `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
+   for the language to WRITE EXPLANATIONS IN. If EITHER FAILS (non-zero exit),
+   print `ERROR rephrasing: not configured — run /shadowling:setup` and STOP.
+   Write `problem` and `why` in the explanation language only — no other-language glosses.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang <code>`,
+   where `<code>` is the lowercase ISO 639-1 code of the learning language
+   (English → `en`, German → `de`, Spanish → `es`, …). If it prints
    `<messages></messages>` (empty), print `OK rephrasing: nothing found` and STOP.
-   If a listed message turns out not to be English prose (a mis-tag), skip it —
-   never analyze non-English text.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
-   for the language to WRITE EXPLANATIONS IN. If it FAILS (non-zero exit), print
-   `ERROR rephrasing: not configured — run /shadowling:setup` and STOP.
-   Write `problem` and `why` in THAT language only — no other-language glosses.
+   If a listed message turns out not to be learning-language prose (a mis-tag),
+   skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing select`. Collect the
    existing `slug` values — your dedup context.
 4. Read every `<m>` message and find phrasing that is grammatical but UNNATURAL
@@ -44,11 +47,11 @@ Steps:
      fits. Prefer these areas (mint a new one only if none truly fits):
      `collocation word-choice register wordiness phrasing calque idiomaticity`.
    Then record it with ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing record "<slug>" "<problem>" "<yours>" "<natural>" "<why>"`
-   where `problem` is a short description of the class, `yours` the user's wording,
-   `natural` the natural rephrasing, `why` a short reason written in the explanation
-   language. Don't invent issues. Backslash-escape `\`, `"`, `` ` `` or
-   `$` inside the quoted args.
+   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing record "<slug>" "<problem>" "<learner_wrote>" "<native_phrase>" "<why>"`
+   where `problem` is a short description of the class, `learner_wrote` the user's wording,
+   `native_phrase` how a native speaker of the learning language would phrase it, `why`
+   a short reason written in the explanation language. Don't invent issues.
+   Backslash-escape `\`, `"`, `` ` `` or `$` inside the quoted args.
 5. Print exactly one line and nothing else:
    `OK rephrasing: <N> incremented, <M> inserted` (or `OK rephrasing: nothing found`).
 6. If ANY command fails (non-zero exit, missing/garbled output) or you cannot finish

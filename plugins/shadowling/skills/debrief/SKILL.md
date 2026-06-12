@@ -1,6 +1,6 @@
 ---
 name: debrief
-description: "Review your buffered English into per-category frequency docs (grammar / rephrasings / idioms / verbs). Usage: /debrief"
+description: "Review your buffered writing into per-category frequency docs (grammar / rephrasings / idioms / verbs). Usage: /debrief"
 allowed-tools: Bash(python3 */capture.py*) Skill(shadowling:debrief-triage) Skill(shadowling:debrief-grammar) Skill(shadowling:debrief-rephrasing) Skill(shadowling:debrief-idioms) Skill(shadowling:debrief-verbs) Skill(shadowling:debrief-friction)
 ---
 
