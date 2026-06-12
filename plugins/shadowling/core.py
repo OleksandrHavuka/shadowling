@@ -2,7 +2,7 @@
 """core.py - shared infrastructure for shadowling scripts (stdlib only, Python 3.9+).
 
 Home-directory resolution, config loading, and transcript reading, shared by
-`vocab.py` (glossing) and `capture.py` (English-correction collection).
+`vocab.py` (glossing) and `capture.py` (message collection).
 """
 import json
 import os
@@ -10,8 +10,10 @@ import re
 from datetime import datetime
 
 # first_language = the learner's native/mother tongue (translations go INTO it);
-# explanation_language = the language corrections/explanations are written in.
-CONFIG_KEYS = ("first_language", "explanation_language")
+# explanation_language = the language corrections/explanations are written in;
+# learning_language = the language the learner is studying (the prose that gets
+#   analyzed/drilled; never assume a specific one — English is no longer baked in).
+CONFIG_KEYS = ("first_language", "explanation_language", "learning_language")
 
 
 def data_dir():
