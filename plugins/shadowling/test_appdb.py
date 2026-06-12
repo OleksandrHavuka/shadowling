@@ -41,7 +41,7 @@ class MigrationRunnerTest(AppDbTestBase):
         finally:
             con.close()
 
-    def test_existing_nonempty_db_backed_up_and_kept(self):
+    def test_existing_nonempty_db_backed_up_then_wiped(self):
         # simulate a pre-consolidation 0.6.0 db: messages table, user_version 0
         con = sqlite3.connect(appdb.db_path())
         con.execute("CREATE TABLE messages(id INTEGER PRIMARY KEY AUTOINCREMENT,"
@@ -52,8 +52,16 @@ class MigrationRunnerTest(AppDbTestBase):
         con.close()
         appdb.connect().close()
         self.assertTrue(os.path.exists(appdb.db_path() + ".bak"))
-        self.assertEqual(appdb.query("SELECT text FROM messages"),
-                         [{"text": "hello there"}])
+        # migration 2 wipes the corpus; the pre-upgrade backup keeps the copy
+        self.assertEqual(appdb.query("SELECT COUNT(*) AS n FROM messages"),
+                         [{"n": 0}])
+        bak_con = sqlite3.connect(appdb.db_path() + ".bak")
+        try:
+            self.assertEqual(
+                bak_con.execute("SELECT text FROM messages").fetchall(),
+                [("hello there",)])
+        finally:
+            bak_con.close()
 
     def test_legacy_files_deleted_unimported(self):
         for name in ("grammar.md", "grammar.log.jsonl", "words.csv",
@@ -75,6 +83,45 @@ class MigrationRunnerTest(AppDbTestBase):
         # A brand-new db has no prior data — backing it up would be pointless.
         appdb.connect().close()
         self.assertFalse(os.path.exists(appdb.db_path() + ".bak"))
+
+
+class Migration2Test(AppDbTestBase):
+    def test_fresh_db_has_tutor_schema(self):
+        con = appdb.connect()
+        try:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0], 2)
+            tables = {r["name"] for r in con.execute(
+                "SELECT name FROM sqlite_master WHERE type='table'")}
+            self.assertIn("attempts", tables)
+            self.assertIn("mastery", tables)
+            cols = {r["name"] for r in con.execute(
+                "PRAGMA table_info(messages)")}
+            self.assertIn("session_id", cols)
+            self.assertIn("kind", cols)
+        finally:
+            con.close()
+
+    def test_upgrade_wipes_messages_keeps_other_data(self):
+        # build a 0.7.x-state db: version 1, old messages + one grammar incident
+        con = appdb.connect()
+        con.close()
+        con = sqlite3.connect(appdb.db_path())
+        con.execute("PRAGMA user_version = 1")
+        con.execute("DROP TABLE attempts")
+        con.execute("DROP TABLE mastery")
+        con.execute("INSERT INTO messages(ts, text) VALUES ('t', 'legacy message here')")
+        con.execute("INSERT INTO grammar(date, slug) VALUES ('d', 's1')")
+        con.commit()
+        con.close()
+        bak = appdb.db_path() + ".bak"
+        if os.path.exists(bak):  # fresh connect makes NO backup; guard anyway
+            os.remove(bak)
+        appdb.connect().close()
+        self.assertTrue(os.path.exists(appdb.db_path() + ".bak"))
+        self.assertEqual(appdb.query("SELECT COUNT(*) AS n FROM messages"),
+                         [{"n": 0}])     # zero legacy support (pre-prod waiver)
+        self.assertEqual(appdb.query("SELECT COUNT(*) AS n FROM grammar"),
+                         [{"n": 1}])     # everything else intact
 
 
 class ViewsTest(AppDbTestBase):

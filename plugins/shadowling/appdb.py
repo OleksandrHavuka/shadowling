@@ -72,7 +72,40 @@ def _migration_1(con):
             os.remove(path)
 
 
-MIGRATIONS = [_migration_1]
+def _migration_2(con):
+    """Tutor v1 + debrief 2.0. The legacy message corpus is wiped UNIMPORTED
+    (pre-prod; user explicitly waived it — same as words.csv in 0.7.0); every
+    row from now on carries the session it came from. The two ADD COLUMNs are
+    guarded so a replay against an already-migrated messages table (sqlite has
+    no ALTER … ADD COLUMN IF NOT EXISTS) doesn't raise 'duplicate column'."""
+    cols = {r["name"] for r in con.execute("PRAGMA table_info(messages)")}
+    if "session_id" not in cols:
+        con.execute("ALTER TABLE messages ADD COLUMN session_id TEXT")
+    if "kind" not in cols:
+        con.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
+    con.executescript("""
+        DELETE FROM messages;
+        CREATE TABLE IF NOT EXISTS attempts(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ts TEXT NOT NULL,
+            session_id TEXT,
+            item_kind TEXT NOT NULL,
+            item_key TEXT NOT NULL,
+            exercise TEXT NOT NULL,
+            answer TEXT NOT NULL,
+            verdict TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS mastery(
+            item_kind TEXT NOT NULL,
+            item_key TEXT NOT NULL,
+            box INTEGER NOT NULL,
+            due_date TEXT NOT NULL,
+            last_verdict TEXT NOT NULL,
+            counter_seen INTEGER,
+            PRIMARY KEY (item_kind, item_key));
+    """)
+
+
+MIGRATIONS = [_migration_1, _migration_2]
 
 # --- views: derived code, never migrated --------------------------------------
 # The MAX(id) bare-column idiom makes non-aggregated columns come from the
