@@ -76,6 +76,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/loot <word>[, ...]` | Translate the word(s) into your native language and start tracking them. |
 | `/drop <word>[, ...]` | Stop tracking and delete word(s). |
 | `/debrief` | Review your captured messages into per-category frequency datasets (grammar / rephrasings / idioms / verbs / friction). |
+| `/tutor [size]` | Drill your recorded pains (friction phrasings, grammar, irregular verbs, learned vocab) with spaced repetition; ~8 cards by default. |
 | `/aha <phrase> [+ your hunch]` | Explain an English expression you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. |
 | `/vipe` | Dev: wipe the six category datasets for a clean test run (keeps config, vocab, message store). |
 
@@ -219,11 +220,27 @@ unknown word it points you at `/loot` instead.
 
 ---
 
+## Training (`/tutor`)
+
+The datasets aren't just a mirror — `/tutor` closes the loop. Each session
+deals a small deck of cards built from your own incidents: "how would you
+say…?" for code-switching zones, "correct this sentence" for recurring
+grammar errors, quick-fire irregular-verb forms, and reverse checks of
+vocabulary you "learned" by exposure (fail one and it returns to glossing).
+Scheduling is spaced repetition (Leitner: answer well → the item comes back
+later; fail → tomorrow), and items your latest `/debrief` re-caught jump the
+queue. Your answers during a session are NOT collected as writing material.
+
+Requires Claude Code ≥ 2.1.163 for that last guarantee (older versions:
+tutoring works, but drill answers may reach `/debrief` analysis).
+
+---
+
 ## Data & files
 
 | Path | What |
 |---|---|
-| `~/.shadowling/shadowling.db` | everything: message store (language tags, processed flags), the six category incident datasets with their computed rankings, and your vocabulary |
+| `~/.shadowling/shadowling.db` | everything: message store (language tags, processed flags), the six category incident datasets with their computed rankings, your vocabulary, and the tutor's attempt log + spaced-repetition state |
 | `~/.shadowling/config.json` | language settings |
 
 Want a human-readable table? `python3 <plugin>/db.py <category> export` prints
