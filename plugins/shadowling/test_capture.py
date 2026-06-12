@@ -316,5 +316,63 @@ class SessionVerbsTest(CaptureTestBase):
         self.assertIn("processed 2", out)
 
 
+class MarkDrillsTest(CaptureTestBase):
+    def _attempt(self, answer, session="sess-A"):
+        with closing_con() as con:
+            with con:
+                con.execute(
+                    "INSERT INTO attempts(ts, session_id, item_kind, item_key,"
+                    " exercise, answer, verdict) VALUES ('t', ?, 'grammar',"
+                    " 'k', 'fix', ?, 'pass')", (session, answer))
+
+    def test_exact_and_drifted_matches_marked(self):
+        self._capture_text("I have gone to the gym", "sess-A")
+        self._capture_text("I see it differently - here is my concern", "sess-A")
+        self._attempt("I have gone to the gym")                  # identical
+        self._attempt("i have GONE to the gym")                  # case flip
+        self._attempt("I see it differently -  here is my concern ")  # ws drift
+        out = capture.mark_drills()
+        rows = capture.query("SELECT kind FROM messages ORDER BY id")
+        self.assertEqual([r["kind"] for r in rows], ["drill", "drill"])
+        self.assertIn("marked 2", out)
+
+    def test_interjection_and_other_session_not_marked(self):
+        self._capture_text("стоп забий треба фіксити деплой зараз", "sess-A")
+        self._capture_text("I have gone to the gym", "sess-B")   # other session
+        self._attempt("I have gone to the gym", session="sess-A")
+        out = capture.mark_drills()
+        rows = capture.query("SELECT kind FROM messages ORDER BY id")
+        self.assertEqual([r["kind"] for r in rows], [None, None])
+        self.assertIn("1 attempt(s) unmatched", out)
+
+    def test_short_lookalike_below_threshold(self):
+        self._capture_text("went home just now ok", "sess-A")
+        self._attempt("went, gone")
+        capture.mark_drills()
+        self.assertEqual(
+            capture.query("SELECT kind FROM messages")[0]["kind"], None)
+
+    def test_similarity_characterization(self):
+        similarity = capture._similarity
+        self.assertGreaterEqual(
+            similarity("I have gone home", "I have gone home"), 1.0)
+        self.assertGreaterEqual(
+            similarity("I have gone home", "I Have Gone Home!"), 0.9)
+        self.assertGreaterEqual(
+            similarity("take  a   photo", "take a photo"), 0.9)
+        self.assertLess(similarity("went, gone", "went home"), 0.9)
+        self.assertLess(
+            similarity("I have gone home", "the deploy is green now"), 0.5)
+
+    def test_processed_rows_untouched(self):
+        self._capture_text("I have gone to the gym", "sess-A")
+        capture.tag(["1=en"])
+        capture.mark_processed()
+        self._attempt("I have gone to the gym")
+        capture.mark_drills()
+        self.assertEqual(
+            capture.query("SELECT kind FROM messages")[0]["kind"], None)
+
+
 if __name__ == "__main__":
     unittest.main()
