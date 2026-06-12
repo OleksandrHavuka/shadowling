@@ -133,5 +133,95 @@ class RecordTest(TutorTestBase):
                                   stdin_text="x")[0], 1)
 
 
+class DeckTest(TutorTestBase):
+    def _mastery_row(self, kind, key, box, due, counter_seen=None):
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO mastery(item_kind, item_key, box, due_date,"
+                    " last_verdict, counter_seen) VALUES (?, ?, ?, ?, 'pass', ?)",
+                    (kind, key, box, due, counter_seen))
+        finally:
+            con.close()
+
+    def test_new_items_ranked_by_counter(self):
+        self.seed_grammar("rare", n=1)
+        self.seed_grammar("frequent", n=3)
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            cards = tutor.deck(8)
+        keys = [c["item_key"] for c in cards if c["item_kind"] == "grammar"]
+        self.assertEqual(keys, ["frequent", "rare"])
+        card = cards[0]
+        self.assertEqual(card["exercise"], "fix")
+        self.assertEqual(card["prompt_data"]["original"], "I went to store")
+        self.assertEqual(card["prompt_data"]["fixed"], "I went to the store")
+
+    def test_due_before_new_and_overdue_first(self):
+        self.seed_grammar("s-due-old"); self.seed_grammar("s-due-new")
+        self.seed_grammar("s-fresh")
+        self._mastery_row("grammar", "s-due-old", 2, "2026-06-10")
+        self._mastery_row("grammar", "s-due-new", 2, "2026-06-12")
+        self._mastery_row("grammar", "s-fresh", 2, "2026-07-01")  # not due
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            keys = [c["item_key"] for c in tutor.deck(8)]
+        self.assertEqual(keys[:2], ["s-due-old", "s-due-new"])
+        self.assertNotIn("s-fresh", keys)
+
+    def test_hot_zone_boost_jumps_queue(self):
+        self.seed_grammar("calm", n=1)
+        self.seed_grammar("hot", n=3)        # counter now 3
+        self._mastery_row("grammar", "calm", 2, "2026-06-10")
+        self._mastery_row("grammar", "hot", 2, "2026-06-11", counter_seen=1)
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            keys = [c["item_key"] for c in tutor.deck(8)]
+        self.assertEqual(keys[0], "hot")     # boosted past the older due
+        self.assertEqual(keys[1], "calm")
+
+    def test_mix_cap_half_per_kind(self):
+        for i in range(8):
+            self.seed_grammar("g{0}".format(i))
+        self.seed_vocab("alpha"); self.seed_vocab("beta")
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            cards = tutor.deck(4)
+        kinds = [c["item_kind"] for c in cards]
+        self.assertEqual(len(cards), 4)
+        self.assertLessEqual(kinds.count("grammar"), 2)
+        self.assertIn("vocab", kinds)
+
+    def test_vocab_card_prompt_data(self):
+        self.seed_vocab("throughput", status="learned")
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            cards = [c for c in tutor.deck(8) if c["item_kind"] == "vocab"]
+        self.assertEqual(cards[0]["exercise"], "reverse")
+        self.assertEqual(cards[0]["prompt_data"]["translation"], "переклад")
+
+    def test_active_vocab_not_drilled(self):
+        self.seed_vocab("active-word", status="active")
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            self.assertEqual(tutor.deck(8), [])
+
+
+class StatsTest(TutorTestBase):
+    def test_stats_counts_due(self):
+        self.seed_grammar("s1")
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO mastery(item_kind, item_key, box, due_date,"
+                    " last_verdict) VALUES ('grammar','s1',1,'2026-06-12','fail')")
+                con.execute(
+                    "INSERT INTO mastery(item_kind, item_key, box, due_date,"
+                    " last_verdict) VALUES ('grammar','s2',2,'2026-06-13','pass')")
+        finally:
+            con.close()
+        with mock.patch("tutor._today", return_value="2026-06-12"):
+            s = tutor.stats()
+        self.assertEqual(s["due_today"], 1)
+        self.assertEqual(s["due_tomorrow"], 1)
+        self.assertEqual(s["mastered" if "mastered" in s else "tracked"], 2)
+
+
 if __name__ == "__main__":
     unittest.main()
