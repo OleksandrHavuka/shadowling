@@ -150,7 +150,25 @@ def _migration_4(con):
     """)
 
 
-MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4]
+def _migration_5(con):
+    """Verbs redesign. `example_fix` crammed the learner's wrong usage and the
+    correction into one "wrong → right" string; split it so verbs match every
+    other incident table (an explicit learner column) and gain a drillable
+    context excerpt. `example_fix` → `correction` (now just the fixed side);
+    `used_form` (what the learner actually wrote) and `context` are new. The view
+    is dropped first so RENAME can't trip on it; _ensure_views() rebuilds. Legacy
+    rows keep their old "wrong → right" text under `correction`; used_form/context
+    backfill NULL (pre-prod, append-only — no rewrite of recorded text)."""
+    con.executescript("""
+        DROP VIEW IF EXISTS verbs_ranked;
+        ALTER TABLE verbs RENAME COLUMN example_fix TO correction;
+        ALTER TABLE verbs ADD COLUMN used_form TEXT;
+        ALTER TABLE verbs ADD COLUMN context TEXT;
+    """)
+
+
+MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4,
+              _migration_5]
 
 # --- views: derived code, never migrated --------------------------------------
 # The MAX(id) bare-column idiom makes non-aggregated columns come from the
@@ -175,8 +193,8 @@ VIEWS = {
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM idioms GROUP BY idiom ORDER BY counter DESC, last_id DESC'),
     "verbs_ranked": (
-        ' SELECT verb, past, participle AS "past participle",'
-        ' example_fix AS "example fix",'
+        ' SELECT used_form AS "you used", correction, context,'
+        ' verb, past, participle AS "past participle",'
         ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
         ' COUNT(*) AS counter, MAX(id) AS last_id'
         ' FROM verbs GROUP BY verb ORDER BY counter DESC, last_id DESC'),

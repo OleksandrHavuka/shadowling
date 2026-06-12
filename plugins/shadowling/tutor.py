@@ -113,7 +113,7 @@ PROMPT_SQL = {
                 " FROM friction WHERE slug = ? ORDER BY id DESC LIMIT 1",
     "grammar": "SELECT problem, original, fixed, rule"
                " FROM grammar WHERE slug = ? ORDER BY id DESC LIMIT 1",
-    "verbs": "SELECT past, participle, example_fix"
+    "verbs": "SELECT past, participle, used_form, correction, context"
              " FROM verbs WHERE verb = ? ORDER BY id DESC LIMIT 1",
     "vocab": "SELECT translation FROM vocab WHERE word = ?",
 }

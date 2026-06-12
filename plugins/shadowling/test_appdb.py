@@ -219,6 +219,38 @@ class Migration4Test(AppDbTestBase):
             [{"native_phrase": "I see it differently"}])
 
 
+class Migration5Test(AppDbTestBase):
+    def test_fresh_db_has_verbs_redesign(self):
+        con = appdb.connect()
+        try:
+            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0],
+                             len(appdb.MIGRATIONS))
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(verbs)")}
+            self.assertIn("correction", cols)   # renamed from example_fix
+            self.assertIn("used_form", cols)     # new: the learner's wrong form
+            self.assertIn("context", cols)       # new: drillable excerpt
+            self.assertNotIn("example_fix", cols)
+        finally:
+            con.close()
+
+    def test_upgrade_renames_example_fix_keeps_data(self):
+        con = sqlite3.connect(appdb.db_path())
+        appdb._migration_1(con)
+        con.execute("PRAGMA user_version = 1")
+        con.execute("INSERT INTO verbs(date, verb, example_fix)"
+                    " VALUES ('2026-06-01', 'go', 'I have went -> I have gone')")
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays migrations 2..5 (RENAME preserves rows)
+        rows = appdb.query(
+            "SELECT verb, correction, used_form, context FROM verbs")
+        self.assertEqual(rows[0]["verb"], "go")
+        # legacy example_fix text survives under the new name
+        self.assertEqual(rows[0]["correction"], "I have went -> I have gone")
+        self.assertIsNone(rows[0]["used_form"])   # added columns backfill NULL
+        self.assertIsNone(rows[0]["context"])
+
+
 class ViewsTest(AppDbTestBase):
     def test_all_views_exist_and_query(self):
         con = appdb.connect()
