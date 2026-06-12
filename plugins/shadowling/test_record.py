@@ -108,20 +108,26 @@ class VerbsRecordTest(RecordTestBase):
     def test_record_uses_verb_key_and_logs(self):
         from models.verbs import Verbs
         self.assertEqual(models.RECORDERS["verbs"](
-            "go", "went", "gone", "I have went → I have gone"), "inserted")
+            "go", "went", "gone", "I have went", "I have gone",
+            "I have went to the store yesterday"), "inserted")
         row = Verbs.select("go")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["past"], "went")
         self.assertEqual(row["past participle"], "gone")
-        self.assertEqual(row["example fix"], "I have went → I have gone")
-        self.assertEqual(self._incidents("verbs")[0]["example_fix"],
-                         "I have went → I have gone")
+        self.assertEqual(row["you used"], "I have went")
+        self.assertEqual(row["correction"], "I have gone")
+        self.assertEqual(row["context"], "I have went to the store yesterday")
+        incident = self._incidents("verbs")[0]
+        self.assertEqual(incident["used_form"], "I have went")
+        self.assertEqual(incident["correction"], "I have gone")
+        self.assertEqual(incident["context"],
+                         "I have went to the store yesterday")
 
     def test_verb_key_normalized(self):
         from models.verbs import Verbs
-        models.RECORDERS["verbs"]("Go", "went", "gone", "e1")
+        models.RECORDERS["verbs"]("Go", "went", "gone", "u1", "c1", "ctx1")
         self.assertEqual(
-            models.RECORDERS["verbs"](" go ", "went", "gone", "e2"),
+            models.RECORDERS["verbs"](" go ", "went", "gone", "u2", "c2", "ctx2"),
             "incremented")
         self.assertEqual(Verbs.select("go")["counter"], 2)
 
