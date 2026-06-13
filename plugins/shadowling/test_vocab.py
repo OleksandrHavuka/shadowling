@@ -42,7 +42,7 @@ class VocabTestBase(unittest.TestCase):
             with con:
                 for col, val in cols.items():
                     con.execute(
-                        "UPDATE vocab SET {0} = ? WHERE word = ?".format(col),
+                        f"UPDATE vocab SET {col} = ? WHERE word = ?",
                         (val, word))
         finally:
             con.close()
@@ -275,7 +275,8 @@ class ScanTest(VocabTestBase):
         self.assertEqual(vocab.scan(""), [])
 
     def test_scan_missing_transcript_path_returns_empty(self):
-        self.assertEqual(vocab.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), [])
+        self.assertEqual(
+            vocab.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), [])
 
     def test_scan_main_bad_stdin_returns_zero(self):
         # Hook path must never crash even on completely invalid stdin

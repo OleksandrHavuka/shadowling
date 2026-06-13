@@ -36,10 +36,10 @@ def snapshot(con):
     os.makedirs(bdir, exist_ok=True)
     os.chmod(bdir, 0o700)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    path = os.path.join(bdir, "shadowling-{0}.db".format(stamp))
+    path = os.path.join(bdir, f"shadowling-{stamp}.db")
     n = 2
     while os.path.exists(path):  # two snapshots within one second
-        path = os.path.join(bdir, "shadowling-{0}-{1}.db".format(stamp, n))
+        path = os.path.join(bdir, f"shadowling-{stamp}-{n}.db")
         n += 1
     dest = sqlite3.connect(path)
     try:
@@ -70,7 +70,7 @@ def run_write(sql_text, params):
         elif cur.rowcount < 0:  # DDL has no meaningful rowcount
             print("ok")
         else:
-            print("{0} row(s) affected".format(cur.rowcount))
+            print(f"{cur.rowcount} row(s) affected")
         return 0
     finally:
         con.close()

@@ -134,9 +134,10 @@ def gloss_rules(first_language):
     return (
         "VOCAB GLOSSING: The user is learning new vocabulary. For each "
         "active word listed below, the FIRST time that word appears in any reply "
-        "you write to the user, append its {native} translation inline in "
+        f"you write to the user, append its {first_language} translation inline in "
         "parentheses immediately after the word (write the word, then its "
-        "{native} translation in parentheses). Gloss only the first occurrence "
+        f"{first_language} translation in parentheses). Gloss only the "
+        "first occurrence "
         "per reply. Do not gloss any word not in this list. CRITICAL: this list "
         "must NOT influence what you say. Write exactly as you naturally would; "
         "only annotate a word if it would have appeared anyway. Never insert, "
@@ -149,7 +150,7 @@ def gloss_rules(first_language):
         "none of these words, omit the block entirely. The active words "
         "(word = translation, remaining shown) are in the <active_words> tag "
         "below."
-    ).format(native=first_language)
+    )
 
 
 def inject(event="SessionStart"):
@@ -161,7 +162,7 @@ def inject(event="SessionStart"):
         return ""
     rules = gloss_rules(cfg["first_language"])
     word_lines = "\n".join(
-        "- {0} = {1} (remaining {2})".format(
+        "- {} = {} (remaining {})".format(
             r["word"], r["translation"], r["remaining"])
         for r in rows)
     context = (
@@ -197,7 +198,7 @@ def main(argv):
             return 1
         for i in range(0, len(pairs), 2):
             action, row = add(pairs[i], pairs[i + 1])
-            print("{0}: {1} = {2} (remaining {3}, {4})".format(
+            print("{}: {} = {} (remaining {}, {})".format(
                 action, row["word"], row["translation"],
                 row["remaining"], row["status"]))
         return 0
@@ -207,12 +208,12 @@ def main(argv):
             print('usage: vocab.py remove "<word>" ["<word>" ...]', file=sys.stderr)
             return 1
         for word in words:
-            print("{0}: {1}".format(
+            print("{}: {}".format(
                 word, "removed" if remove(word) else "not found"))
         return 0
     if cmd == "list-active":
         for r in list_active():
-            print("{0} = {1} (remaining {2})".format(
+            print("{} = {} (remaining {})".format(
                 r["word"], r["translation"], r["remaining"]))
         return 0
     if cmd == "inject":
@@ -227,7 +228,7 @@ def main(argv):
         except Exception:
             pass
         return 0  # Stop hook must never fail
-    print("unknown command: {0}".format(cmd), file=sys.stderr)
+    print(f"unknown command: {cmd}", file=sys.stderr)
     return 1
 
 

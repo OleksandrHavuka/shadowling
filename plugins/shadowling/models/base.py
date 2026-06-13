@@ -28,17 +28,16 @@ class Model:
         record's key AFTER the insert (1 = first occurrence)."""
         cols = ["created_at"] + list(cls.insert_cols)
         row = [today()] + [values[c] for c in cls.insert_cols]
-        sql = "INSERT INTO {0}({1}) VALUES ({2})".format(
+        sql = "INSERT INTO {}({}) VALUES ({})".format(
             cls.table,
-            ", ".join('"{0}"'.format(c) for c in cols),
+            ", ".join(f'"{c}"' for c in cols),
             ", ".join("?" for _ in cols))
         con = connect()
         try:
             with con:
                 con.execute(sql, row)
             return con.execute(
-                'SELECT COUNT(*) FROM {0} WHERE "{1}" = ?'.format(
-                    cls.table, cls.key),
+                f'SELECT COUNT(*) FROM {cls.table} WHERE "{cls.key}" = ?',
                 (values[cls.key],)).fetchone()[0]
         finally:
             con.close()
@@ -49,10 +48,10 @@ class Model:
         try:
             if key is None:
                 rows = con.execute(
-                    "SELECT * FROM {0}".format(cls.view)).fetchall()
+                    f"SELECT * FROM {cls.view}").fetchall()
                 return [cls._public(r) for r in rows]
             r = con.execute(
-                'SELECT * FROM {0} WHERE "{1}" = ?'.format(cls.view, cls.key),
+                f'SELECT * FROM {cls.view} WHERE "{cls.key}" = ?',
                 (key,)).fetchone()
             return cls._public(r) if r is not None else None
         finally:
@@ -69,7 +68,7 @@ class Model:
         con = connect()
         try:
             with con:
-                con.execute("DELETE FROM {0}".format(cls.table))
+                con.execute(f"DELETE FROM {cls.table}")
             return "dropped"
         finally:
             con.close()

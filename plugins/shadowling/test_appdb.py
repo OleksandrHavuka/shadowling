@@ -138,7 +138,7 @@ class Migration3Test(AppDbTestBase):
 
             def cols(t):
                 return {r["name"] for r in con.execute(
-                    "PRAGMA table_info({0})".format(t))}
+                    f"PRAGMA table_info({t})")}
             # creation time unified to created_at; ts/date retired everywhere
             self.assertIn("created_at", cols("messages"))
             self.assertNotIn("ts", cols("messages"))
@@ -192,7 +192,7 @@ class Migration4Test(AppDbTestBase):
 
             def cols(t):
                 return {r["name"] for r in con.execute(
-                    "PRAGMA table_info({0})".format(t))}
+                    f"PRAGMA table_info({t})")}
             for t in ("rephrasing", "friction"):
                 self.assertIn("native_phrase", cols(t))
             self.assertNotIn("natural", cols("rephrasing"))
@@ -256,7 +256,7 @@ class ViewsTest(AppDbTestBase):
         con = appdb.connect()
         try:
             for view in appdb.VIEWS:
-                con.execute("SELECT * FROM {0}".format(view)).fetchall()
+                con.execute(f"SELECT * FROM {view}").fetchall()
         finally:
             con.close()
 
