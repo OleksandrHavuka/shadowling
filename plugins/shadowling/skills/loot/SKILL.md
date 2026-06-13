@@ -12,15 +12,14 @@ are given — do NOT ask, do NOT block on typos.
 
 The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so
 each command starts with `python3` (e.g.
-`python3 "${CLAUDE_SKILL_DIR}/../../config.py" get first_language`).
+`python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`).
 
 Terms (comma-separated): `$ARGUMENTS`
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get first_language`. If it
-   FAILS (non-zero exit), relay the notice it printed (which names the missing
-   setting) and tell the user to run `/shadowling:setup` first — then stop.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`. You translate the
+   terms into `first_language`.
 2. Split `$ARGUMENTS` on commas, trim each, drop empties. Keep multi-word phrases
    whole (`machine learning` is one term).
 3. Translate each term INTO the language from step 1 — one short word or phrase,

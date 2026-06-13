@@ -64,6 +64,23 @@ class GetTest(ConfigCliTestBase):
         self.assertIn("not fully configured", err.getvalue())
         self.assertIn("learning_language", err.getvalue())  # names the gap
 
+    def test_show_emits_all_keys_as_json_when_ready(self):
+        self._configure()
+        code, out = run_main(["show"])
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertEqual(set(data), set(core.CONFIG_KEYS))
+        self.assertEqual(data["learning_language"], "English")
+
+    def test_show_fails_with_notice_when_unconfigured(self):
+        self._write_config({"first_language": "Ukrainian"})
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = config.main(["show"])
+        self.assertEqual(code, 1)
+        self.assertIn("not fully configured", err.getvalue())
+        self.assertIn("learning_language", err.getvalue())
+
     def test_get_prints_each_configured_key(self):
         self._configure()
         self.assertEqual(run_main(["get", "first_language"])[1].strip(), "Ukrainian")
