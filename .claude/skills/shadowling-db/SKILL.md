@@ -1,6 +1,6 @@
 ---
 name: shadowling-db
-description: Use when changing shadowling's sqlite schema or data layer — adding tables, columns, views, or migrations, storing data for a new feature, or touching shadowling.db, appdb.py, models/, or capture.py storage code.
+description: Use whenever you read, query, or mutate shadowling's sqlite database (shadowling.db) — any SELECT/INSERT/UPDATE/DELETE, ad-hoc SQL, dropping/clearing/resetting rows, inspecting data, or checking a migration's result. All DB access goes through sql.py or the data-layer verbs (db.py / vocab.py / capture.py), never raw sqlite3. Schema/data-layer changes are NOT made here — they go through an appended migration in appdb.py; this skill only documents that rule and verifies the outcome.
 ---
 
 # shadowling DB conventions
