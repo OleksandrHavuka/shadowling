@@ -5,7 +5,6 @@ User-initiated /aha: a phrase that couldn't be read literally, classified as a
 `method` the key is the rule, so one rule aggregates across phrases."""
 from core import slugify
 
-from . import register
 from .base import Model
 
 
@@ -23,6 +22,3 @@ def record(slug, kind, expression, meaning, takeaway, learner_wrote, context):
                        "takeaway": takeaway, "learner_wrote": learner_wrote,
                        "context": context})
     return "inserted" if n == 1 else "incremented"
-
-
-register("decode", Decode, record)

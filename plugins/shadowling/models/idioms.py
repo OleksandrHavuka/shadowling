@@ -1,7 +1,6 @@
 """models/idioms.py - idiom incidents (append-only) + record fan-out.
 
 Natural key: the idiom phrase, normalized (casefold + whitespace collapse)."""
-from . import register
 from .base import Model, norm_key
 
 
@@ -16,6 +15,3 @@ def record(idiom, meaning, context, learner_wrote):
     n = Idioms.insert({"idiom": norm_key(idiom), "meaning": meaning,
                        "context": context, "learner_wrote": learner_wrote})
     return "inserted" if n == 1 else "incremented"
-
-
-register("idioms", Idioms, record)
