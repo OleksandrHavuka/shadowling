@@ -112,7 +112,7 @@ class ReadyTest(ConfigCliTestBase):
         )
         self.assertFalse(core.config_ready())
 
-    def test_load_config_exposes_exactly_the_known_keys(self):
+    def test_load_config_exposes_known_keys_and_drops_stale(self):
         self._write_config(
             {
                 "first_language": "Ukrainian",
@@ -123,9 +123,34 @@ class ReadyTest(ConfigCliTestBase):
         )
         cfg = core.load_config()
         self.assertEqual(
-            set(cfg), {"first_language", "explanation_language", "learning_language"}
+            set(cfg),
+            {
+                "first_language",
+                "explanation_language",
+                "learning_language",
+                "missing",  # derived gate state
+                "notice",
+            },
         )
+        self.assertNotIn("future_key", cfg)  # unknown keys dropped
+        self.assertEqual(cfg["missing"], [])  # fully configured
+        self.assertEqual(cfg["notice"], "")
         self.assertTrue(core.config_ready())
+
+    def test_load_config_missing_lists_unset_required_keys(self):
+        self._write_config(
+            {"first_language": "Ukrainian", "explanation_language": "English"}
+        )
+        cfg = core.load_config()
+        self.assertEqual(cfg["missing"], ["learning_language"])
+        self.assertIn("learning_language", cfg["notice"])  # notice names the gap
+        self.assertFalse(core.config_ready())
+
+    def test_load_config_unconfigured_notices_every_key(self):
+        self._write_config({})
+        cfg = core.load_config()
+        self.assertEqual(cfg["missing"], list(core.CONFIG_KEYS))
+        self.assertIn("not fully configured", cfg["notice"])
 
     def test_load_config_blank_for_malformed_values(self):
         self._write_config({"first_language": 7})
