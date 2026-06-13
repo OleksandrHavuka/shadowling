@@ -1,6 +1,5 @@
 import contextlib
 import io
-import json
 import os
 import shutil
 import tempfile
@@ -61,8 +60,8 @@ class TutorTestBase(unittest.TestCase):
         rows = appdb.query(
             "SELECT * FROM mastery WHERE item_kind=? AND item_key=?"
             if False else
-            "SELECT * FROM mastery WHERE item_kind='{0}' AND item_key='{1}'"
-            .format(kind, key))
+            f"SELECT * FROM mastery WHERE item_kind='{kind}' AND item_key='{key}'"
+            )
         return rows[0] if rows else None
 
 
@@ -108,7 +107,8 @@ class RecordTest(TutorTestBase):
             with mock.patch("tutor._today", return_value="2026-06-12"):
                 run_main(["record", "grammar", "article-omission", "fix",
                           verdict], stdin_text="x")
-        rec("pass"); rec("pass")
+        rec("pass")
+        rec("pass")
         self.assertEqual(self.mastery("grammar", "article-omission")["box"], 3)
         rec("partial")                                  # stays
         self.assertEqual(self.mastery("grammar", "article-omission")["box"], 3)
@@ -178,7 +178,8 @@ class DeckTest(TutorTestBase):
         self.assertEqual(card["prompt_data"]["fixed"], "I went to the store")
 
     def test_due_before_new_and_overdue_first(self):
-        self.seed_grammar("s-due-old"); self.seed_grammar("s-due-new")
+        self.seed_grammar("s-due-old")
+        self.seed_grammar("s-due-new")
         self.seed_grammar("s-fresh")
         self._mastery_row("grammar", "s-due-old", 2, "2026-06-10")
         self._mastery_row("grammar", "s-due-new", 2, "2026-06-12")
@@ -200,8 +201,9 @@ class DeckTest(TutorTestBase):
 
     def test_mix_cap_half_per_kind(self):
         for i in range(8):
-            self.seed_grammar("g{0}".format(i))
-        self.seed_vocab("alpha"); self.seed_vocab("beta")
+            self.seed_grammar(f"g{i}")
+        self.seed_vocab("alpha")
+        self.seed_vocab("beta")
         with mock.patch("tutor._today", return_value="2026-06-12"):
             cards = tutor.deck(4)
         kinds = [c["item_kind"] for c in cards]

@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """tutor.py - spaced-repetition engine over the incident datasets (stdlib only).
 
-  python3 tutor.py deck [--size N]                          # today's cards, JSON per card
-  python3 tutor.py record <kind> <key> <exercise> <verdict> # answer on STDIN (verbatim)
-  python3 tutor.py stats                                    # due counts, JSON
+  python3 tutor.py deck [--size N]      # today's cards, JSON per card
+  python3 tutor.py record <kind> <key> <exercise> <verdict>  # answer on STDIN
+  python3 tutor.py stats               # due counts, JSON
 
 Leitner: 5 boxes, intervals 1/3/7/16/35 days. pass -> box+1 (cap 5),
 partial -> box stays, fail -> box 1. `attempts` is the append-only log (and
@@ -16,7 +16,7 @@ import os
 import sys
 from datetime import date, datetime, timedelta
 
-from appdb import connect, query
+from appdb import connect
 from core import today
 
 INTERVALS = {1: 1, 2: 3, 3: 7, 4: 16, 5: 35}
@@ -60,7 +60,7 @@ def _counter(con, kind, key):
     if view is None:
         return None
     row = con.execute(
-        'SELECT counter FROM {0} WHERE "{1}" = ?'.format(view, keycol),
+        f'SELECT counter FROM {view} WHERE "{keycol}" = ?',
         (key,)).fetchone()
     return row["counter"] if row else None
 
@@ -99,8 +99,7 @@ def record(kind, key, exercise, verdict, answer):
                 con.execute(  # relearn: back into the glossing loop
                     "UPDATE vocab SET remaining = 10, status = 'active'"
                     " WHERE word = ?", (key,))
-        return "recorded {0}/{1}: {2} -> box {3}".format(
-            kind, key, verdict, box)
+        return f"recorded {kind}/{key}: {verdict} -> box {box}"
     finally:
         con.close()
 
@@ -142,12 +141,12 @@ def deck(size=SIZE_DEFAULT):
         picked = boosted + plain
         # new items: in the ranked views / learned vocab, never attempted
         new = []
-        for kind, (table, keycol, view) in KINDS.items():
+        for kind, (_table, keycol, view) in KINDS.items():
             if view is not None:
                 rows = con.execute(
-                    'SELECT "{0}" AS k FROM {1} WHERE "{0}" NOT IN'
+                    f'SELECT "{keycol}" AS k FROM {view} WHERE "{keycol}" NOT IN'
                     ' (SELECT item_key FROM mastery WHERE item_kind = ?)'
-                    ' ORDER BY counter DESC'.format(keycol, view),
+                    ' ORDER BY counter DESC',
                     (kind,)).fetchall()
             else:
                 rows = con.execute(

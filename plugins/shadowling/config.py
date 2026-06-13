@@ -33,7 +33,7 @@ def main(argv):
         print(USAGE, file=sys.stderr)
         return 1
     cfg = save_config({key: argv[2]})
-    print("{0} = {1}".format(key, cfg[key]))
+    print(f"{key} = {cfg[key]}")
     return 0
 
 

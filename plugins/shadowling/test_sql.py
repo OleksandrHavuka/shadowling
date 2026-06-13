@@ -45,7 +45,7 @@ class SqlTestBase(unittest.TestCase):
         return sorted(os.listdir(bdir)) if os.path.isdir(bdir) else []
 
     def count(self, table="grammar"):
-        return appdb.query("SELECT COUNT(*) AS n FROM {0}".format(table))[0]["n"]
+        return appdb.query(f"SELECT COUNT(*) AS n FROM {table}")[0]["n"]
 
 
 class ReadOnlyTest(SqlTestBase):
@@ -54,7 +54,7 @@ class ReadOnlyTest(SqlTestBase):
         code, out, _ = run_main(["SELECT slug FROM grammar ORDER BY id"])
         self.assertEqual(code, 0)
         lines = out.strip().splitlines()
-        self.assertEqual([json.loads(l)["slug"] for l in lines], ["s1", "s2"])
+        self.assertEqual([json.loads(ln)["slug"] for ln in lines], ["s1", "s2"])
 
     def test_params_bind(self):
         self.seed("s1", "s2")

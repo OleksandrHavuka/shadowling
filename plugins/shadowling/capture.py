@@ -18,7 +18,11 @@ from contextlib import closing
 from datetime import datetime
 from difflib import SequenceMatcher
 
-from appdb import connect, db_path, query  # noqa: F401  (query re-exported for CLI/tests)
+from appdb import (  # noqa: F401  (query re-exported for CLI/tests)
+    connect,
+    db_path,
+    query,
+)
 from core import config_ready, last_user_text
 
 MIN_LETTERS = 8  # below this it's not analyzable prose / not worth logging
@@ -112,7 +116,7 @@ def messages(lang=None, untagged=False, limit=None, session=None):
         return "<messages></messages>"
     out = ["<messages>"]
     for r in rows:
-        out.append('  <m id="{0}" created_at="{1}" langs="{2}">{3}</m>'.format(
+        out.append('  <m id="{}" created_at="{}" langs="{}">{}</m>'.format(
             r["id"], _xml(r["created_at"]), _xml(r["langs"] or ""),
             _xml(r["text"])))
     out.append("</messages>")
@@ -138,7 +142,7 @@ def tag(pairs):
             cur = con.execute("UPDATE messages SET langs=? WHERE id=?",
                               (langs_json, mid))
             if cur.rowcount == 0:
-                errors.append("unknown id: {0}".format(mid))
+                errors.append(f"unknown id: {mid}")
             else:
                 ok += 1
     return ok, errors
@@ -158,7 +162,7 @@ def mark_processed(session=None):
         kept = con.execute("SELECT COUNT(*) FROM messages "
                            "WHERE processed_at IS NULL AND kind IS NULL"
                            ).fetchone()[0]
-    return "processed {0}, kept {1} untagged".format(cur.rowcount, kept)
+    return f"processed {cur.rowcount}, kept {kept} untagged"
 
 
 # --- drill filtering (tutor answers must not enter the analysis corpus) -----
@@ -200,8 +204,7 @@ def mark_drills():
             "                WHERE m.session_id = a.session_id "
             "                  AND similarity(a.answer, m.text) >= ?)",
             (DRILL_SIMILARITY,)).fetchone()[0]
-    return "marked {0} drill answer(s); {1} attempt(s) unmatched".format(
-        marked, unmatched)
+    return f"marked {marked} drill answer(s); {unmatched} attempt(s) unmatched"
 
 
 # --- escape hatch -------------------------------------------------------------
@@ -251,7 +254,7 @@ def main(argv):
             print('usage: capture.py tag "<id>=<code[,code]>" ...', file=sys.stderr)
             return 1
         ok, errors = tag(argv[1:])
-        print("tagged {0}".format(ok))
+        print(f"tagged {ok}")
         for e in errors:
             print(e, file=sys.stderr)
         return 1 if errors else 0

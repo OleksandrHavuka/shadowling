@@ -17,7 +17,7 @@ class RecordTestBase(unittest.TestCase):
         shutil.rmtree(self.home, ignore_errors=True)
 
     def _incidents(self, table):
-        return appdb.query("SELECT * FROM {0} ORDER BY id".format(table))
+        return appdb.query(f"SELECT * FROM {table} ORDER BY id")
 
 
 class GrammarRecordTest(RecordTestBase):

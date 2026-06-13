@@ -2,9 +2,12 @@ import io
 import json
 import os
 import shutil
+import sqlite3
 import tempfile
 import unittest
+from contextlib import closing
 
+import appdb
 import capture
 import core
 
@@ -224,7 +227,7 @@ class MarkProcessedTest(CaptureTestBase):
 class QueryTest(CaptureTestBase):
     def test_query_is_read_only(self):
         self._capture_text("First normal english sentence here please")
-        with self.assertRaises(Exception):
+        with self.assertRaises(sqlite3.Error):
             capture.query("DELETE FROM messages")
         self.assertEqual(len(self._rows()), 1)
 
@@ -248,12 +251,8 @@ class MainTest(CaptureTestBase):
         self.assertEqual(capture.main(["bogus"]), 1)
 
 
-from contextlib import closing as _closing
-import appdb as _appdb
-
-
 def closing_con():
-    return _closing(_appdb.connect())
+    return closing(appdb.connect())
 
 
 class SessionVerbsTest(CaptureTestBase):
@@ -275,7 +274,6 @@ class SessionVerbsTest(CaptureTestBase):
                                {"session": "sess-B", "pending": 1}])
 
     def test_sessions_skips_drill_only_sessions(self):
-        capture.query  # ensure db exists
         with closing_con() as con:
             with con:
                 con.execute("UPDATE messages SET kind='drill' "

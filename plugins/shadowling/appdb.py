@@ -217,13 +217,13 @@ def _ensure_views(con):
     stored in sqlite_master — steady-state connects write nothing, so the five
     parallel debrief specialists can't race each other's DROP/SELECT."""
     for name, body in VIEWS.items():
-        stmt = "CREATE VIEW {0} AS{1}".format(name, body)
+        stmt = f"CREATE VIEW {name} AS{body}"
         row = con.execute(
             "SELECT sql FROM sqlite_master WHERE type='view' AND name=?",
             (name,)).fetchone()
         if row is None or row["sql"] != stmt:
             with con:
-                con.execute("DROP VIEW IF EXISTS {0}".format(name))
+                con.execute(f"DROP VIEW IF EXISTS {name}")
                 con.execute(stmt)
 
 
@@ -255,7 +255,7 @@ def connect():
         for i in range(version, len(MIGRATIONS)):
             with con:  # step + version bump are atomic; a failed step retries
                 MIGRATIONS[i](con)
-                con.execute("PRAGMA user_version = {0}".format(i + 1))
+                con.execute(f"PRAGMA user_version = {i + 1}")
     _ensure_views(con)
     _chmod_private(path)
     return con
@@ -266,7 +266,7 @@ def query(sql, params=()):
     any write fails at the connection level. Returns a list of dicts. The DB is
     materialized first (connect) so a read on a never-opened home still works."""
     connect().close()  # ensure the store + schema exist before opening ro
-    uri = "file:{0}?mode=ro".format(db_path())
+    uri = f"file:{db_path()}?mode=ro"
     con = sqlite3.connect(uri, uri=True)
     try:
         con.row_factory = sqlite3.Row

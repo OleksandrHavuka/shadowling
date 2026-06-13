@@ -1,0 +1,11 @@
+# Dev-only lint config. ruff never ships with the plugin — the runtime stays
+# stdlib-only with zero pip deps; this only validates the code.
+#   uvx ruff check plugins/shadowling      # lint
+#   uvx ruff check --fix plugins/shadowling # apply safe fixes
+# target-version pins UP (pyupgrade) to 3.9-safe rewrites, preserving the
+# documented "Python 3.9+" guarantee (no 3.10+ syntax introduced).
+target-version = "py39"
+line-length = 88
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4"]
