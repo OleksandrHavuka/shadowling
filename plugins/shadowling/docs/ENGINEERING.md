@@ -148,35 +148,21 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 183 tests, ~1s
+python3 -m unittest                       # 186 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
-**End-to-end traceability proof** (schema ↔ models ↔ skill placeholders):
+**End-to-end traceability proof** — productized as `traceability.py`. The same
+`check()` also runs as a test (`test_traceability.py`) and as a PostToolUse hook
+that re-checks after edits to `appdb.py`, `tutor.py`, `models/`, or `skills/`
+(see the repo-root `DEV.md`):
 
 ```bash
-export SHADOWLING_HOME=$(mktemp -d)
-python3 - <<'PY'
-import re, inspect, models, tutor, appdb
-con = appdb.connect()
-cols = lambda t: {r["name"] for r in con.execute("PRAGMA table_info(%s)" % t)}
-MAP = {"kind": "type"}  # recorder's local param name -> the column it lands in
-skill = {"grammar":"skills/debrief-grammar/SKILL.md","rephrasing":"skills/debrief-rephrasing/SKILL.md",
-         "idioms":"skills/debrief-idioms/SKILL.md","verbs":"skills/debrief-verbs/SKILL.md",
-         "friction":"skills/debrief-friction/SKILL.md","decode":"skills/aha/SKILL.md"}
-ok = True
-for cat, rec in models.RECORDERS.items():
-    assert set(models.REGISTRY[cat].insert_cols) <= cols(models.REGISTRY[cat].table)
-    expected = [MAP.get(p, p) for p in inspect.signature(rec).parameters]
-    found = re.findall(r'<([^>]+)>',
-            re.search(r'%s record ((?:"<[^>]+>" ?)+)' % cat, open(skill[cat]).read()).group(1))
-    ok &= found == expected
-    print(f"{cat:11} placeholders == columns: {found == expected}")
-for kind, sql in tutor.PROMPT_SQL.items():
-    m = re.search(r'SELECT (.+?) FROM (\w+)', sql)
-    ok &= all(f.strip() in cols(m.group(2)) for f in m.group(1).split(','))
-print("CONTRACT HOLDS:", ok)
-PY
+python3 traceability.py
+# asserts, per category: every insert_col ⊆ the table columns; each skill's
+# `record "<…>"` placeholder sequence == the column sequence its args land in;
+# tutor.PROMPT_SQL selects only real columns. Exit 1 + the exact mismatch on
+# drift, else "OK".
 ```
 
 **Residual audit** — retired names appear only in schema *history*, never in a live consumer:
