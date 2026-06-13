@@ -14,17 +14,18 @@ plugins/shadowling/
   db.py              # CLI over models/ (record / select / export / drop)
   sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup verb
   tutor.py           # spaced repetition: deck (due+new+hot-zone boost) / record (Leitner) / stats
+  traceability.py    # enforce the schema <-> models <-> skills <-> PROMPT_SQL field-name contract (CLI / test / hook)
   models/            # incident models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
   skills/            # skill bodies:
                      #   loot/, drop/          — fork: translate+add / remove terms
-                     #   setup/                — main: ask + set the plugin language
+                     #   setup/                — main: ask + set the three plugin languages
                      #   debrief/              — main: orchestrate triage + five specialists
                      #   debrief-triage/       — fork: tag each message's language(s)
                      #   debrief-{grammar,rephrasing,idioms,verbs,friction}/ — fork: analyze batch slice → datasets
                      #   aha/                  — main: explain expressions you can't read literally
                      #   vipe/                 — dev: drop the six category datasets for a clean test run
   hooks/hooks.json   # UserPromptSubmit (inject) + Stop (scan, capture)
-  test_*.py          # appdb, capture, config, core, db, models, record, vocab
+  test_*.py          # appdb, capture, config, core, db, models, record, sql, traceability, tutor, vocab
 ```
 
 ## Apply local changes
@@ -57,6 +58,22 @@ cd plugins/shadowling
 python3 -m unittest discover -p 'test_*.py' -v    # full suite, stdlib only
 ```
 
+## Data-structure traceability
+
+`traceability.py` enforces the field-name contract end-to-end — schema →
+`models/*.insert_cols` → skill `record "<…>"` placeholders → `tutor.PROMPT_SQL` —
+so a rename that drifts any layer fails loudly instead of silently. One `check()`,
+three surfaces:
+
+```
+python3 plugins/shadowling/traceability.py    # dev CLI: exit 1 + the offending mismatch on drift, else "OK"
+```
+
+- **test** — `test_traceability.py`, part of the suite above (and CI);
+- **hook** — `.claude/settings.json` re-runs it (PostToolUse) after any edit to
+  `appdb.py`, `tutor.py`, `models/`, or `skills/`, surfacing a break in-session (exit 2);
+- view aliases (`learner_wrote AS "you wrote"`) are a display layer and are not asserted.
+
 ## Manual CLI smoke
 
 All scripts are stdlib-only and runnable directly. Point the data dir at a temp
@@ -65,8 +82,9 @@ home so you never touch real data. Language now lives in `config.py`:
 ```
 export SHADOWLING_HOME=/tmp/sl
 python3 plugins/shadowling/config.py set first_language Spanish
+python3 plugins/shadowling/config.py set learning_language English
 python3 plugins/shadowling/config.py set explanation_language Spanish
-python3 plugins/shadowling/config.py get first_language         # exit 1 + setup hint until BOTH keys are set
+python3 plugins/shadowling/config.py get first_language         # exit 1 + setup hint until ALL THREE keys are set
 python3 plugins/shadowling/vocab.py add hello hola "machine learning" "aprendizaje automatico"
 python3 plugins/shadowling/vocab.py list-active
 python3 plugins/shadowling/vocab.py remove hello ghost
@@ -121,7 +139,7 @@ Real data lives in `~/.shadowling/`:
 | File                  | What                                                                       |
 | --------------------- | -------------------------------------------------------------------------- |
 | `shadowling.db`       | everything: message store (captured messages, language tags, processed stamps), the six category incident datasets + their `*_ranked` views, and the `vocab` table + tutor attempts/mastery |
-| `config.json`         | `first_language` / `explanation_language` — both required (whole-plugin gate)|
+| `config.json`         | `first_language` / `learning_language` / `explanation_language` — all three required (whole-plugin gate)|
 | `backups/`            | rotating pre-write snapshots from `sql.py` (keep last 10, dev tool only) |
 
 Env overrides (used by tests and smoke runs):
