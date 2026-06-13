@@ -4,6 +4,7 @@
 Home-directory resolution, config loading, and transcript reading, shared by
 `vocab.py` (glossing) and `capture.py` (message collection).
 """
+
 import json
 import os
 import re

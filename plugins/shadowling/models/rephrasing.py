@@ -1,4 +1,5 @@
 """models/rephrasing.py - naturalness incidents (append-only) + record fan-out."""
+
 from core import slugify
 
 from .base import Model
@@ -12,7 +13,13 @@ class Rephrasing(Model):
 
 
 def record(slug, problem, learner_wrote, native_phrase, why):
-    n = Rephrasing.insert({"slug": slugify(slug), "problem": problem,
-                           "learner_wrote": learner_wrote,
-                           "native_phrase": native_phrase, "why": why})
+    n = Rephrasing.insert(
+        {
+            "slug": slugify(slug),
+            "problem": problem,
+            "learner_wrote": learner_wrote,
+            "native_phrase": native_phrase,
+            "why": why,
+        }
+    )
     return "inserted" if n == 1 else "incremented"

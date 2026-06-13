@@ -25,6 +25,7 @@ migration or view via connect(). It does NOT analyze capture.py / vocab.py /
 attempts / mastery write paths; those are guarded by their own unit tests. View
 display aliases (`learner_wrote AS "you wrote"`) are intentionally not asserted.
 """
+
 import inspect
 import json
 import os
@@ -58,9 +59,13 @@ def _discover_record_lines():
         with open(path, encoding="utf-8") as f:
             text = f.read()
         for m in re.finditer(r'(\w+) record ((?:"<[^>]+>" ?)+)', text):
-            found.append((m.group(1),
-                          re.findall(r'<([^>]+)>', m.group(2)),
-                          os.path.relpath(path, HERE)))
+            found.append(
+                (
+                    m.group(1),
+                    re.findall(r"<([^>]+)>", m.group(2)),
+                    os.path.relpath(path, HERE),
+                )
+            )
     return found
 
 
@@ -77,11 +82,12 @@ def check():
         import appdb
         import models
         import tutor
+
         con = appdb.connect()
         try:
+
             def cols(table):
-                return {r["name"] for r in
-                        con.execute(f"PRAGMA table_info({table})")}
+                return {r["name"] for r in con.execute(f"PRAGMA table_info({table})")}
 
             # 1. models: every insert_col and the key is a real column
             for cat, model in models.REGISTRY.items():
@@ -89,10 +95,12 @@ def check():
                 for c in model.insert_cols:
                     if c not in tcols:
                         violations.append(
-                            f"{cat}: insert_col {c!r} is not a column of {model.table}")
+                            f"{cat}: insert_col {c!r} is not a column of {model.table}"
+                        )
                 if model.key not in tcols:
                     violations.append(
-                        f"{cat}: key {model.key!r} is not a column of {model.table}")
+                        f"{cat}: key {model.key!r} is not a column of {model.table}"
+                    )
 
             # 2. skills: discovered record lines <-> the recorder column sequence
             documented = set()
@@ -102,30 +110,36 @@ def check():
                 if rec is None:
                     violations.append(
                         f"{cat}: {rel} documents a `record` line for an unregistered "
-                        "category")
+                        "category"
+                    )
                     continue
-                expected = [_PARAM_TO_COLUMN.get(p, p)
-                            for p in inspect.signature(rec).parameters]
+                expected = [
+                    _PARAM_TO_COLUMN.get(p, p)
+                    for p in inspect.signature(rec).parameters
+                ]
                 if placeholders != expected:
                     violations.append(
                         f"{cat}: {rel} placeholders {placeholders} != "
-                        f"column sequence {expected}")
+                        f"column sequence {expected}"
+                    )
             for cat in models.RECORDERS:
                 if cat not in documented:
                     violations.append(
                         f"{cat}: registered recorder has no documenting skill "
-                        "`record` line")
+                        "`record` line"
+                    )
 
             # 3. tutor: PROMPT_SQL reads only real columns
             for kind, sql in tutor.PROMPT_SQL.items():
-                m = re.search(r'SELECT (.+?) FROM (\w+)', sql)
+                m = re.search(r"SELECT (.+?) FROM (\w+)", sql)
                 table = m.group(2)
                 tcols = cols(table)
                 for field in (f.strip() for f in m.group(1).split(",")):
                     if field not in tcols:
                         violations.append(
                             f"tutor PROMPT_SQL[{kind!r}]: {field!r} is not "
-                            f"a column of {table}")
+                            f"a column of {table}"
+                        )
         finally:
             con.close()
     finally:
@@ -158,8 +172,11 @@ def main(argv):
         except Exception:
             return 0
         if violations:
-            print("data-structure traceability broken by this edit:\n  "
-                  + "\n  ".join(violations), file=sys.stderr)
+            print(
+                "data-structure traceability broken by this edit:\n  "
+                + "\n  ".join(violations),
+                file=sys.stderr,
+            )
             return 2
         return 0
 

@@ -11,6 +11,7 @@ the registry capture.py mark-drills joins against — answers stored VERBATIM
 from stdin, session from CLAUDE_CODE_SESSION_ID); `mastery` is the mutable
 scheduling state (sanctioned exception, like vocab).
 """
+
 import json
 import os
 import sys
@@ -60,8 +61,8 @@ def _counter(con, kind, key):
     if view is None:
         return None
     row = con.execute(
-        f'SELECT counter FROM {view} WHERE "{keycol}" = ?',
-        (key,)).fetchone()
+        f'SELECT counter FROM {view} WHERE "{keycol}" = ?', (key,)
+    ).fetchone()
     return row["counter"] if row else None
 
 
@@ -79,50 +80,82 @@ def record(kind, key, exercise, verdict, answer):
                 "INSERT INTO attempts(created_at, session_id, item_kind,"
                 " item_key, exercise, answer, verdict)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (now, os.environ.get("CLAUDE_CODE_SESSION_ID"), kind, key,
-                 exercise, answer, verdict))
+                (
+                    now,
+                    os.environ.get("CLAUDE_CODE_SESSION_ID"),
+                    kind,
+                    key,
+                    exercise,
+                    answer,
+                    verdict,
+                ),
+            )
             row = con.execute(
-                "SELECT box FROM mastery WHERE item_kind=? AND item_key=?",
-                (kind, key)).fetchone()
-            box = _next_box(row["box"] if row else 1,
-                            verdict) if row else _next_box(1, verdict)
+                "SELECT box FROM mastery WHERE item_kind=? AND item_key=?", (kind, key)
+            ).fetchone()
+            box = (
+                _next_box(row["box"] if row else 1, verdict)
+                if row
+                else _next_box(1, verdict)
+            )
             con.execute(
                 "INSERT INTO mastery(item_kind, item_key, box, due_date,"
                 " last_verdict, counter_seen, created_at, updated_at)"
                 " VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                 " ON CONFLICT(item_kind, item_key) DO UPDATE SET box=?,"
                 " due_date=?, last_verdict=?, counter_seen=?, updated_at=?",
-                (kind, key, box, _due(box, t), verdict,
-                 _counter(con, kind, key), now, now,
-                 box, _due(box, t), verdict, _counter(con, kind, key), now))
+                (
+                    kind,
+                    key,
+                    box,
+                    _due(box, t),
+                    verdict,
+                    _counter(con, kind, key),
+                    now,
+                    now,
+                    box,
+                    _due(box, t),
+                    verdict,
+                    _counter(con, kind, key),
+                    now,
+                ),
+            )
             if kind == "vocab" and verdict == "fail":
                 con.execute(  # relearn: back into the glossing loop
-                    "UPDATE vocab SET remaining = 10, status = 'active'"
-                    " WHERE word = ?", (key,))
+                    "UPDATE vocab SET remaining = 10, status = 'active' WHERE word = ?",
+                    (key,),
+                )
         return f"recorded {kind}/{key}: {verdict} -> box {box}"
     finally:
         con.close()
 
 
-EXERCISES = {"friction": "production", "grammar": "fix",
-             "verbs": "forms", "vocab": "reverse"}
+EXERCISES = {
+    "friction": "production",
+    "grammar": "fix",
+    "verbs": "forms",
+    "vocab": "reverse",
+}
 
 PROMPT_SQL = {
     "friction": "SELECT type, zone, learner_wrote, native_phrase, context"
-                " FROM friction WHERE slug = ? ORDER BY id DESC LIMIT 1",
+    " FROM friction WHERE slug = ? ORDER BY id DESC LIMIT 1",
     "grammar": "SELECT problem, original, fixed, rule"
-               " FROM grammar WHERE slug = ? ORDER BY id DESC LIMIT 1",
+    " FROM grammar WHERE slug = ? ORDER BY id DESC LIMIT 1",
     "verbs": "SELECT past, participle, used_form, correction, context"
-             " FROM verbs WHERE verb = ? ORDER BY id DESC LIMIT 1",
+    " FROM verbs WHERE verb = ? ORDER BY id DESC LIMIT 1",
     "vocab": "SELECT translation FROM vocab WHERE word = ?",
 }
 
 
 def _card(con, kind, key):
     row = con.execute(PROMPT_SQL[kind], (key,)).fetchone()
-    return {"item_kind": kind, "item_key": key,
-            "exercise": EXERCISES[kind],
-            "prompt_data": dict(row) if row else {}}
+    return {
+        "item_kind": kind,
+        "item_key": key,
+        "exercise": EXERCISES[kind],
+        "prompt_data": dict(row) if row else {},
+    }
 
 
 def deck(size=SIZE_DEFAULT):
@@ -131,12 +164,17 @@ def deck(size=SIZE_DEFAULT):
     try:
         due = con.execute(
             "SELECT item_kind, item_key, due_date, counter_seen FROM mastery"
-            " WHERE due_date <= ? ORDER BY due_date", (t,)).fetchall()
+            " WHERE due_date <= ? ORDER BY due_date",
+            (t,),
+        ).fetchall()
         boosted, plain = [], []
         for r in due:  # hot-zone boost: re-caught since the last drill
             cur = _counter(con, r["item_kind"], r["item_key"])
-            hot = (cur is not None and r["counter_seen"] is not None
-                   and cur > r["counter_seen"])
+            hot = (
+                cur is not None
+                and r["counter_seen"] is not None
+                and cur > r["counter_seen"]
+            )
             (boosted if hot else plain).append((r["item_kind"], r["item_key"]))
         picked = boosted + plain
         # new items: in the ranked views / learned vocab, never attempted
@@ -145,14 +183,16 @@ def deck(size=SIZE_DEFAULT):
             if view is not None:
                 rows = con.execute(
                     f'SELECT "{keycol}" AS k FROM {view} WHERE "{keycol}" NOT IN'
-                    ' (SELECT item_key FROM mastery WHERE item_kind = ?)'
-                    ' ORDER BY counter DESC',
-                    (kind,)).fetchall()
+                    " (SELECT item_key FROM mastery WHERE item_kind = ?)"
+                    " ORDER BY counter DESC",
+                    (kind,),
+                ).fetchall()
             else:
                 rows = con.execute(
                     "SELECT word AS k FROM vocab WHERE status = 'learned'"
                     " AND word NOT IN (SELECT item_key FROM mastery"
-                    " WHERE item_kind = 'vocab')").fetchall()
+                    " WHERE item_kind = 'vocab')"
+                ).fetchall()
             new.extend((kind, r["k"]) for r in rows)
         cards, per_kind = [], {}
         pool = picked + new
@@ -177,27 +217,36 @@ def stats():
     try:
         due_today = con.execute(
             "SELECT COUNT(*) FROM mastery WHERE due_date <= ?", (t,)
-            ).fetchone()[0]
+        ).fetchone()[0]
         due_tomorrow = con.execute(
             "SELECT COUNT(*) FROM mastery WHERE due_date = ?", (tomorrow,)
-            ).fetchone()[0]
+        ).fetchone()[0]
         tracked = con.execute("SELECT COUNT(*) FROM mastery").fetchone()[0]
-        return {"due_today": due_today, "due_tomorrow": due_tomorrow,
-                "tracked": tracked}
+        return {
+            "due_today": due_today,
+            "due_tomorrow": due_tomorrow,
+            "tracked": tracked,
+        }
     finally:
         con.close()
 
 
 def main(argv):
     if not argv:
-        print("usage: tutor.py {deck [--size N]|record <kind> <key>"
-              " <exercise> <verdict>|stats}", file=sys.stderr)
+        print(
+            "usage: tutor.py {deck [--size N]|record <kind> <key>"
+            " <exercise> <verdict>|stats}",
+            file=sys.stderr,
+        )
         return 1
     cmd = argv[0]
     if cmd == "record":
         if len(argv) != 5:
-            print("usage: tutor.py record <kind> <key> <exercise> <verdict>"
-                  " (answer on stdin)", file=sys.stderr)
+            print(
+                "usage: tutor.py record <kind> <key> <exercise> <verdict>"
+                " (answer on stdin)",
+                file=sys.stderr,
+            )
             return 1
         answer = sys.stdin.read()
         try:

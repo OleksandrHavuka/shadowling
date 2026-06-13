@@ -9,6 +9,7 @@
 <repo> is looked up in models.REGISTRY. Repos: grammar, rephrasing, idioms,
 verbs, decode, friction.
 """
+
 import json
 import sys
 
@@ -22,8 +23,10 @@ def _cell(value):
 def render_md(rows):
     """rows: non-empty list of dicts (same keys) -> markdown table string."""
     headers = list(rows[0].keys())
-    out = ["| " + " | ".join(headers) + " |",
-           "| " + " | ".join("---" for _ in headers) + " |"]
+    out = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
     for r in rows:
         out.append("| " + " | ".join(_cell(r[h]) for h in headers) + " |")
     return "\n".join(out)
@@ -38,8 +41,7 @@ def export_md(model):
 
 def main(argv):
     if len(argv) < 2:
-        print("usage: db.py <repo> {record|select|export|drop} [args]",
-              file=sys.stderr)
+        print("usage: db.py <repo> {record|select|export|drop} [args]", file=sys.stderr)
         return 1
     name, op, args = argv[0], argv[1], argv[2:]
     if op == "record":

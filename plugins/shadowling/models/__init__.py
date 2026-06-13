@@ -5,6 +5,7 @@ This package builds the two name-keyed registries the db.py CLI drives by name â
 explicitly, so the imports stay at the top and the category modules don't depend
 back on the package.
 """
+
 from . import decode, friction, grammar, idioms, rephrasing, verbs
 
 REGISTRY = {
