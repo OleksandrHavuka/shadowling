@@ -21,8 +21,9 @@ Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` (the
    language the expression is in) and `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
-   for the language to WRITE EXPLANATIONS IN. If EITHER FAILS (non-zero exit), tell
-   the user to run `/shadowling:setup` first and STOP. Write `meaning` and
+   for the language to WRITE EXPLANATIONS IN. If EITHER FAILS (non-zero exit), relay
+   the notice config.py printed (it names the missing setting) and tell the user to
+   run `/shadowling:setup` first, then STOP. Write `meaning` and
    `takeaway` in the explanation language.
 2. For EACH expression the user brought:
    a. If it is literal / there is nothing to explain → say so to the user and DO NOT

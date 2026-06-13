@@ -19,8 +19,8 @@ Terms (comma-separated): `$ARGUMENTS`
 Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get first_language`. If it
-   FAILS (non-zero exit), reply that shadowling is not configured — tell the user
-   to run `/shadowling:setup` first — and stop.
+   FAILS (non-zero exit), relay the notice it printed (which names the missing
+   setting) and tell the user to run `/shadowling:setup` first — then stop.
 2. Split `$ARGUMENTS` on commas, trim each, drop empties. Keep multi-word phrases
    whole (`machine learning` is one term).
 3. Translate each term INTO the language from step 1 — one short word or phrase,

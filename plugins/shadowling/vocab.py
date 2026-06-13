@@ -202,10 +202,9 @@ def main(argv):
         return 1
     cmd = argv[0]
     if cmd == "add":
-        if not config_ready():
-            print(
-                "shadowling is not configured — run /shadowling:setup", file=sys.stderr
-            )
+        cfg = load_config()
+        if cfg["missing"]:
+            print(cfg["notice"], file=sys.stderr)
             return 1
         pairs = argv[1:]
         if not pairs or len(pairs) % 2 != 0:

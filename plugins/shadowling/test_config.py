@@ -53,6 +53,17 @@ class GetTest(ConfigCliTestBase):
         code, _ = run_main(["get", "explanation_language"])
         self.assertEqual(code, 1)
 
+    def test_get_failure_emits_notice_naming_missing_key(self):
+        self._write_config(
+            {"first_language": "Ukrainian", "explanation_language": "English"}
+        )
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = config.main(["get", "learning_language"])
+        self.assertEqual(code, 1)
+        self.assertIn("not fully configured", err.getvalue())
+        self.assertIn("learning_language", err.getvalue())  # names the gap
+
     def test_get_prints_each_configured_key(self):
         self._configure()
         self.assertEqual(run_main(["get", "first_language"])[1].strip(), "Ukrainian")
