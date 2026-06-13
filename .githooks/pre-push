@@ -1,0 +1,18 @@
+#!/bin/sh
+# pre-push — run the full test suite + traceability before sharing commits.
+# stdlib-only, ~1s; the fast format/lint gate lives in pre-commit.
+# Activate once per clone:  git config core.hooksPath .githooks
+
+cd "$(git rev-parse --show-toplevel)/plugins/shadowling" || exit 1
+
+if ! out=$(python3 -m unittest 2>&1); then
+    printf '%s\n' "$out" >&2
+    echo "pre-push: tests failed — push aborted" >&2
+    exit 1
+fi
+
+if ! python3 traceability.py >/dev/null 2>&1; then
+    python3 traceability.py >&2
+    echo "pre-push: data-structure traceability broken — push aborted" >&2
+    exit 1
+fi

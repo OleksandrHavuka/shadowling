@@ -69,10 +69,29 @@ three surfaces:
 python3 plugins/shadowling/traceability.py    # dev CLI: exit 1 + the offending mismatch on drift, else "OK"
 ```
 
-- **test** — `test_traceability.py`, part of the suite above (and CI);
+- **test** — `test_traceability.py`, part of the suite above (and the pre-push hook);
 - **hook** — `.claude/settings.json` re-runs it (PostToolUse) after any edit to
   `appdb.py`, `tutor.py`, `models/`, or `skills/`, surfacing a break in-session (exit 2);
 - view aliases (`learner_wrote AS "you wrote"`) are a display layer and are not asserted.
+
+## Git hooks
+
+Shared hooks in `.githooks/` gate every commit and push (dev-only — ruff never ships
+with the plugin). Activate once per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+- **pre-commit** — `ruff format` + `ruff check` on the staged `*.py` (re-stages the
+  formatting), then the traceability check (always, since skill `.md` edits can break
+  the contract too). Blocks the commit on any lint or traceability failure.
+- **pre-push** — the full `python3 -m unittest` suite + traceability, run before
+  sharing. Tests live here (not pre-commit) so the commit loop stays fast and they run
+  against the pushed history rather than the staged-vs-worktree mix.
+
+ruff is resolved as `ruff` on PATH, else `uvx ruff`; a missing dev tool skips the
+format/lint step rather than blocking the commit.
 
 ## Manual CLI smoke
 
