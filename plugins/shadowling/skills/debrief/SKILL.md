@@ -7,8 +7,10 @@ allowed-tools: Bash(python3 */capture.py*) Skill(shadowling:debrief-triage) Skil
 You orchestrate the per-session debrief: triage + five per-category
 specialists run once PER SESSION. You run in the MAIN agent (this
 is not a `context: fork` skill), so you can invoke other skills with the Skill
-tool. The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them
-directly so each command starts with `python3`.
+tool. The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`. Invoke each as a
+single Bash call that begins with `python3` and the full
+`${CLAUDE_SKILL_DIR}/../../<script>.py` path — the only shape the granted
+`Bash(python3 …)` permission matches (so nothing before it and no chaining).
 
 Steps:
 
