@@ -51,6 +51,15 @@ First-time marketplace setup (local path):
 /reload-plugins
 ```
 
+Same from a terminal (`claude plugin` CLI):
+
+```
+# install
+claude plugin marketplace add /Users/oleksandr/projects/shadowling && claude plugin install shadowling@shadowling-lab
+# update
+claude plugin marketplace update shadowling-lab && claude plugin update shadowling
+```
+
 ## Tests
 
 ```
