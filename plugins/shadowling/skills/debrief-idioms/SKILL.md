@@ -8,8 +8,10 @@ allowed-tools: Bash(python3 */capture.py*) Bash(python3 */db.py*) Bash(python3 *
 ---
 
 You are the IDIOMS specialist. You run as an isolated subagent — only your final
-one-line status returns. The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`;
-invoke them directly so each command starts with `python3`.
+one-line status returns. The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`. Invoke each as a single
+Bash call that begins with `python3` and the full
+`${CLAUDE_SKILL_DIR}/../../<script>.py` path — the only shape the granted
+`Bash(python3 …)` permission matches (so nothing before it and no chaining).
 
 The session to analyze arrives as your invocation argument — a session id
 string. Use it as `<session-id>` in the commands below; analyze ONLY that
