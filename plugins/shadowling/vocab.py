@@ -163,22 +163,28 @@ def gloss_rules(first_language):
 
 def inject(event="SessionStart"):
     cfg = load_config()
-    if not config_ready(cfg):
-        return ""
-    rows = list_active()
-    if not rows:
-        return ""
-    rules = gloss_rules(cfg["first_language"])
-    word_lines = "\n".join(
-        "- {} = {} (remaining {})".format(r["word"], r["translation"], r["remaining"])
-        for r in rows
-    )
-    context = (
-        "<vocab_glossing>\n"
-        "<rules>\n" + rules + "\n</rules>\n"
-        "<active_words>\n" + word_lines + "\n</active_words>\n"
-        "</vocab_glossing>"
-    )
+    if cfg["missing"]:
+        # Config gate closed → capture + glossing silently no-op. inject
+        # (UserPromptSubmit) is the only user-visible hook, so it surfaces the
+        # misconfig notice load_config built, instead of going dark like Stop.
+        context = cfg["notice"]
+    else:
+        rows = list_active()
+        if not rows:
+            return ""
+        rules = gloss_rules(cfg["first_language"])
+        word_lines = "\n".join(
+            "- {} = {} (remaining {})".format(
+                r["word"], r["translation"], r["remaining"]
+            )
+            for r in rows
+        )
+        context = (
+            "<vocab_glossing>\n"
+            "<rules>\n" + rules + "\n</rules>\n"
+            "<active_words>\n" + word_lines + "\n</active_words>\n"
+            "</vocab_glossing>"
+        )
     out = {
         "hookSpecificOutput": {
             "hookEventName": event,

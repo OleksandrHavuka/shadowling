@@ -379,6 +379,38 @@ class InjectTest(VocabTestBase):
         self.assertIn("Spanish", ctx)
 
 
+class InjectMisconfigTest(VocabTestBase):
+    """Incomplete config: inject surfaces the load_config notice (the only
+    user-visible hook) naming the unset keys, rather than silently going dark."""
+
+    def _partial_config(self, data):
+        with open(core.config_path(), "w", encoding="utf-8") as f:
+            json.dump(data, f)
+
+    def test_inject_emits_notice_when_required_key_missing(self):
+        self._partial_config(
+            {"first_language": "Ukrainian", "explanation_language": "English"}
+        )
+        data = json.loads(vocab.inject("UserPromptSubmit"))
+        self.assertEqual(
+            data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit"
+        )
+        ctx = data["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("learning_language", ctx)
+        self.assertIn("setup", ctx.lower())
+
+    def test_inject_notice_names_every_missing_key(self):
+        self._partial_config({"first_language": "Ukrainian"})
+        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("learning_language", ctx)
+        self.assertIn("explanation_language", ctx)
+
+    def test_inject_notice_when_config_completely_empty(self):
+        self._partial_config({})
+        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("not fully configured", ctx)
+
+
 class DataDirTest(unittest.TestCase):
     def setUp(self):
         self._home = os.environ.pop("SHADOWLING_HOME", None)
@@ -411,10 +443,13 @@ class GateTest(VocabTestBase):
         self.assertEqual(code, 1)
         self.assertEqual(self.rows_by_word(), {})
 
-    def test_inject_silent_without_config(self):
+    def test_inject_notices_without_config(self):
+        # inject is the one user-visible hook, so an absent config is reported
+        # here (capture/scan/add stay silently gated) rather than going dark.
         vocab.add("hello", "привіт")
         self._unconfigure()
-        self.assertEqual(vocab.inject(), "")
+        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        self.assertIn("not fully configured", ctx)
 
     def test_scan_noop_without_config(self):
         vocab.add("throughput", "пропускна здатність")

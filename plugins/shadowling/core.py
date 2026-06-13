@@ -38,12 +38,28 @@ def raw_config():
 
 
 def load_config():
-    """Exactly CONFIG_KEYS, each "" when missing/malformed. No defaults."""
+    """Each CONFIG_KEYS value ("" when missing/malformed; no defaults) plus the
+    gate state derived in this one place: "missing" (required keys with no value)
+    and "notice" (the user-facing misconfig text, "" when ready). The gate
+    otherwise closes capture + glossing silently, so the UserPromptSubmit hook
+    just emits cfg["notice"]. Both are in-memory only — save_config persists
+    raw_config, not this."""
     data = raw_config()
     cfg = {}
     for key in CONFIG_KEYS:
         value = data.get(key)
         cfg[key] = value.strip() if isinstance(value, str) else ""
+    cfg["missing"] = [key for key in CONFIG_KEYS if not cfg[key]]
+    cfg["notice"] = ""
+    if cfg["missing"]:
+        cfg["notice"] = (
+            "<shadowling_misconfig>\n"
+            "shadowling is not fully configured — message capture and vocab "
+            "glossing are OFF.\n"
+            "Missing required setting(s): " + ", ".join(cfg["missing"]) + ".\n"
+            "Run /shadowling:setup (or `config.py set <key> <value>`) to enable.\n"
+            "</shadowling_misconfig>"
+        )
     return cfg
 
 
