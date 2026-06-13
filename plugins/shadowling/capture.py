@@ -10,6 +10,7 @@ language tags (`langs`, JSON array of codes) via the batch `tag` verb;
 specialists read deterministic slices via `messages --lang/--untagged`. The
 read-only `query` verb is the escape hatch for ad-hoc analysis.
 """
+
 import json
 import re
 import sqlite3
@@ -59,22 +60,25 @@ def capture(stdin_text):
         return False
     with closing(connect()) as con, con:
         last = con.execute(
-            "SELECT text FROM messages ORDER BY id DESC LIMIT 1").fetchone()
+            "SELECT text FROM messages ORDER BY id DESC LIMIT 1"
+        ).fetchone()
         if last is not None and last["text"] == text:
             return False  # guard against repeated Stop on the same turn
         con.execute(
-            "INSERT INTO messages(created_at, text, session_id)"
-            " VALUES (?, ?, ?)", (_now(), text, data.get("session_id")))
+            "INSERT INTO messages(created_at, text, session_id) VALUES (?, ?, ?)",
+            (_now(), text, data.get("session_id")),
+        )
     return True
 
 
 # --- working-batch reads (processed_at IS NULL) ------------------------------
 
+
 def pending_count():
     with closing(connect()) as con:
-        return con.execute("SELECT COUNT(*) FROM messages "
-                           "WHERE processed_at IS NULL AND kind IS NULL"
-                           ).fetchone()[0]
+        return con.execute(
+            "SELECT COUNT(*) FROM messages WHERE processed_at IS NULL AND kind IS NULL"
+        ).fetchone()[0]
 
 
 def sessions():
@@ -83,19 +87,26 @@ def sessions():
         rows = con.execute(
             "SELECT session_id AS session, COUNT(*) AS pending FROM messages "
             "WHERE processed_at IS NULL AND kind IS NULL "
-            "GROUP BY session_id ORDER BY MIN(id)").fetchall()
+            "GROUP BY session_id ORDER BY MIN(id)"
+        ).fetchall()
     return [dict(r) for r in rows]
 
 
 def _xml(s):
-    return (s.replace("&", "&amp;").replace("<", "&lt;")
-             .replace(">", "&gt;").replace('"', "&quot;"))
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
 
 
 def messages(lang=None, untagged=False, limit=None, session=None):
     """Unprocessed rows as an XML block; optionally sliced."""
-    sql = ("SELECT id, created_at, text, langs FROM messages "
-           "WHERE processed_at IS NULL AND kind IS NULL")
+    sql = (
+        "SELECT id, created_at, text, langs FROM messages "
+        "WHERE processed_at IS NULL AND kind IS NULL"
+    )
     params = []
     if session:
         sql += " AND session_id = ?"
@@ -103,8 +114,10 @@ def messages(lang=None, untagged=False, limit=None, session=None):
     if untagged:
         sql += " AND langs IS NULL"
     elif lang:
-        sql += (" AND EXISTS (SELECT 1 FROM json_each(messages.langs) "
-                "WHERE json_each.value = ?)")
+        sql += (
+            " AND EXISTS (SELECT 1 FROM json_each(messages.langs) "
+            "WHERE json_each.value = ?)"
+        )
         params.append(lang)
     sql += " ORDER BY id"
     if limit is not None:
@@ -116,14 +129,17 @@ def messages(lang=None, untagged=False, limit=None, session=None):
         return "<messages></messages>"
     out = ["<messages>"]
     for r in rows:
-        out.append('  <m id="{}" created_at="{}" langs="{}">{}</m>'.format(
-            r["id"], _xml(r["created_at"]), _xml(r["langs"] or ""),
-            _xml(r["text"])))
+        out.append(
+            '  <m id="{}" created_at="{}" langs="{}">{}</m>'.format(
+                r["id"], _xml(r["created_at"]), _xml(r["langs"] or ""), _xml(r["text"])
+            )
+        )
     out.append("</messages>")
     return "\n".join(out)
 
 
 # --- writes driven by the debrief pipeline -----------------------------------
+
 
 def tag(pairs):
     """pairs: 'id=code[,code]' strings. Returns (ok_count, errors)."""
@@ -131,16 +147,21 @@ def tag(pairs):
     for p in pairs:
         id_part, eq, langs_part = p.partition("=")
         codes = [c.strip() for c in langs_part.split(",") if c.strip()]
-        if (not eq or not id_part.isdigit() or not codes
-                or not all(LANG_CODE.match(c) for c in codes)):
+        if (
+            not eq
+            or not id_part.isdigit()
+            or not codes
+            or not all(LANG_CODE.match(c) for c in codes)
+        ):
             errors.append("malformed pair: " + p)
             continue
         updates.append((json.dumps(codes), int(id_part)))
     ok = 0
     with closing(connect()) as con, con:
         for langs_json, mid in updates:
-            cur = con.execute("UPDATE messages SET langs=? WHERE id=?",
-                              (langs_json, mid))
+            cur = con.execute(
+                "UPDATE messages SET langs=? WHERE id=?", (langs_json, mid)
+            )
             if cur.rowcount == 0:
                 errors.append(f"unknown id: {mid}")
             else:
@@ -151,17 +172,19 @@ def tag(pairs):
 def mark_processed(session=None):
     """Stamp tagged+unprocessed rows (and drill rows — they are excluded from
     analysis but must not stay pending forever); untagged natural rows stay."""
-    sql = ("UPDATE messages SET processed_at=? WHERE processed_at IS NULL "
-           "AND (langs IS NOT NULL OR kind = 'drill')")
+    sql = (
+        "UPDATE messages SET processed_at=? WHERE processed_at IS NULL "
+        "AND (langs IS NOT NULL OR kind = 'drill')"
+    )
     params = [_now()]
     if session:
         sql += " AND session_id = ?"
         params.append(session)
     with closing(connect()) as con, con:
         cur = con.execute(sql, params)
-        kept = con.execute("SELECT COUNT(*) FROM messages "
-                           "WHERE processed_at IS NULL AND kind IS NULL"
-                           ).fetchone()[0]
+        kept = con.execute(
+            "SELECT COUNT(*) FROM messages WHERE processed_at IS NULL AND kind IS NULL"
+        ).fetchone()[0]
     return f"processed {cur.rowcount}, kept {kept} untagged"
 
 
@@ -195,7 +218,8 @@ def mark_drills():
                 "AND EXISTS (SELECT 1 FROM attempts a "
                 "            WHERE a.session_id = messages.session_id "
                 "              AND similarity(a.answer, messages.text) >= ?)",
-                (DRILL_SIMILARITY,))
+                (DRILL_SIMILARITY,),
+            )
             marked = cur.rowcount
         unmatched = con.execute(
             "SELECT COUNT(*) FROM attempts a "
@@ -203,11 +227,13 @@ def mark_drills():
             "AND NOT EXISTS (SELECT 1 FROM messages m "
             "                WHERE m.session_id = a.session_id "
             "                  AND similarity(a.answer, m.text) >= ?)",
-            (DRILL_SIMILARITY,)).fetchone()[0]
+            (DRILL_SIMILARITY,),
+        ).fetchone()[0]
     return f"marked {marked} drill answer(s); {unmatched} attempt(s) unmatched"
 
 
 # --- escape hatch -------------------------------------------------------------
+
 
 def paths():
     return "db: " + db_path()
@@ -215,8 +241,11 @@ def paths():
 
 def main(argv):
     if not argv:
-        print("usage: capture.py {capture|pending-count|sessions|messages|tag|"
-              "mark-processed|mark-drills|query|paths} ...", file=sys.stderr)
+        print(
+            "usage: capture.py {capture|pending-count|sessions|messages|tag|"
+            "mark-processed|mark-drills|query|paths} ...",
+            file=sys.stderr,
+        )
         return 1
     cmd = argv[0]
     if cmd == "capture":

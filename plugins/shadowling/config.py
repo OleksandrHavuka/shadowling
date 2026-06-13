@@ -9,6 +9,7 @@ Two generic verbs over the two mandatory keys:
 `get` doubles as the whole-plugin gate: a skill makes its one call and, on
 failure, tells the user to run /shadowling:setup and stops.
 """
+
 import sys
 
 from core import CONFIG_KEYS, config_ready, load_config, save_config

@@ -24,9 +24,13 @@ class VocabTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
-        core.save_config({"first_language": "Ukrainian",
-                          "explanation_language": "English",
-                          "learning_language": "English"})
+        core.save_config(
+            {
+                "first_language": "Ukrainian",
+                "explanation_language": "English",
+                "learning_language": "English",
+            }
+        )
 
     def tearDown(self):
         os.environ.pop("SHADOWLING_HOME", None)
@@ -42,8 +46,8 @@ class VocabTestBase(unittest.TestCase):
             with con:
                 for col, val in cols.items():
                     con.execute(
-                        f"UPDATE vocab SET {col} = ? WHERE word = ?",
-                        (val, word))
+                        f"UPDATE vocab SET {col} = ? WHERE word = ?", (val, word)
+                    )
         finally:
             con.close()
 
@@ -117,7 +121,8 @@ class RemoveTest(VocabTestBase):
 class MainAddTest(VocabTestBase):
     def test_add_multiple_pairs_stores_all(self):
         code, out = run_main(
-            ["add", "hello", "привіт", "machine learning", "машинне навчання"])
+            ["add", "hello", "привіт", "machine learning", "машинне навчання"]
+        )
         self.assertEqual(code, 0)
         rows = self.rows_by_word()
         self.assertEqual(rows["hello"]["translation"], "привіт")
@@ -129,7 +134,8 @@ class MainAddTest(VocabTestBase):
         code, out = run_main(["add", "throughput", "пропускна здатність"])
         self.assertEqual(code, 0)
         self.assertEqual(
-            self.rows_by_word()["throughput"]["translation"], "пропускна здатність")
+            self.rows_by_word()["throughput"]["translation"], "пропускна здатність"
+        )
 
     def test_add_odd_arg_count_is_error(self):
         code, _ = run_main(["add", "hello", "привіт", "orphan"])
@@ -255,12 +261,20 @@ class ScanTest(VocabTestBase):
         vocab.add("throughput", "п")
         # transcript with two assistant turns; only the LAST counts
         fd, tpath = tempfile.mkstemp(suffix=".jsonl")
-        a = {"type": "assistant",
-             "message": {"role": "assistant",
-                         "content": [{"type": "text", "text": "throughput here"}]}}
-        b = {"type": "assistant",
-             "message": {"role": "assistant",
-                         "content": [{"type": "text", "text": "no vocab word now"}]}}
+        a = {
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "throughput here"}],
+            },
+        }
+        b = {
+            "type": "assistant",
+            "message": {
+                "role": "assistant",
+                "content": [{"type": "text", "text": "no vocab word now"}],
+            },
+        }
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(json.dumps(a) + "\n")
             f.write(json.dumps(b) + "\n")
@@ -276,11 +290,13 @@ class ScanTest(VocabTestBase):
 
     def test_scan_missing_transcript_path_returns_empty(self):
         self.assertEqual(
-            vocab.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), [])
+            vocab.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), []
+        )
 
     def test_scan_main_bad_stdin_returns_zero(self):
         # Hook path must never crash even on completely invalid stdin
         import io
+
         old_stdin = vocab.sys.stdin
         vocab.sys.stdin = io.StringIO("not json at all")
         try:
@@ -298,9 +314,7 @@ class InjectTest(VocabTestBase):
         vocab.add("throughput", "пропускна здатність")
         out = vocab.inject()
         data = json.loads(out)
-        self.assertEqual(
-            data["hookSpecificOutput"]["hookEventName"], "SessionStart"
-        )
+        self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
         ctx = data["hookSpecificOutput"]["additionalContext"]
         self.assertIn("throughput", ctx)
         self.assertIn("пропускна здатність", ctx)  # utf-8 preserved
@@ -317,14 +331,14 @@ class InjectTest(VocabTestBase):
     def test_inject_defaults_to_sessionstart(self):
         vocab.add("throughput", "п")
         data = json.loads(vocab.inject())
-        self.assertEqual(
-            data["hookSpecificOutput"]["hookEventName"], "SessionStart")
+        self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 
     def test_inject_accepts_custom_event_name(self):
         vocab.add("throughput", "п")
         data = json.loads(vocab.inject("UserPromptSubmit"))
         self.assertEqual(
-            data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit")
+            data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit"
+        )
         # word list still present regardless of event
         self.assertIn("throughput", data["hookSpecificOutput"]["additionalContext"])
 
@@ -377,8 +391,9 @@ class DataDirTest(unittest.TestCase):
 
     def test_default_data_dir_is_dot_shadowling(self):
         self.assertEqual(core.data_dir(), os.path.expanduser("~/.shadowling"))
-        self.assertEqual(core.config_path(),
-                         os.path.expanduser("~/.shadowling/config.json"))
+        self.assertEqual(
+            core.config_path(), os.path.expanduser("~/.shadowling/config.json")
+        )
 
     def test_env_home_overrides_everything(self):
         os.environ["SHADOWLING_HOME"] = "/tmp/shadowling_home"
@@ -406,8 +421,19 @@ class GateTest(VocabTestBase):
         self._unconfigure()
         tpath = os.path.join(self.home, "t.jsonl")
         with open(tpath, "w", encoding="utf-8") as f:
-            f.write(json.dumps({"type": "assistant", "message": {"content": [
-                {"type": "text", "text": "improved throughput a lot"}]}}) + "\n")
+            f.write(
+                json.dumps(
+                    {
+                        "type": "assistant",
+                        "message": {
+                            "content": [
+                                {"type": "text", "text": "improved throughput a lot"}
+                            ]
+                        },
+                    }
+                )
+                + "\n"
+            )
         self.assertEqual(vocab.scan(json.dumps({"transcript_path": tpath})), [])
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 

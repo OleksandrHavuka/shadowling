@@ -36,7 +36,8 @@ class SqlTestBase(unittest.TestCase):
                     con.execute(
                         "INSERT INTO grammar(created_at, slug, problem, original,"
                         " fixed, rule) VALUES ('2026-06-11', ?, 'p', 'a', 'b', 'r')",
-                        (s,))
+                        (s,),
+                    )
         finally:
             con.close()
 
@@ -128,7 +129,8 @@ class WriteTest(SqlTestBase):
         con = sqlite3.connect(spath)
         try:
             self.assertEqual(
-                con.execute("SELECT COUNT(*) FROM grammar").fetchone()[0], 1)
+                con.execute("SELECT COUNT(*) FROM grammar").fetchone()[0], 1
+            )
         finally:
             con.close()
 
@@ -140,7 +142,8 @@ class WriteTest(SqlTestBase):
     def test_returning_rows_printed_as_json(self):
         self.seed("s1")
         code, out, _ = run_main(
-            ["--write", "DELETE FROM grammar WHERE slug = ? RETURNING slug", "s1"])
+            ["--write", "DELETE FROM grammar WHERE slug = ? RETURNING slug", "s1"]
+        )
         self.assertEqual(code, 0)
         self.assertEqual(json.loads(out.strip()), {"slug": "s1"})
 
@@ -151,11 +154,12 @@ class WriteTest(SqlTestBase):
     def test_failing_write_rolls_back_and_exits_1(self):
         self.seed("s1")
         code, _, err = run_main(
-            ["--write", "INSERT INTO grammar(created_at, slug) VALUES (NULL, 'x')"])
+            ["--write", "INSERT INTO grammar(created_at, slug) VALUES (NULL, 'x')"]
+        )
         self.assertEqual(code, 1)
         self.assertIn("error:", err)
-        self.assertEqual(self.count(), 1)            # rolled back
-        self.assertEqual(len(self.backups()), 1)     # snapshot precedes execute
+        self.assertEqual(self.count(), 1)  # rolled back
+        self.assertEqual(len(self.backups()), 1)  # snapshot precedes execute
 
 
 class RotationTest(SqlTestBase):
@@ -174,8 +178,9 @@ class BackupVerbTest(SqlTestBase):
         self.assertTrue(os.path.exists(path))
         con = sqlite3.connect(path)
         try:
-            self.assertEqual(con.execute("PRAGMA user_version").fetchone()[0],
-                             len(appdb.MIGRATIONS))
+            self.assertEqual(
+                con.execute("PRAGMA user_version").fetchone()[0], len(appdb.MIGRATIONS)
+            )
         finally:
             con.close()
 

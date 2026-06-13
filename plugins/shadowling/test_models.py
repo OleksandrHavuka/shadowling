@@ -17,9 +17,15 @@ class ModelTestBase(unittest.TestCase):
         shutil.rmtree(self.home, ignore_errors=True)
 
     def _insert(self, slug, original="a", fixed="b"):
-        return Grammar.insert({"slug": slug, "problem": "p",
-                               "original": original, "fixed": fixed,
-                               "rule": "r"})
+        return Grammar.insert(
+            {
+                "slug": slug,
+                "problem": "p",
+                "original": original,
+                "fixed": fixed,
+                "rule": "r",
+            }
+        )
 
 
 class InsertSelectTest(ModelTestBase):
@@ -64,13 +70,12 @@ class LifecycleAndOrderingTest(ModelTestBase):
         self.assertEqual(row["counter"], 2)
         self.assertEqual(row["created_at"], "2026-06-01")  # fixed at first
         self.assertEqual(row["updated_at"], "2026-06-09")  # advances to latest
-        self.assertEqual(row["last example"], "c → d")     # latest incident wins
+        self.assertEqual(row["last example"], "c → d")  # latest incident wins
 
     def test_equal_counters_break_ties_by_most_recent_incident(self):
         self._insert("older")
         self._insert("newer")  # same counter (1); higher last_id ranks first
-        self.assertEqual([r["slug"] for r in Grammar.select()],
-                         ["newer", "older"])
+        self.assertEqual([r["slug"] for r in Grammar.select()], ["newer", "older"])
 
 
 if __name__ == "__main__":

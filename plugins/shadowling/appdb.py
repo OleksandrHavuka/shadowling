@@ -9,6 +9,7 @@ is linear: PRAGMA user_version + the ordered MIGRATIONS list. To change
 schema, APPEND a migration — never edit a shipped one (see the
 shadowling-db project skill).
 """
+
 import os
 import shutil
 import sqlite3
@@ -21,6 +22,7 @@ def db_path():
 
 
 # --- migrations ---------------------------------------------------------------
+
 
 def _migration_1(con):
     """Initial consolidated schema. Legacy md/jsonl/csv files are deleted
@@ -60,12 +62,23 @@ def _migration_1(con):
             remaining INTEGER NOT NULL,
             status TEXT NOT NULL);
     """)
-    legacy = ["grammar.md", "rephrasings.md", "idioms.md", "irregular_verbs.md",
-              "decode.md", "friction.md",
-              "grammar.log.jsonl", "rephrasings.log.jsonl", "idioms.log.jsonl",
-              "irregular_verbs.log.jsonl", "decode.log.jsonl",
-              "friction.log.jsonl",
-              "words.csv", "buffer.jsonl", "messages.log.jsonl"]
+    legacy = [
+        "grammar.md",
+        "rephrasings.md",
+        "idioms.md",
+        "irregular_verbs.md",
+        "decode.md",
+        "friction.md",
+        "grammar.log.jsonl",
+        "rephrasings.log.jsonl",
+        "idioms.log.jsonl",
+        "irregular_verbs.log.jsonl",
+        "decode.log.jsonl",
+        "friction.log.jsonl",
+        "words.csv",
+        "buffer.jsonl",
+        "messages.log.jsonl",
+    ]
     for name in legacy:
         path = os.path.join(data_dir(), name)
         if os.path.exists(path):
@@ -167,8 +180,7 @@ def _migration_5(con):
     """)
 
 
-MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4,
-              _migration_5]
+MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4, _migration_5]
 
 # --- views: derived code, never migrated --------------------------------------
 # The MAX(id) bare-column idiom makes non-aggregated columns come from the
@@ -176,39 +188,45 @@ MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4,
 
 VIEWS = {
     "grammar_ranked": (
-        ' SELECT slug, problem,'
-        ' original || \' → \' || fixed AS "last example",'
-        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
-        ' COUNT(*) AS counter, MAX(id) AS last_id'
-        ' FROM grammar GROUP BY slug ORDER BY counter DESC, last_id DESC'),
+        " SELECT slug, problem,"
+        " original || ' → ' || fixed AS \"last example\","
+        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
+        " COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM grammar GROUP BY slug ORDER BY counter DESC, last_id DESC"
+    ),
     "rephrasing_ranked": (
         ' SELECT slug, problem, learner_wrote AS "you wrote",'
         ' native_phrase AS "native phrase",'
-        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
-        ' COUNT(*) AS counter, MAX(id) AS last_id'
-        ' FROM rephrasing GROUP BY slug ORDER BY counter DESC, last_id DESC'),
+        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
+        " COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM rephrasing GROUP BY slug ORDER BY counter DESC, last_id DESC"
+    ),
     "idioms_ranked": (
         ' SELECT idiom, meaning, learner_wrote AS "you wrote",'
-        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
-        ' COUNT(*) AS counter, MAX(id) AS last_id'
-        ' FROM idioms GROUP BY idiom ORDER BY counter DESC, last_id DESC'),
+        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
+        " COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM idioms GROUP BY idiom ORDER BY counter DESC, last_id DESC"
+    ),
     "verbs_ranked": (
         ' SELECT used_form AS "you used", correction, context,'
         ' verb, past, participle AS "past participle",'
-        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
-        ' COUNT(*) AS counter, MAX(id) AS last_id'
-        ' FROM verbs GROUP BY verb ORDER BY counter DESC, last_id DESC'),
+        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
+        " COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM verbs GROUP BY verb ORDER BY counter DESC, last_id DESC"
+    ),
     "decode_ranked": (
-        ' SELECT slug, type, expression, meaning, takeaway,'
-        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
-        ' COUNT(*) AS counter, MAX(id) AS last_id'
-        ' FROM decode GROUP BY slug ORDER BY counter DESC, last_id DESC'),
+        " SELECT slug, type, expression, meaning, takeaway,"
+        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
+        " COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM decode GROUP BY slug ORDER BY counter DESC, last_id DESC"
+    ),
     "friction_ranked": (
         ' SELECT slug, type, zone, learner_wrote AS "you reached for",'
         ' native_phrase AS "native phrase",'
-        ' MIN(created_at) AS created_at, MAX(created_at) AS updated_at,'
-        ' COUNT(*) AS counter, MAX(id) AS last_id'
-        ' FROM friction GROUP BY slug ORDER BY counter DESC, last_id DESC'),
+        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
+        " COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM friction GROUP BY slug ORDER BY counter DESC, last_id DESC"
+    ),
 }
 
 
@@ -219,8 +237,8 @@ def _ensure_views(con):
     for name, body in VIEWS.items():
         stmt = f"CREATE VIEW {name} AS{body}"
         row = con.execute(
-            "SELECT sql FROM sqlite_master WHERE type='view' AND name=?",
-            (name,)).fetchone()
+            "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (name,)
+        ).fetchone()
         if row is None or row["sql"] != stmt:
             with con:
                 con.execute(f"DROP VIEW IF EXISTS {name}")

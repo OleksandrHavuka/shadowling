@@ -14,6 +14,7 @@ verbs first (see the shadowling-db project skill).
   python3 sql.py --write "<SQL>" [param ...]  # rw: snapshot, then execute
   python3 sql.py backup                       # manual snapshot; prints path
 """
+
 import json
 import os
 import sqlite3
@@ -26,7 +27,7 @@ from db import render_md
 
 KEEP = 10  # snapshots retained in <data_dir>/backups/
 
-USAGE = "usage: sql.py [--md|--write] \"<SQL>\" [param ...] | sql.py backup"
+USAGE = 'usage: sql.py [--md|--write] "<SQL>" [param ...] | sql.py backup'
 
 
 def snapshot(con):
@@ -47,8 +48,9 @@ def snapshot(con):
     finally:
         dest.close()
     os.chmod(path, 0o600)
-    snaps = sorted(f for f in os.listdir(bdir)
-                   if f.startswith("shadowling-") and f.endswith(".db"))
+    snaps = sorted(
+        f for f in os.listdir(bdir) if f.startswith("shadowling-") and f.endswith(".db")
+    )
     for name in snaps[:-KEEP]:
         os.remove(os.path.join(bdir, name))
     return path

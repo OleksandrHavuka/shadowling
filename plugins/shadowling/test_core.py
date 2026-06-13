@@ -16,12 +16,15 @@ class SlugifyTest(unittest.TestCase):
     KEBAB = r"^[a-z0-9]+(-[a-z0-9]+)*$"
 
     def test_spaces_to_hyphens_and_lowercase(self):
-        self.assertEqual(core.slugify("Article Omission Before Countable"),
-                         "article-omission-before-countable")
+        self.assertEqual(
+            core.slugify("Article Omission Before Countable"),
+            "article-omission-before-countable",
+        )
 
     def test_underscores_and_mixed_separators(self):
-        self.assertEqual(core.slugify("word choice_demonstrative"),
-                         "word-choice-demonstrative")
+        self.assertEqual(
+            core.slugify("word choice_demonstrative"), "word-choice-demonstrative"
+        )
 
     def test_trims_outer_and_collapses_inner_hyphens(self):
         self.assertEqual(core.slugify("  -tense--shift-  "), "tense-shift")
@@ -30,8 +33,10 @@ class SlugifyTest(unittest.TestCase):
         self.assertEqual(core.slugify("calque! (literal)"), "calque-literal")
 
     def test_already_canonical_unchanged(self):
-        self.assertEqual(core.slugify("subject-verb-agreement-plural"),
-                         "subject-verb-agreement-plural")
+        self.assertEqual(
+            core.slugify("subject-verb-agreement-plural"),
+            "subject-verb-agreement-plural",
+        )
 
     def test_blank_becomes_empty(self):
         self.assertEqual(core.slugify("   _-_  "), "")

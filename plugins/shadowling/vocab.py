@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """vocab.py - vocabulary glossing store for shadowling (stdlib only, Python 3.9+)."""
+
 import json
 import re
 import sys
@@ -28,34 +29,37 @@ def add(word, translation):
     # back untranslated). Never persist such a row — signal the caller instead.
     if not translation or _norm(translation) == _norm(word):
         return "untranslated", {
-            "word": word, "translation": translation,
-            "remaining": "-", "status": "-",
+            "word": word,
+            "translation": translation,
+            "remaining": "-",
+            "status": "-",
         }
     now = _now()
     con = connect()
     try:
-        row = con.execute("SELECT * FROM vocab WHERE word = ?",
-                          (word,)).fetchone()
+        row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
         with con:
             if row is None:
                 con.execute(
                     "INSERT INTO vocab(word, translation, remaining, status,"
                     " created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
-                    (word, translation, START_REMAINING, now, now))
+                    (word, translation, START_REMAINING, now, now),
+                )
                 action = "add"
             elif row["status"] == "learned":
                 con.execute(
                     "UPDATE vocab SET translation = ?, remaining = ?,"
                     " status = 'active', updated_at = ? WHERE word = ?",
-                    (translation, START_REMAINING, now, word))
+                    (translation, START_REMAINING, now, word),
+                )
                 action = "relearn"
             else:
                 con.execute(
-                    "UPDATE vocab SET translation = ?, updated_at = ?"
-                    " WHERE word = ?", (translation, now, word))
+                    "UPDATE vocab SET translation = ?, updated_at = ? WHERE word = ?",
+                    (translation, now, word),
+                )
                 action = "refresh"
-        new = con.execute("SELECT * FROM vocab WHERE word = ?",
-                          (word,)).fetchone()
+        new = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
         return action, dict(new)
     finally:
         con.close()
@@ -91,8 +95,12 @@ def word_in_text(word, text):
 def list_active():
     con = connect()
     try:
-        return [dict(r) for r in con.execute(
-            "SELECT * FROM vocab WHERE status = 'active' ORDER BY rowid")]
+        return [
+            dict(r)
+            for r in con.execute(
+                "SELECT * FROM vocab WHERE status = 'active' ORDER BY rowid"
+            )
+        ]
     finally:
         con.close()
 
@@ -111,8 +119,7 @@ def scan(stdin_text):
     now = _now()
     con = connect()
     try:
-        rows = con.execute(
-            "SELECT * FROM vocab WHERE status = 'active'").fetchall()
+        rows = con.execute("SELECT * FROM vocab WHERE status = 'active'").fetchall()
         with con:
             for r in rows:
                 if not word_in_text(r["word"], text):
@@ -122,7 +129,8 @@ def scan(stdin_text):
                 con.execute(
                     "UPDATE vocab SET remaining = ?, status = ?,"
                     " updated_at = ? WHERE word = ?",
-                    (remaining, status, now, r["word"]))
+                    (remaining, status, now, r["word"]),
+                )
                 changed.append(r["word"])
         return changed
     finally:
@@ -162,9 +170,9 @@ def inject(event="SessionStart"):
         return ""
     rules = gloss_rules(cfg["first_language"])
     word_lines = "\n".join(
-        "- {} = {} (remaining {})".format(
-            r["word"], r["translation"], r["remaining"])
-        for r in rows)
+        "- {} = {} (remaining {})".format(r["word"], r["translation"], r["remaining"])
+        for r in rows
+    )
     context = (
         "<vocab_glossing>\n"
         "<rules>\n" + rules + "\n</rules>\n"
@@ -182,25 +190,36 @@ def inject(event="SessionStart"):
 
 def main(argv):
     if not argv:
-        print("usage: vocab.py {add|remove|list-active|inject|scan} ...",
-              file=sys.stderr)
+        print(
+            "usage: vocab.py {add|remove|list-active|inject|scan} ...", file=sys.stderr
+        )
         return 1
     cmd = argv[0]
     if cmd == "add":
         if not config_ready():
-            print("shadowling is not configured — run /shadowling:setup",
-                  file=sys.stderr)
+            print(
+                "shadowling is not configured — run /shadowling:setup", file=sys.stderr
+            )
             return 1
         pairs = argv[1:]
         if not pairs or len(pairs) % 2 != 0:
-            print('usage: vocab.py add "<word>" "<translation>" ['
-                  '"<word>" "<translation>" ...]', file=sys.stderr)
+            print(
+                'usage: vocab.py add "<word>" "<translation>" ['
+                '"<word>" "<translation>" ...]',
+                file=sys.stderr,
+            )
             return 1
         for i in range(0, len(pairs), 2):
             action, row = add(pairs[i], pairs[i + 1])
-            print("{}: {} = {} (remaining {}, {})".format(
-                action, row["word"], row["translation"],
-                row["remaining"], row["status"]))
+            print(
+                "{}: {} = {} (remaining {}, {})".format(
+                    action,
+                    row["word"],
+                    row["translation"],
+                    row["remaining"],
+                    row["status"],
+                )
+            )
         return 0
     if cmd == "remove":
         words = argv[1:]
@@ -208,13 +227,15 @@ def main(argv):
             print('usage: vocab.py remove "<word>" ["<word>" ...]', file=sys.stderr)
             return 1
         for word in words:
-            print("{}: {}".format(
-                word, "removed" if remove(word) else "not found"))
+            print("{}: {}".format(word, "removed" if remove(word) else "not found"))
         return 0
     if cmd == "list-active":
         for r in list_active():
-            print("{} = {} (remaining {})".format(
-                r["word"], r["translation"], r["remaining"]))
+            print(
+                "{} = {} (remaining {})".format(
+                    r["word"], r["translation"], r["remaining"]
+                )
+            )
         return 0
     if cmd == "inject":
         event = argv[1] if len(argv) > 1 else "SessionStart"
