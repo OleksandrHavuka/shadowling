@@ -443,6 +443,14 @@ class GateTest(VocabTestBase):
         self.assertEqual(code, 1)
         self.assertEqual(self.rows_by_word(), {})
 
+    def test_add_emits_notice_without_config(self):
+        self._unconfigure()
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = vocab.main(["add", "hello", "привіт"])
+        self.assertEqual(code, 1)
+        self.assertIn("not fully configured", err.getvalue())
+
     def test_inject_notices_without_config(self):
         # inject is the one user-visible hook, so an absent config is reported
         # here (capture/scan/add stay silently gated) rather than going dark.

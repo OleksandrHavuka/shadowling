@@ -12,10 +12,9 @@ failure, tells the user to run /shadowling:setup and stops.
 
 import sys
 
-from core import CONFIG_KEYS, config_ready, load_config, save_config
+from core import CONFIG_KEYS, load_config, save_config
 
 USAGE = "usage: config.py {get|set} {" + "|".join(CONFIG_KEYS) + "} [<value>]"
-NOT_CONFIGURED = "shadowling is not configured — run /shadowling:setup"
 
 
 def main(argv):
@@ -25,8 +24,8 @@ def main(argv):
     cmd, key = argv[0], argv[1]
     if cmd == "get":
         cfg = load_config()
-        if not config_ready(cfg):
-            print(NOT_CONFIGURED, file=sys.stderr)
+        if cfg["missing"]:  # whole-plugin gate; the notice names the unset key(s)
+            print(cfg["notice"], file=sys.stderr)
             return 1
         print(cfg[key])
         return 0
