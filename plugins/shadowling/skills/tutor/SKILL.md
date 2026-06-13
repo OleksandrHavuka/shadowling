@@ -12,11 +12,8 @@ the user answers, you judge, repeat). The plugin's scripts live at
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` and
-   `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`.
-   If EITHER FAILS (non-zero exit), relay the notice config.py printed (it names
-   the missing setting) and tell the user to run `/shadowling:setup`, then STOP.
-   Write all feedback in the explanation language.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`. Write all feedback in
+   `explanation_language`.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" deck` (add `--size <N>` if
    the user passed a number). If it prints nothing: say there is nothing due
    and nothing new — come back after a /debrief — and STOP.

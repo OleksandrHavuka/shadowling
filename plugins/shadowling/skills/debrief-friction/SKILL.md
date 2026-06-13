@@ -22,12 +22,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` (the
-   language the user is writing in — and bailing OUT of) and
-   `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
-   for the language to WRITE the `zone` descriptions IN. If EITHER FAILS (non-zero
-   exit), print `ERROR friction: not configured (missing: <keys>) — run /shadowling:setup`
-   and STOP, filling `<keys>` from config.py's `Missing required setting(s):` line.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`.
    Refer to the learning language by its ISO 639-1 code (English → `en`,
    German → `de`, …) when reading the `langs` attributes below.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>"` — the full

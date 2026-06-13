@@ -20,11 +20,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get learning_language` for the
-   language you analyze, and `python3 "${CLAUDE_SKILL_DIR}/../../config.py" get explanation_language`
-   for the language to WRITE EXPLANATIONS IN. If EITHER FAILS (non-zero exit),
-   print `ERROR verbs: not configured (missing: <keys>) — run /shadowling:setup` and
-   STOP, filling `<keys>` from config.py's `Missing required setting(s):` line.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`.
    The verb forms, `used_form`, `correction`, and `context` stay in the learning language regardless.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language
