@@ -1,5 +1,4 @@
 """models/verbs.py - irregular-verb incidents (append-only) + record fan-out."""
-from . import register
 from .base import Model, norm_key
 
 
@@ -16,6 +15,3 @@ def record(verb, past, participle, used_form, correction, context):
                       "participle": participle, "used_form": used_form,
                       "correction": correction, "context": context})
     return "inserted" if n == 1 else "incremented"
-
-
-register("verbs", Verbs, record)

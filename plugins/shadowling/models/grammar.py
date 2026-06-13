@@ -1,7 +1,6 @@
 """models/grammar.py - grammar incidents (append-only) + record fan-out."""
 from core import slugify
 
-from . import register
 from .base import Model
 
 
@@ -16,6 +15,3 @@ def record(slug, problem, original, fixed, rule):
     n = Grammar.insert({"slug": slugify(slug), "problem": problem,
                         "original": original, "fixed": fixed, "rule": rule})
     return "inserted" if n == 1 else "incremented"
-
-
-register("grammar", Grammar, record)

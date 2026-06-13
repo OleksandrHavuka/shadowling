@@ -5,7 +5,6 @@ language, keyed by zone slug and classified by the five-value taxonomy
 (lexical/phrasal/structural/topical/register)."""
 from core import slugify
 
-from . import register
 from .base import Model
 
 
@@ -23,6 +22,3 @@ def record(slug, kind, zone, learner_wrote, native_phrase, context):
                          "native_phrase": native_phrase,
                          "context": context})
     return "inserted" if n == 1 else "incremented"
-
-
-register("friction", Friction, record)
