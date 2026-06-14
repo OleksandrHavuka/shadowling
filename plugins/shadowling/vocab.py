@@ -1,109 +1,14 @@
 #!/usr/bin/env python3
-"""vocab.py - vocabulary glossing store for shadowling (stdlib only, Python 3.9+)."""
+"""vocab.py - SHIM (uniform-DB refactor). Data lives in models/vocab.py; this
+keeps the glossing hooks (inject/scan) and the add/remove/list-active CLI
+working until loot.py/drop.py/gloss.py take over. Deleted/renamed in phase 3."""
 
 import json
-import re
 import sys
-from datetime import datetime
 
-from appdb import connect
 from core import config_ready, last_assistant_text, load_config
+from models.vocab import Vocab
 from tagio import read_fields, rows
-
-START_REMAINING = 10
-STEM_MIN_LEN = 4
-
-
-def _now():
-    # full ISO timestamp for the vocab audit stamps, matching capture._now().
-    return datetime.now().isoformat(timespec="seconds")
-
-
-def _norm(s):
-    return re.sub(r"\s+", " ", s).strip().lower()
-
-
-def add(word, translation):
-    word = word.strip().lower()
-    translation = translation.strip()
-    # Guard against a failed/identity translation (e.g. the LLM echoing the term
-    # back untranslated). Never persist such a row — signal the caller instead.
-    if not translation or _norm(translation) == _norm(word):
-        return "untranslated", {
-            "word": word,
-            "translation": translation,
-            "remaining": "-",
-            "status": "-",
-        }
-    now = _now()
-    con = connect()
-    try:
-        row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
-        with con:
-            if row is None:
-                con.execute(
-                    "INSERT INTO vocab(word, translation, remaining, status,"
-                    " created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
-                    (word, translation, START_REMAINING, now, now),
-                )
-                action = "add"
-            elif row["status"] == "learned":
-                con.execute(
-                    "UPDATE vocab SET translation = ?, remaining = ?,"
-                    " status = 'active', updated_at = ? WHERE word = ?",
-                    (translation, START_REMAINING, now, word),
-                )
-                action = "relearn"
-            else:
-                con.execute(
-                    "UPDATE vocab SET translation = ?, updated_at = ? WHERE word = ?",
-                    (translation, now, word),
-                )
-                action = "refresh"
-        new = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
-        return action, dict(new)
-    finally:
-        con.close()
-
-
-def remove(word):
-    word = word.strip().lower()
-    con = connect()
-    try:
-        with con:
-            cur = con.execute("DELETE FROM vocab WHERE word = ?", (word,))
-        return cur.rowcount > 0
-    finally:
-        con.close()
-
-
-def build_pattern(word):
-    word = word.strip().lower()
-    esc = re.escape(word)
-    left = r"(?<!\w)"
-    right = r"(?!\w)"
-    if len(word) >= STEM_MIN_LEN and word[-1:].isalnum():
-        body = esc + r"(?:s|es|ed|ing|d)?"
-    else:
-        body = esc
-    return re.compile(left + body + right, re.IGNORECASE)
-
-
-def word_in_text(word, text):
-    return build_pattern(word).search(text) is not None
-
-
-def list_active():
-    con = connect()
-    try:
-        return [
-            dict(r)
-            for r in con.execute(
-                "SELECT * FROM vocab WHERE status = 'active' ORDER BY rowid"
-            )
-        ]
-    finally:
-        con.close()
 
 
 def scan(stdin_text):
@@ -116,26 +21,7 @@ def scan(stdin_text):
     text = last_assistant_text(data.get("transcript_path", ""))
     if not text:
         return []
-    changed = []
-    now = _now()
-    con = connect()
-    try:
-        rows = con.execute("SELECT * FROM vocab WHERE status = 'active'").fetchall()
-        with con:
-            for r in rows:
-                if not word_in_text(r["word"], text):
-                    continue
-                remaining = max(r["remaining"] - 1, 0)
-                status = "learned" if remaining == 0 else "active"
-                con.execute(
-                    "UPDATE vocab SET remaining = ?, status = ?,"
-                    " updated_at = ? WHERE word = ?",
-                    (remaining, status, now, r["word"]),
-                )
-                changed.append(r["word"])
-        return changed
-    finally:
-        con.close()
+    return Vocab.scan_decrement(text)
 
 
 def gloss_rules(first_language):
@@ -165,20 +51,17 @@ def gloss_rules(first_language):
 def inject(event="SessionStart"):
     cfg = load_config()
     if cfg["missing"]:
-        # Config gate closed → capture + glossing silently no-op. inject
-        # (UserPromptSubmit) is the only user-visible hook, so it surfaces the
-        # misconfig notice load_config built, instead of going dark like Stop.
         context = cfg["notice"]
     else:
-        rows = list_active()
-        if not rows:
+        rows_ = Vocab.list_active()
+        if not rows_:
             return ""
         rules = gloss_rules(cfg["first_language"])
         word_lines = "\n".join(
             "- {} = {} (remaining {})".format(
                 r["word"], r["translation"], r["remaining"]
             )
-            for r in rows
+            for r in rows_
         )
         context = (
             "<vocab_glossing>\n"
@@ -198,7 +81,8 @@ def inject(event="SessionStart"):
 def main(argv):
     if not argv:
         print(
-            "usage: vocab.py {add|remove|list-active|inject|scan} ...", file=sys.stderr
+            "usage: vocab.py {add|remove|list-active|inject|scan} ...",
+            file=sys.stderr,
         )
         return 1
     cmd = argv[0]
@@ -207,8 +91,6 @@ def main(argv):
         if cfg["missing"]:
             print(cfg["notice"], file=sys.stderr)
             return 1
-        # Pairs arrive as TSV inside an <items> tag on stdin (one per line,
-        # word<TAB>translation) — no shell escaping, commas/quotes are free.
         try:
             items = read_fields({"items": rows("word", "translation")})["items"]
         except ValueError as e:
@@ -222,7 +104,7 @@ def main(argv):
             )
             return 1
         for item in items:
-            action, row = add(item["word"], item["translation"])
+            action, row = Vocab.add(item["word"], item["translation"])
             print(
                 "{}: {} = {} (remaining {}, {})".format(
                     action,
@@ -239,10 +121,12 @@ def main(argv):
             print('usage: vocab.py remove "<word>" ["<word>" ...]', file=sys.stderr)
             return 1
         for word in words:
-            print("{}: {}".format(word, "removed" if remove(word) else "not found"))
+            print(
+                "{}: {}".format(word, "removed" if Vocab.remove(word) else "not found")
+            )
         return 0
     if cmd == "list-active":
-        for r in list_active():
+        for r in Vocab.list_active():
             print(
                 "{} = {} (remaining {})".format(
                     r["word"], r["translation"], r["remaining"]

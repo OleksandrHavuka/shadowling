@@ -5,11 +5,11 @@ import os
 import shutil
 import tempfile
 import unittest
-from unittest import mock
 
 import appdb
 import core
 import vocab
+from models.vocab import Vocab
 
 
 def run_main(argv, stdin_text=""):
@@ -63,72 +63,6 @@ class VocabTestBase(unittest.TestCase):
             con.close()
 
 
-class AddTest(VocabTestBase):
-    def test_add_new_word_starts_at_10_active(self):
-        action, row = vocab.add("Throughput", "пропускна здатність")
-        self.assertEqual(action, "add")
-        self.assertEqual(row["word"], "throughput")  # stored lowercased
-        self.assertEqual(row["translation"], "пропускна здатність")
-        self.assertEqual(row["remaining"], 10)
-        self.assertEqual(row["status"], "active")
-
-    def test_rows_persist_in_sqlite(self):
-        vocab.add("throughput", "пропускна здатність")
-        rows = self.rows_by_word()
-        self.assertEqual(rows["throughput"]["remaining"], 10)
-        self.assertEqual(rows["throughput"]["status"], "active")
-
-    def test_add_existing_active_refreshes_translation_keeps_remaining(self):
-        vocab.add("throughput", "old")
-        self._set("throughput", remaining=7)  # simulate prior exposure
-        action, row = vocab.add("throughput", "new translation")
-        self.assertEqual(action, "refresh")
-        self.assertEqual(row["translation"], "new translation")
-        self.assertEqual(row["remaining"], 7)  # unchanged
-        self.assertEqual(row["status"], "active")
-
-    def test_add_identity_translation_is_untranslated_and_not_saved(self):
-        action, _ = vocab.add("Awesome", "awesome")  # case/space-insensitive match
-        self.assertEqual(action, "untranslated")
-        self.assertNotIn("awesome", self.rows_by_word())
-
-    def test_add_empty_translation_is_untranslated_and_not_saved(self):
-        action, _ = vocab.add("throughput", "   ")
-        self.assertEqual(action, "untranslated")
-        self.assertNotIn("throughput", self.rows_by_word())
-
-    def test_add_stamps_created_and_updated(self):
-        with mock.patch("vocab._now", return_value="2026-06-12T08:00:00"):
-            vocab.add("throughput", "переклад")
-        r = self.rows_by_word()["throughput"]
-        self.assertEqual(r["created_at"], "2026-06-12T08:00:00")
-        self.assertEqual(r["updated_at"], "2026-06-12T08:00:00")
-        with mock.patch("vocab._now", return_value="2026-06-12T09:30:00"):
-            vocab.add("throughput", "новий переклад")  # refresh
-        r2 = self.rows_by_word()["throughput"]
-        self.assertEqual(r2["created_at"], "2026-06-12T08:00:00")  # pinned
-        self.assertEqual(r2["updated_at"], "2026-06-12T09:30:00")  # bumped
-
-    def test_add_existing_learned_resets_to_10_active(self):
-        vocab.add("throughput", "t")
-        self._set("throughput", remaining=0, status="learned")
-        action, row = vocab.add("throughput", "t2")
-        self.assertEqual(action, "relearn")
-        self.assertEqual(row["remaining"], 10)
-        self.assertEqual(row["status"], "active")
-        self.assertEqual(row["translation"], "t2")
-
-
-class RemoveTest(VocabTestBase):
-    def test_remove_existing_returns_true_and_deletes(self):
-        vocab.add("throughput", "t")
-        self.assertTrue(vocab.remove("Throughput"))  # case-insensitive
-        self.assertNotIn("throughput", self.rows_by_word())
-
-    def test_remove_unknown_returns_false_no_error(self):
-        self.assertFalse(vocab.remove("nonexistent"))
-
-
 class MainAddTest(VocabTestBase):
     def test_add_multiple_pairs_stores_all(self):
         code, out = run_main(
@@ -166,8 +100,8 @@ class MainAddTest(VocabTestBase):
 
 class MainRemoveTest(VocabTestBase):
     def test_remove_multiple_words(self):
-        vocab.add("alpha", "а")
-        vocab.add("beta", "б")
+        Vocab.add("alpha", "а")
+        Vocab.add("beta", "б")
         code, out = run_main(["remove", "alpha", "beta"])
         self.assertEqual(code, 0)
         self.assertEqual(self.rows_by_word(), {})
@@ -175,47 +109,11 @@ class MainRemoveTest(VocabTestBase):
         self.assertIn("beta: removed", out)
 
     def test_remove_reports_unknown_per_word(self):
-        vocab.add("alpha", "а")
+        Vocab.add("alpha", "а")
         code, out = run_main(["remove", "alpha", "ghost"])
         self.assertEqual(code, 0)
         self.assertIn("alpha: removed", out)
         self.assertIn("ghost: not found", out)
-
-
-class MatchTest(VocabTestBase):
-    def test_long_word_matches_stem_suffixes(self):
-        # word >= 4 chars: exact + s/es/ed/ing/d
-        for text in ["throughput", "Throughput", "throughputs", "throughputed"]:
-            self.assertTrue(vocab.word_in_text("throughput", text), text)
-
-    def test_short_word_exact_only(self):
-        # word < 4 chars: exact form only, no suffix expansion
-        self.assertTrue(vocab.word_in_text("log", "the log file"))
-        self.assertFalse(vocab.word_in_text("log", "logging output"))
-
-    def test_no_substring_false_match(self):
-        self.assertFalse(vocab.word_in_text("cat", "category theory"))
-
-    def test_punctuation_term_matches(self):
-        # Fix 2: terms ending in non-word chars (e.g. c++) must match
-        self.assertTrue(vocab.word_in_text("c++", "I write C++ every day"))
-        # Existing stem-suffix cases must still hold
-        for text in ["throughput", "Throughput", "throughputs", "throughputed"]:
-            self.assertTrue(vocab.word_in_text("throughput", text), text)
-        # Short word exact-only still holds
-        self.assertTrue(vocab.word_in_text("log", "the log file"))
-        self.assertFalse(vocab.word_in_text("log", "logging output"))
-        # No substring false match still holds
-        self.assertFalse(vocab.word_in_text("cat", "category theory"))
-
-
-class ListActiveTest(VocabTestBase):
-    def test_list_active_excludes_learned(self):
-        vocab.add("alpha", "а")
-        vocab.add("beta", "б")
-        self._set("beta", status="learned")
-        words = [r["word"] for r in vocab.list_active()]
-        self.assertEqual(words, ["alpha"])
 
 
 def make_transcript(text):
@@ -234,7 +132,7 @@ class ScanTest(VocabTestBase):
         return json.dumps({"transcript_path": transcript_path})
 
     def test_scan_decrements_matched_active_word(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         tpath = make_transcript("This improves throughput under load.")
         try:
             changed = vocab.scan(self._stdin(tpath))
@@ -244,7 +142,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 9)
 
     def test_scan_ignores_absent_word(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         tpath = make_transcript("Nothing relevant here.")
         try:
             changed = vocab.scan(self._stdin(tpath))
@@ -254,7 +152,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 
     def test_scan_graduates_at_zero(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         self._set("throughput", remaining=1)
         tpath = make_transcript("throughput throughput")  # still one decrement
         try:
@@ -266,7 +164,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(row["status"], "learned")
 
     def test_scan_skips_learned_words(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         self._set("throughput", status="learned", remaining=0)
         tpath = make_transcript("throughput throughput")
         try:
@@ -276,7 +174,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(changed, [])
 
     def test_scan_uses_last_assistant_message_only(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         # transcript with two assistant turns; only the LAST counts
         fd, tpath = tempfile.mkstemp(suffix=".jsonl")
         a = {
@@ -329,7 +227,7 @@ class InjectTest(VocabTestBase):
         self.assertEqual(vocab.inject(), "")
 
     def test_inject_emits_sessionstart_json_with_words(self):
-        vocab.add("throughput", "пропускна здатність")
+        Vocab.add("throughput", "пропускна здатність")
         out = vocab.inject()
         data = json.loads(out)
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
@@ -339,20 +237,20 @@ class InjectTest(VocabTestBase):
         self.assertIn("first", ctx.lower())  # instruction present
 
     def test_inject_excludes_learned_words(self):
-        vocab.add("alpha", "а")
-        vocab.add("beta", "б")
+        Vocab.add("alpha", "а")
+        Vocab.add("beta", "б")
         self._set("beta", status="learned")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("alpha", ctx)
         self.assertNotIn("beta", ctx)
 
     def test_inject_defaults_to_sessionstart(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         data = json.loads(vocab.inject())
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 
     def test_inject_accepts_custom_event_name(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         data = json.loads(vocab.inject("UserPromptSubmit"))
         self.assertEqual(
             data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit"
@@ -361,24 +259,24 @@ class InjectTest(VocabTestBase):
         self.assertIn("throughput", data["hookSpecificOutput"]["additionalContext"])
 
     def test_inject_includes_remaining_count(self):
-        vocab.add("throughput", "пропускна здатність")
+        Vocab.add("throughput", "пропускна здатність")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("remaining 10", ctx)
 
     def test_inject_instruction_has_summary_footer_rule(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("summary", ctx.lower())
         self.assertIn("Vocabulary", ctx)
 
     def test_inject_instruction_has_anti_bias_rule(self):
-        vocab.add("throughput", "п")
+        Vocab.add("throughput", "п")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("naturally", ctx.lower())
         self.assertIn("influence", ctx.lower())
 
     def test_inject_wraps_in_xml_block(self):
-        vocab.add("throughput", "пропускна здатність")
+        Vocab.add("throughput", "пропускна здатність")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("<vocab_glossing>", ctx)
         self.assertIn("</vocab_glossing>", ctx)
@@ -392,7 +290,7 @@ class InjectTest(VocabTestBase):
 
     def test_inject_uses_configured_first_language(self):
         core.save_config({"first_language": "Spanish"})
-        vocab.add("throughput", "rendimiento")
+        Vocab.add("throughput", "rendimiento")
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Spanish", ctx)
 
@@ -472,13 +370,13 @@ class GateTest(VocabTestBase):
     def test_inject_notices_without_config(self):
         # inject is the one user-visible hook, so an absent config is reported
         # here (capture/scan/add stay silently gated) rather than going dark.
-        vocab.add("hello", "привіт")
+        Vocab.add("hello", "привіт")
         self._unconfigure()
         ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("not fully configured", ctx)
 
     def test_scan_noop_without_config(self):
-        vocab.add("throughput", "пропускна здатність")
+        Vocab.add("throughput", "пропускна здатність")
         self._unconfigure()
         tpath = os.path.join(self.home, "t.jsonl")
         with open(tpath, "w", encoding="utf-8") as f:
