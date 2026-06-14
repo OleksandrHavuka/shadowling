@@ -1,5 +1,3 @@
-import contextlib
-import io
 import json
 import os
 import shutil
@@ -8,27 +6,8 @@ import unittest
 
 import appdb
 import core
-import vocab
+import gloss
 from models.vocab import Vocab
-
-
-def run_main(argv, stdin_text=""):
-    """Run vocab.main(argv) with stdin_text on stdin, returning (exit_code, stdout)."""
-    buf = io.StringIO()
-    old = vocab.sys.stdin
-    vocab.sys.stdin = io.StringIO(stdin_text)
-    try:
-        with contextlib.redirect_stdout(buf):
-            code = vocab.main(argv)
-    finally:
-        vocab.sys.stdin = old
-    return code, buf.getvalue()
-
-
-def items(*pairs):
-    """Build the <items> TSV envelope vocab add now reads from stdin."""
-    body = "\n".join(f"{w}\t{t}" for w, t in pairs)
-    return "<items>\n" + body + "\n</items>"
 
 
 class VocabTestBase(unittest.TestCase):
@@ -63,59 +42,6 @@ class VocabTestBase(unittest.TestCase):
             con.close()
 
 
-class MainAddTest(VocabTestBase):
-    def test_add_multiple_pairs_stores_all(self):
-        code, out = run_main(
-            ["add"],
-            items(("hello", "привіт"), ("machine learning", "машинне навчання")),
-        )
-        self.assertEqual(code, 0)
-        rows = self.rows_by_word()
-        self.assertEqual(rows["hello"]["translation"], "привіт")
-        self.assertEqual(rows["machine learning"]["translation"], "машинне навчання")
-        # one result line per word
-        self.assertEqual(out.count("\n"), 2)
-
-    def test_add_single_pair_still_works(self):
-        code, out = run_main(["add"], items(("throughput", "пропускна здатність")))
-        self.assertEqual(code, 0)
-        self.assertEqual(
-            self.rows_by_word()["throughput"]["translation"], "пропускна здатність"
-        )
-
-    def test_add_translation_with_comma_survives(self):
-        # tab is the only boundary, so a comma in the translation is free
-        code, _ = run_main(["add"], items(("however", "однак, проте")))
-        self.assertEqual(code, 0)
-        self.assertEqual(self.rows_by_word()["however"]["translation"], "однак, проте")
-
-    def test_add_malformed_row_is_error(self):
-        code, _ = run_main(["add"], "<items>\nhello\tпривіт\torphan\n</items>")
-        self.assertEqual(code, 1)
-
-    def test_add_empty_items_is_error(self):
-        code, _ = run_main(["add"], "<items>\n</items>")
-        self.assertEqual(code, 1)
-
-
-class MainRemoveTest(VocabTestBase):
-    def test_remove_multiple_words(self):
-        Vocab.add("alpha", "а")
-        Vocab.add("beta", "б")
-        code, out = run_main(["remove", "alpha", "beta"])
-        self.assertEqual(code, 0)
-        self.assertEqual(self.rows_by_word(), {})
-        self.assertIn("alpha: removed", out)
-        self.assertIn("beta: removed", out)
-
-    def test_remove_reports_unknown_per_word(self):
-        Vocab.add("alpha", "а")
-        code, out = run_main(["remove", "alpha", "ghost"])
-        self.assertEqual(code, 0)
-        self.assertIn("alpha: removed", out)
-        self.assertIn("ghost: not found", out)
-
-
 def make_transcript(text):
     fd, path = tempfile.mkstemp(suffix=".jsonl")
     obj = {
@@ -135,7 +61,7 @@ class ScanTest(VocabTestBase):
         Vocab.add("throughput", "п")
         tpath = make_transcript("This improves throughput under load.")
         try:
-            changed = vocab.scan(self._stdin(tpath))
+            changed = gloss.scan(self._stdin(tpath))
         finally:
             os.remove(tpath)
         self.assertEqual(changed, ["throughput"])
@@ -145,7 +71,7 @@ class ScanTest(VocabTestBase):
         Vocab.add("throughput", "п")
         tpath = make_transcript("Nothing relevant here.")
         try:
-            changed = vocab.scan(self._stdin(tpath))
+            changed = gloss.scan(self._stdin(tpath))
         finally:
             os.remove(tpath)
         self.assertEqual(changed, [])
@@ -156,7 +82,7 @@ class ScanTest(VocabTestBase):
         self._set("throughput", remaining=1)
         tpath = make_transcript("throughput throughput")  # still one decrement
         try:
-            vocab.scan(self._stdin(tpath))
+            gloss.scan(self._stdin(tpath))
         finally:
             os.remove(tpath)
         row = self.rows_by_word()["throughput"]
@@ -168,7 +94,7 @@ class ScanTest(VocabTestBase):
         self._set("throughput", status="learned", remaining=0)
         tpath = make_transcript("throughput throughput")
         try:
-            changed = vocab.scan(self._stdin(tpath))
+            changed = gloss.scan(self._stdin(tpath))
         finally:
             os.remove(tpath)
         self.assertEqual(changed, [])
@@ -195,40 +121,40 @@ class ScanTest(VocabTestBase):
             f.write(json.dumps(a) + "\n")
             f.write(json.dumps(b) + "\n")
         try:
-            changed = vocab.scan(self._stdin(tpath))
+            changed = gloss.scan(self._stdin(tpath))
         finally:
             os.remove(tpath)
         self.assertEqual(changed, [])  # last message has no match
 
     def test_scan_bad_stdin_never_raises(self):
-        self.assertEqual(vocab.scan("not json"), [])
-        self.assertEqual(vocab.scan(""), [])
+        self.assertEqual(gloss.scan("not json"), [])
+        self.assertEqual(gloss.scan(""), [])
 
     def test_scan_missing_transcript_path_returns_empty(self):
         self.assertEqual(
-            vocab.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), []
+            gloss.scan(json.dumps({"transcript_path": "/no/such.jsonl"})), []
         )
 
     def test_scan_main_bad_stdin_returns_zero(self):
         # Hook path must never crash even on completely invalid stdin
         import io
 
-        old_stdin = vocab.sys.stdin
-        vocab.sys.stdin = io.StringIO("not json at all")
+        old_stdin = gloss.sys.stdin
+        gloss.sys.stdin = io.StringIO("not json at all")
         try:
-            ret = vocab.main(["scan"])
+            ret = gloss.main(["scan"])
         finally:
-            vocab.sys.stdin = old_stdin
+            gloss.sys.stdin = old_stdin
         self.assertEqual(ret, 0)
 
 
 class InjectTest(VocabTestBase):
     def test_inject_empty_when_no_active_words(self):
-        self.assertEqual(vocab.inject(), "")
+        self.assertEqual(gloss.inject(), "")
 
     def test_inject_emits_sessionstart_json_with_words(self):
         Vocab.add("throughput", "пропускна здатність")
-        out = vocab.inject()
+        out = gloss.inject()
         data = json.loads(out)
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
         ctx = data["hookSpecificOutput"]["additionalContext"]
@@ -240,18 +166,18 @@ class InjectTest(VocabTestBase):
         Vocab.add("alpha", "а")
         Vocab.add("beta", "б")
         self._set("beta", status="learned")
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("alpha", ctx)
         self.assertNotIn("beta", ctx)
 
     def test_inject_defaults_to_sessionstart(self):
         Vocab.add("throughput", "п")
-        data = json.loads(vocab.inject())
+        data = json.loads(gloss.inject())
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 
     def test_inject_accepts_custom_event_name(self):
         Vocab.add("throughput", "п")
-        data = json.loads(vocab.inject("UserPromptSubmit"))
+        data = json.loads(gloss.inject("UserPromptSubmit"))
         self.assertEqual(
             data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit"
         )
@@ -260,24 +186,24 @@ class InjectTest(VocabTestBase):
 
     def test_inject_includes_remaining_count(self):
         Vocab.add("throughput", "пропускна здатність")
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("remaining 10", ctx)
 
     def test_inject_instruction_has_summary_footer_rule(self):
         Vocab.add("throughput", "п")
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("summary", ctx.lower())
         self.assertIn("Vocabulary", ctx)
 
     def test_inject_instruction_has_anti_bias_rule(self):
         Vocab.add("throughput", "п")
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("naturally", ctx.lower())
         self.assertIn("influence", ctx.lower())
 
     def test_inject_wraps_in_xml_block(self):
         Vocab.add("throughput", "пропускна здатність")
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("<vocab_glossing>", ctx)
         self.assertIn("</vocab_glossing>", ctx)
         self.assertIn("<rules>", ctx)
@@ -291,7 +217,7 @@ class InjectTest(VocabTestBase):
     def test_inject_uses_configured_first_language(self):
         core.save_config({"first_language": "Spanish"})
         Vocab.add("throughput", "rendimiento")
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Spanish", ctx)
 
 
@@ -307,7 +233,7 @@ class InjectMisconfigTest(VocabTestBase):
         self._partial_config(
             {"first_language": "Ukrainian", "explanation_language": "English"}
         )
-        data = json.loads(vocab.inject("UserPromptSubmit"))
+        data = json.loads(gloss.inject("UserPromptSubmit"))
         self.assertEqual(
             data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit"
         )
@@ -317,13 +243,13 @@ class InjectMisconfigTest(VocabTestBase):
 
     def test_inject_notice_names_every_missing_key(self):
         self._partial_config({"first_language": "Ukrainian"})
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("learning_language", ctx)
         self.assertIn("explanation_language", ctx)
 
     def test_inject_notice_when_config_completely_empty(self):
         self._partial_config({})
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("not fully configured", ctx)
 
 
@@ -353,26 +279,12 @@ class GateTest(VocabTestBase):
     def _unconfigure(self):
         os.remove(os.path.join(self.home, "config.json"))
 
-    def test_add_refuses_without_config(self):
-        self._unconfigure()
-        code, _ = run_main(["add", "hello", "привіт"])
-        self.assertEqual(code, 1)
-        self.assertEqual(self.rows_by_word(), {})
-
-    def test_add_emits_notice_without_config(self):
-        self._unconfigure()
-        err = io.StringIO()
-        with contextlib.redirect_stderr(err):
-            code = vocab.main(["add", "hello", "привіт"])
-        self.assertEqual(code, 1)
-        self.assertIn("not fully configured", err.getvalue())
-
     def test_inject_notices_without_config(self):
         # inject is the one user-visible hook, so an absent config is reported
-        # here (capture/scan/add stay silently gated) rather than going dark.
+        # here (capture/scan stay silently gated) rather than going dark.
         Vocab.add("hello", "привіт")
         self._unconfigure()
-        ctx = json.loads(vocab.inject())["hookSpecificOutput"]["additionalContext"]
+        ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("not fully configured", ctx)
 
     def test_scan_noop_without_config(self):
@@ -393,7 +305,7 @@ class GateTest(VocabTestBase):
                 )
                 + "\n"
             )
-        self.assertEqual(vocab.scan(json.dumps({"transcript_path": tpath})), [])
+        self.assertEqual(gloss.scan(json.dumps({"transcript_path": tpath})), [])
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 
 

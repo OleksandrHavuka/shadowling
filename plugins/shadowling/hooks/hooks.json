@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/vocab.py\" inject UserPromptSubmit"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/gloss.py\" inject UserPromptSubmit"
           }
         ]
       }
@@ -15,7 +15,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/vocab.py\" scan"
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/gloss.py\" scan"
           },
           {
             "type": "command",

@@ -1,14 +1,18 @@
 #!/usr/bin/env python3
-"""vocab.py - SHIM (uniform-DB refactor). Data lives in models/vocab.py; this
-keeps the glossing hooks (inject/scan) and the add/remove/list-active CLI
-working until loot.py/drop.py/gloss.py take over. Deleted/renamed in phase 3."""
+"""gloss.py - shadowling vocabulary-glossing hooks (stdlib only, py3.9+).
+
+Two hook entries over models/vocab.py:
+  * inject (UserPromptSubmit): emit the active-word glossing instruction block,
+    or the misconfig notice when config is incomplete (the one user-visible hook).
+  * scan (Stop): decrement every active word that appeared in the assistant's last
+    message; graduate at 0. Never crashes the session.
+Renamed from vocab.py; its data logic now lives in models/vocab.py."""
 
 import json
 import sys
 
 from core import config_ready, last_assistant_text, load_config
 from models.vocab import Vocab
-from tagio import read_fields, rows
 
 
 def scan(stdin_text):
@@ -51,17 +55,20 @@ def gloss_rules(first_language):
 def inject(event="SessionStart"):
     cfg = load_config()
     if cfg["missing"]:
+        # Config gate closed → capture + glossing silently no-op. inject
+        # (UserPromptSubmit) is the only user-visible hook, so it surfaces the
+        # misconfig notice instead of going dark like Stop.
         context = cfg["notice"]
     else:
-        rows_ = Vocab.list_active()
-        if not rows_:
+        rows = Vocab.list_active()
+        if not rows:
             return ""
         rules = gloss_rules(cfg["first_language"])
         word_lines = "\n".join(
             "- {} = {} (remaining {})".format(
                 r["word"], r["translation"], r["remaining"]
             )
-            for r in rows_
+            for r in rows
         )
         context = (
             "<vocab_glossing>\n"
@@ -80,59 +87,9 @@ def inject(event="SessionStart"):
 
 def main(argv):
     if not argv:
-        print(
-            "usage: vocab.py {add|remove|list-active|inject|scan} ...",
-            file=sys.stderr,
-        )
+        print("usage: gloss.py {inject|scan} ...", file=sys.stderr)
         return 1
     cmd = argv[0]
-    if cmd == "add":
-        cfg = load_config()
-        if cfg["missing"]:
-            print(cfg["notice"], file=sys.stderr)
-            return 1
-        try:
-            items = read_fields({"items": rows("word", "translation")})["items"]
-        except ValueError as e:
-            print("error: " + str(e), file=sys.stderr)
-            return 1
-        if not items:
-            print(
-                "usage: vocab.py add (word<TAB>translation lines in an "
-                "<items>...</items> tag on stdin)",
-                file=sys.stderr,
-            )
-            return 1
-        for item in items:
-            action, row = Vocab.add(item["word"], item["translation"])
-            print(
-                "{}: {} = {} (remaining {}, {})".format(
-                    action,
-                    row["word"],
-                    row["translation"],
-                    row["remaining"],
-                    row["status"],
-                )
-            )
-        return 0
-    if cmd == "remove":
-        words = argv[1:]
-        if not words:
-            print('usage: vocab.py remove "<word>" ["<word>" ...]', file=sys.stderr)
-            return 1
-        for word in words:
-            print(
-                "{}: {}".format(word, "removed" if Vocab.remove(word) else "not found")
-            )
-        return 0
-    if cmd == "list-active":
-        for r in Vocab.list_active():
-            print(
-                "{} = {} (remaining {})".format(
-                    r["word"], r["translation"], r["remaining"]
-                )
-            )
-        return 0
     if cmd == "inject":
         event = argv[1] if len(argv) > 1 else "SessionStart"
         out = inject(event)

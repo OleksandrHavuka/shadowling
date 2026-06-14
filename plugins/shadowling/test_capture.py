@@ -2,10 +2,10 @@ import io
 import json
 import os
 import shutil
-import sqlite3
 import tempfile
 import unittest
 
+import appdb
 import capture
 import core
 
@@ -58,7 +58,7 @@ class CaptureTestBase(unittest.TestCase):
             os.remove(tpath)
 
     def _rows(self):
-        return capture.query(
+        return appdb.query(
             "SELECT id, created_at, text, langs, processed_at FROM messages ORDER BY id"
         )
 
@@ -143,14 +143,6 @@ class CaptureTest(CaptureTestBase):
         )
 
 
-class QueryTest(CaptureTestBase):
-    def test_query_is_read_only(self):
-        self._capture_text("First normal english sentence here please")
-        with self.assertRaises(sqlite3.Error):
-            capture.query("DELETE FROM messages")
-        self.assertEqual(len(self._rows()), 1)
-
-
 class MainTest(CaptureTestBase):
     def test_capture_via_main_never_crashes_on_bad_stdin(self):
         old = capture.sys.stdin
@@ -160,14 +152,6 @@ class MainTest(CaptureTestBase):
         finally:
             capture.sys.stdin = old
         self.assertEqual(ret, 0)
-
-    def test_tag_via_main_reports_errors_with_exit_1(self):
-        self._capture_text("First normal english sentence here please")
-        self.assertEqual(capture.main(["tag", "1=en"]), 0)
-        self.assertEqual(capture.main(["tag", "999=en"]), 1)
-
-    def test_unknown_command_returns_one(self):
-        self.assertEqual(capture.main(["bogus"]), 1)
 
 
 if __name__ == "__main__":
