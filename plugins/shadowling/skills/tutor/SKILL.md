@@ -8,12 +8,12 @@ allowed-tools: Bash(python3 */tutor.py*) Bash(python3 */config.py*)
 You run an interactive tutoring session IN THIS conversation (you deal a card,
 the user answers, you judge, repeat). This skill's entrypoint is
 `${CLAUDE_SKILL_DIR}/tutor.py` (in this skill dir); the shared `config.py` is at
-`${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each directly so the command starts
+`${CLAUDE_PLUGIN_ROOT}/config.py`. Invoke each directly so the command starts
 with `python3`.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`. Write all feedback in
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`. Write all feedback in
    `explanation_language`.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/tutor.py" deck` (add `--size <N>` if
    the user passed a number). If it prints nothing: say there is nothing due

@@ -13,10 +13,10 @@ into `backups/` before each delete — so a mistaken run is always recoverable.
 Run EXACTLY these six commands and print their combined output, then STOP:
 
 ```
-python3 "${CLAUDE_SKILL_DIR}/../../sql.py" --write "DELETE FROM grammar"
-python3 "${CLAUDE_SKILL_DIR}/../../sql.py" --write "DELETE FROM rephrasing"
-python3 "${CLAUDE_SKILL_DIR}/../../sql.py" --write "DELETE FROM idioms"
-python3 "${CLAUDE_SKILL_DIR}/../../sql.py" --write "DELETE FROM verbs"
-python3 "${CLAUDE_SKILL_DIR}/../../sql.py" --write "DELETE FROM decode"
-python3 "${CLAUDE_SKILL_DIR}/../../sql.py" --write "DELETE FROM friction"
+python3 "${CLAUDE_PLUGIN_ROOT}/sql.py" --write "DELETE FROM grammar"
+python3 "${CLAUDE_PLUGIN_ROOT}/sql.py" --write "DELETE FROM rephrasing"
+python3 "${CLAUDE_PLUGIN_ROOT}/sql.py" --write "DELETE FROM idioms"
+python3 "${CLAUDE_PLUGIN_ROOT}/sql.py" --write "DELETE FROM verbs"
+python3 "${CLAUDE_PLUGIN_ROOT}/sql.py" --write "DELETE FROM decode"
+python3 "${CLAUDE_PLUGIN_ROOT}/sql.py" --write "DELETE FROM friction"
 ```

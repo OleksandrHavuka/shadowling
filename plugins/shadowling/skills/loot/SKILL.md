@@ -11,15 +11,15 @@ You translate the given terms and add them to the vocab store. Add everything yo
 are given — do NOT ask, do NOT block on typos.
 
 This skill's entrypoint is `${CLAUDE_SKILL_DIR}/loot.py` (in this skill dir); the
-shared `config.py` is at `${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each
+shared `config.py` is at `${CLAUDE_PLUGIN_ROOT}/config.py`. Invoke each
 directly so the command starts with `python3` (e.g.
-`python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`).
+`python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`).
 
 Terms (comma-separated): `$ARGUMENTS`
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`. You translate the
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`. You translate the
    terms into `first_language`.
 2. Split `$ARGUMENTS` on commas, trim each, drop empties. Keep multi-word phrases
    whole (`machine learning` is one term).

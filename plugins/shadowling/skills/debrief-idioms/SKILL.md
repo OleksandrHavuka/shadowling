@@ -10,7 +10,7 @@ allowed-tools: Bash(python3 */idioms.py*) Bash(python3 */config.py*)
 You are the IDIOMS specialist. You run as an isolated subagent — only your final
 one-line status returns. This skill's entrypoint is
 `${CLAUDE_SKILL_DIR}/idioms.py` (in this skill dir); the shared `config.py` is at
-`${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each as a single Bash call that
+`${CLAUDE_PLUGIN_ROOT}/config.py`. Invoke each as a single Bash call that
 begins with `python3` and the full path — the only shape the granted
 `Bash(python3 …)` permission matches (so nothing before it and no chaining).
 
@@ -20,7 +20,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
    The `meaning` is written in the explanation language.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/idioms.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language

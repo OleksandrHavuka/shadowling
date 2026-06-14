@@ -10,7 +10,7 @@ allowed-tools: Bash(python3 */rephrasing.py*) Bash(python3 */config.py*)
 You are the REPHRASING specialist (naturalness, not grammar correctness). You run
 as an isolated subagent — only your final one-line status returns. This skill's
 entrypoint is `${CLAUDE_SKILL_DIR}/rephrasing.py` (in this skill dir); the shared
-`config.py` is at `${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each as a single
+`config.py` is at `${CLAUDE_PLUGIN_ROOT}/config.py`. Invoke each as a single
 Bash call that begins with `python3` and the full path — the only shape the
 granted `Bash(python3 …)` permission matches (so nothing before it and no
 chaining).
@@ -21,7 +21,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
    Write `problem` and `why` in the explanation language only — no other-language glosses.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/rephrasing.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language

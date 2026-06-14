@@ -9,9 +9,9 @@ can't read literally (something with a non-literal / idiomatic meaning). You run
 in the MAIN agent, so you already see this
 conversation — use it for context. This skill's entrypoint is
 `${CLAUDE_SKILL_DIR}/decode.py` (in this skill dir); the shared `config.py` is at
-`${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each directly so the command starts
+`${CLAUDE_PLUGIN_ROOT}/config.py`. Invoke each directly so the command starts
 with `python3` (e.g. `python3 "${CLAUDE_SKILL_DIR}/decode.py" record …`,
-`python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`).
+`python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`).
 
 Input: the user passes, in free text, one or more expressions in the language they
 are learning that they couldn't read, optionally with their own hunch at the
@@ -21,7 +21,7 @@ out each phrase and the user's hunch yourself.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`. The expression is in
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`. The expression is in
    `learning_language`; write `meaning` and `takeaway` in `explanation_language`.
 2. For EACH expression the user brought:
    a. If it is literal / there is nothing to explain → say so to the user and DO NOT
