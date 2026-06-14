@@ -278,5 +278,65 @@ class DropTest(EntrypointBase):
         self.assertIn("ghost: not found", out)
 
 
+TUTOR = load("tutor/tutor.py", "ep_tutor")
+
+
+class TutorEntrypointTest(EntrypointBase):
+    def setUp(self):
+        super().setUp()
+        os.environ["CLAUDE_CODE_SESSION_ID"] = "sess-E"
+
+    def tearDown(self):
+        os.environ.pop("CLAUDE_CODE_SESSION_ID", None)
+        super().tearDown()
+
+    def _seed_grammar(self):
+        import appdb
+
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO grammar(created_at, slug, problem, original,"
+                    " fixed, rule) VALUES ('2026-06-12','art','p','a','b','r')"
+                )
+        finally:
+            con.close()
+
+    def test_record_reads_answer_tag_and_records(self):
+        self._seed_grammar()
+        code, out, _ = run_main(
+            TUTOR,
+            ["record", "grammar", "art", "fix", "pass"],
+            "<answer>\nI fixed it\n</answer>",
+        )
+        self.assertEqual(code, 0)
+        self.assertIn("box 2", out)
+        import appdb
+
+        self.assertEqual(
+            appdb.query("SELECT answer FROM attempts")[0]["answer"], "I fixed it"
+        )
+
+    def test_record_missing_answer_tag_is_error(self):
+        self._seed_grammar()
+        code, _, err = run_main(
+            TUTOR, ["record", "grammar", "art", "fix", "pass"], "bare answer"
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("<answer>", err)
+
+    def test_deck_empty_prints_nothing(self):
+        code, out, _ = run_main(TUTOR, ["deck"])
+        self.assertEqual((code, out.strip()), (0, ""))
+
+    def test_stats_json(self):
+        code, out, _ = run_main(TUTOR, ["stats"])
+        self.assertEqual(code, 0)
+        import json
+
+        self.assertEqual(json.loads(out)["tracked"], 0)
+
+
 if __name__ == "__main__":
     unittest.main()

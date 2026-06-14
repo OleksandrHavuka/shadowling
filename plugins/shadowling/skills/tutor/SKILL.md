@@ -6,15 +6,16 @@ allowed-tools: Bash(python3 */tutor.py*) Bash(python3 */config.py*)
 ---
 
 You run an interactive tutoring session IN THIS conversation (you deal a card,
-the user answers, you judge, repeat). The plugin's scripts live at
-`${CLAUDE_SKILL_DIR}/../..`; invoke them directly so each command starts with
-`python3`.
+the user answers, you judge, repeat). This skill's entrypoint is
+`${CLAUDE_SKILL_DIR}/tutor.py` (in this skill dir); the shared `config.py` is at
+`${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each directly so the command starts
+with `python3`.
 
 Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`. Write all feedback in
    `explanation_language`.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" deck` (add `--size <N>` if
+2. Run `python3 "${CLAUDE_SKILL_DIR}/tutor.py" deck` (add `--size <N>` if
    the user passed a number). If it prints nothing: say there is nothing due
    and nothing new — come back after a /debrief — and STOP.
 3. For EACH card, one at a time: print the exercise (number it `[i/N]`), WAIT
@@ -24,7 +25,7 @@ Steps:
    and the closing `SL_IN` MUST start at column 0:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" record <item_kind> <item_key> <exercise> <verdict> <<'SL_IN'
+python3 "${CLAUDE_SKILL_DIR}/tutor.py" record <item_kind> <item_key> <exercise> <verdict> <<'SL_IN'
 <answer>
 their reply, verbatim
 </answer>
@@ -49,5 +50,5 @@ SL_IN
    stop immediately (skip the remaining cards, no records for unseen cards).
 4. After the last card: print a summary — pass/partial/fail counts, items that
    fell back to box 1, then run
-   `python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" stats` and report due_today /
+   `python3 "${CLAUDE_SKILL_DIR}/tutor.py" stats` and report due_today /
    due_tomorrow. Nothing else.
