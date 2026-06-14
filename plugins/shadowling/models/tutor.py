@@ -1,7 +1,7 @@
 """models/tutor.py - spaced-repetition repository over the incident datasets.
 
-attempts is the append-only event log (and the registry messages.mark_drills
-joins against — answers stored VERBATIM, session from CLAUDE_CODE_SESSION_ID);
+attempts is the append-only event log of drill answers — stored VERBATIM, with
+the session id from CLAUDE_CODE_SESSION_ID so a later drill-match can find them;
 mastery is the mutable Leitner scheduling state. `deck` is cross-domain — it
 reads the incident *_ranked views and learned vocab — so it imports those
 repositories for their table/key/view names. All tutor SQL lives here.

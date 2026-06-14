@@ -1,10 +1,10 @@
 """models/messages.py - the captured-message store (mixed mutable state) over appdb.
 
-Rows are never deleted: a successful /debrief stamps the analyzed batch
+Rows are never deleted: a successful analysis pass stamps the batch
 `processed_at`, so the table doubles as the permanent, language-tagged message
-log. The Stop hook (capture.py) writes via `capture`; triage tags via `tag`;
-the analytic specialists read slices via `list`; the debrief orchestrator drives
-`sessions`/`mark_processed`/`mark_drills`. All message SQL lives here.
+log. `langs` (a JSON array of codes) carries the language triage; `kind`
+('drill') fences tutor answers out of the analysis slices. Every method is a
+verb over this one table — all message SQL lives here.
 """
 
 import json
@@ -47,8 +47,9 @@ class Messages:
     @staticmethod
     def capture(text, session_id=None):
         """Store the last user message (any language) if it qualifies; dedups
-        against the most recent row. Returns True iff stored. Admission rules
-        live here so the Stop hook stays thin (it only reads transcript + gate)."""
+        against the most recent row. Returns True iff stored. The admission rules
+        (empty / slash / command-wrapper / min-letters / dedup) live here, in one
+        place, rather than in the caller."""
         text = (text or "").strip()
         if not text or text.startswith("/"):
             return False
@@ -90,7 +91,7 @@ class Messages:
     @staticmethod
     def list(lang=None, untagged=False, limit=None, session=None):
         """Unprocessed rows as a <messages> XML block; optionally sliced. The
-        representation lives here so the 6 specialists share one format."""
+        representation lives here so every reader shares one format."""
         sql = (
             "SELECT id, created_at, text, langs FROM messages "
             "WHERE processed_at IS NULL AND kind IS NULL"

@@ -1,10 +1,9 @@
 """models/vocab.py - vocabulary glossing store (mutable state) over appdb.
 
 The vocab table is the one sanctioned mutable incident store: each word carries a
-`remaining` exposure budget the glossing scan decrements until the word graduates
-(status 'learned'). All vocab SQL lives here; the loot/drop entrypoints and the
-gloss hook call these methods only. `word_in_text`/`build_pattern` are pure
-matching helpers (no DB), kept module-level like models/base.norm_key.
+`remaining` exposure budget that `scan_decrement` lowers until the word graduates
+(status 'learned'). All vocab SQL lives here. `word_in_text`/`build_pattern` are
+pure matching helpers (no DB), kept module-level like models/base.norm_key.
 """
 
 import re
@@ -112,7 +111,8 @@ class Vocab:
 
     @staticmethod
     def relearn(word):
-        """Reset a word back into the glossing loop (tutor vocab-fail path)."""
+        """Reset a graduated word back into the active glossing loop
+        (remaining -> START_REMAINING, status 'active')."""
         con = connect()
         try:
             with con:
@@ -126,8 +126,8 @@ class Vocab:
     @staticmethod
     def scan_decrement(text):
         """Decrement every active word that appears in `text`; graduate at 0.
-        Returns the list of changed words. `text` is the assistant message the
-        gloss hook scanned (the spec's `words` arg)."""
+        Returns the list of changed words. `text` is the assistant reply being
+        scanned for exposures."""
         changed = []
         now = _now()
         con = connect()
