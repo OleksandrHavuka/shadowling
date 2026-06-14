@@ -12,7 +12,7 @@ plugins/shadowling/
   capture.py         # Stop-hook message capture over models/messages
   appdb.py           # single sqlite home: connect(), MIGRATIONS (user_version), ranked views, ro query
   sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup, paths
-  traceability.py    # enforce the schema <-> models <-> skill record heredoc <-> tutor.PROMPT_SQL contract
+  check.sh           # one-command dev gate: ruff + tach + mypy + tests (see Guardrails)
   models/            # the repository layer — owns ALL SQL:
                      #   base.py + 6 incident repos (grammar, rephrasing, idioms, verbs, decode, friction)
                      #   vocab.py (Vocab), messages.py (Messages), tutor.py (Tutor)
@@ -27,7 +27,7 @@ plugins/shadowling/
                      #   vipe/                                      — dev: wipe incident tables via sql.py --write
   hooks/hooks.json   # UserPromptSubmit (gloss inject) + Stop (gloss scan, capture)
   tests/             # the unittest suite (test_appdb … test_entrypoints, test_gloss,
-                     #   test_models*, test_sql, test_traceability) — `python3 -m unittest` discovers it
+                     #   test_models*, test_sql, test_properties) — `python3 -m unittest` discovers it
 ```
 
 ## Apply local changes
@@ -66,43 +66,58 @@ claude plugin marketplace update shadowling-lab && claude plugin update shadowli
 
 ```
 cd plugins/shadowling
-python3 -m unittest discover -p 'test_*.py' -v    # full suite, stdlib only
+python3 -m unittest discover -p 'test_*.py' -v                     # full suite, stdlib only
+uvx --with hypothesis python3 -m unittest discover -p 'test_*.py'  # + property tests (else skipped)
 ```
 
-## Data-structure traceability
+## Code-quality & architecture guardrails
 
-`traceability.py` enforces the field-name contract end-to-end — schema →
-`models/*.insert_cols` → skill `record <<'SL_IN'` tags → `tutor.PROMPT_SQL` —
-so a rename that drifts any layer fails loudly instead of silently. One `check()`,
-three surfaces:
+Dev-only gates that give the agent (and you) machine-readable feedback when an edit
+drifts off-canon. All run via `uvx` — ephemeral, nothing ships with the plugin. If a
+tool is reachable by neither its binary nor `uvx`, the gate FAILS with an install hint
+(never a silent skip, so a missing dependency can't masquerade as a pass). One command
+runs the lot (the definition-of-done; exits non-zero on any failure or missing tool):
 
 ```
-python3 plugins/shadowling/traceability.py    # dev CLI: exit 1 + the offending mismatch on drift, else "OK"
+./check.sh        # ruff + tach + mypy + the test suite (+ property tests when uvx is present)
 ```
 
-- **test** — `test_traceability.py`, part of the suite above (and the pre-push hook);
-- **hook** — `.claude/settings.json` re-runs it (PostToolUse) after any edit to
-  `appdb.py`, `models/`, or `skills/`, surfacing a break in-session (exit 2);
-- view aliases (`learner_wrote AS "you wrote"`) are a display layer and are not asserted.
+Or run a single gate from `plugins/shadowling`:
+
+```
+uvx ruff format --check . && uvx ruff check .   # style + lint (E/F)
+uvx tach check                                  # import architecture: the clean dependency tree
+uvx mypy --check-untyped-defs ./*.py models/    # type contract on the library modules
+```
+
+- **tach** — enforces `tach.toml`: the declared dependency tree (high → low, siblings
+  independent), so no branch pulls a sibling and the leaves (`core`, `tagio`) pull
+  nothing. A forbidden import fails with `file:line` + the offending symbol. The flat,
+  bare-import layout rules out import-linter (grimp needs packages); Tach maps by path.
+- **mypy** — `--check-untyped-defs` type-checks every function body without forcing full
+  annotations; the contract surfaces (`models/base.py`, `core.py`) carry real types.
+- **hypothesis** — property tests for the pure cores (tagio round-trip, Leitner math,
+  vocab matching, slug/key normalizers). The import is guarded so a bare `unittest` run
+  skips them, but `check.sh` provides hypothesis via `uvx` (and fails if it can't), so the
+  gate always runs them. See the Tests section.
 
 ## Git hooks
 
-Shared hooks in `.githooks/` gate every commit and push (dev-only — ruff never ships
-with the plugin). Activate once per clone:
+Shared hooks in `.githooks/` close the feedback loop — both call `check.sh`, so the gate
+definitions live in one place. Activate once per clone:
 
 ```
 git config core.hooksPath .githooks
 ```
 
-- **pre-commit** — `ruff format` + `ruff check` on the staged `*.py` (re-stages the
-  formatting), then the traceability check (always, since skill `.md` edits can break
-  the contract too). Blocks the commit on any lint or traceability failure.
-- **pre-push** — the full `python3 -m unittest` suite + traceability, run before
-  sharing. Tests live here (not pre-commit) so the commit loop stays fast and they run
-  against the pushed history rather than the staged-vs-worktree mix.
+- **pre-commit** — runs `check.sh` (ruff + tach + mypy + the test suite). Blocks the
+  commit on any gate failure. The whole run is ~instant, so there's no fast/full split.
+- **pre-push** — runs `check.sh` again before sharing: a safety net in case a commit used
+  `--no-verify` or was amended.
 
-ruff is resolved as `ruff` on PATH, else `uvx ruff`; a missing dev tool skips the
-format/lint step rather than blocking the commit.
+`check.sh` resolves each tool to its binary, else `uvx`; if neither is available the gate
+FAILS with an install hint rather than skipping. It checks the working tree, not the
+staged snapshot — fine for whole-file commits; review if you `git add -p`.
 
 ## Manual CLI smoke
 

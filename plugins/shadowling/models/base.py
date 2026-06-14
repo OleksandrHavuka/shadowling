@@ -7,21 +7,25 @@ INSERTs (date-stamped); reads go to the view, whose computed columns
 markdown product headers exactly. No updates, no deletes of incident text.
 """
 
+from __future__ import annotations
+
+from typing import ClassVar
+
 from appdb import connect
 from core import today
 
 
-def norm_key(s):
+def norm_key(s: str) -> str:
     """Natural-key normalization (idiom/verb): casefold + whitespace collapse —
     preserves the old md layer's dedup semantics under exact SQL GROUP BY."""
     return " ".join(s.split()).lower()
 
 
 class Model:
-    table = None  # incident table name
-    view = None  # ranking view name
-    key = None  # grouping/key column (same name in table and view)
-    insert_cols = []  # ordered columns set by insert() (besides date)
+    table: ClassVar[str]  # incident table name
+    view: ClassVar[str]  # ranking view name
+    key: ClassVar[str]  # grouping/key column (same name in table and view)
+    insert_cols: ClassVar[list[str]]  # ordered columns set by insert() (besides date)
 
     @classmethod
     def insert(cls, values):

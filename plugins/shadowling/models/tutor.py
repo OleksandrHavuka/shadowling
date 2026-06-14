@@ -167,7 +167,8 @@ class Tutor:
                 " WHERE due_date <= ? ORDER BY due_date",
                 (t,),
             ).fetchall()
-            boosted, plain = [], []
+            boosted: list[tuple[str, str]] = []
+            plain: list[tuple[str, str]] = []
             for r in due:  # hot-zone boost: re-caught since the last drill
                 cur = _counter(con, r["item_kind"], r["item_key"])
                 hot = (
@@ -177,7 +178,8 @@ class Tutor:
                 )
                 (boosted if hot else plain).append((r["item_kind"], r["item_key"]))
             picked = boosted + plain
-            new = []  # new items: in the ranked views / learned vocab, never attempted
+            # new items: in the ranked views / learned vocab, never attempted
+            new: list[tuple[str, str]] = []
             for kind, (_table, keycol, view) in KINDS.items():
                 if view is not None:
                     rows = con.execute(
@@ -193,7 +195,8 @@ class Tutor:
                         " WHERE item_kind = 'vocab')"
                     ).fetchall()
                 new.extend((kind, r["k"]) for r in rows)
-            cards, per_kind = [], {}
+            cards: list[dict] = []
+            per_kind: dict[str, int] = {}
             pool = picked + new
             kinds_available = {k for k, _ in pool}
             cap = max(size // 2, 1)  # no kind hogs more than half the deck

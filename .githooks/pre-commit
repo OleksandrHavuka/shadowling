@@ -1,41 +1,8 @@
 #!/bin/sh
-# pre-commit — keep commits ruff-formatted, lint-clean, and traceability-sound.
-#
-# Dev-only: ruff never ships with the plugin (the runtime stays stdlib-only,
-# zero pip deps); this only gates commits. Activate once per clone:
+# pre-commit — run every dev gate before the commit: ruff + tach + mypy + the test
+# suite, via check.sh (one source of truth for the gates). The whole run is ~instant,
+# so there's no fast/full split. A missing dev tool FAILS the gate with an install
+# hint (check.sh never silently skips). Activate once per clone:
 #   git config core.hooksPath .githooks
-#
-# Git runs this from the repo root.
-
-# --- ruff format + lint on the staged Python files ---------------------------
-files=$(git diff --cached --name-only --diff-filter=ACM -- '*.py')
-if [ -n "$files" ]; then
-    if command -v ruff >/dev/null 2>&1; then
-        RUFF="ruff"
-    elif command -v uvx >/dev/null 2>&1; then
-        RUFF="uvx ruff"
-    else
-        RUFF=""
-        echo "pre-commit: neither 'ruff' nor 'uv' found — skipping format/lint" >&2
-    fi
-    if [ -n "$RUFF" ]; then
-        # format, then re-stage the result. Caveat: re-staging adds the whole
-        # file, so unstaged edits get swept in — review if you `git add -p`.
-        if ! $RUFF format $files; then
-            echo "pre-commit: ruff format failed (syntax error?) — commit aborted" >&2
-            exit 1
-        fi
-        git add $files
-        if ! $RUFF check $files; then
-            echo "pre-commit: ruff check failed — fix the above and re-commit" >&2
-            exit 1
-        fi
-    fi
-fi
-
-# --- data-structure traceability (always: skill .md edits can break it too) --
-if ! python3 plugins/shadowling/traceability.py >/dev/null 2>&1; then
-    python3 plugins/shadowling/traceability.py >&2   # re-run to show the drift
-    echo "pre-commit: data-structure traceability broken — commit aborted" >&2
-    exit 1
-fi
+# Git runs this from the repo root; check.sh cd's to its own dir.
+exec "$(git rev-parse --show-toplevel)/plugins/shadowling/check.sh"

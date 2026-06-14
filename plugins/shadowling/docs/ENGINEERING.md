@@ -151,19 +151,6 @@ python3 -m unittest                       # 186 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
-**End-to-end traceability proof** — productized as `traceability.py`. The same
-`check()` also runs as a test (`test_traceability.py`) and as a PostToolUse hook
-that re-checks after edits to `appdb.py`, `models/`, or `skills/`
-(see the repo-root `DEV.md`):
-
-```bash
-python3 traceability.py
-# asserts, per category: every insert_col ⊆ the table columns; each skill's
-# `record <<'SL_IN'` tag sequence == the column sequence its values land in;
-# tutor.PROMPT_SQL selects only real columns. Exit 1 + the exact mismatch on
-# drift, else "OK".
-```
-
 **Residual audit** — retired names appear only in schema *history*, never in a live consumer:
 
 ```bash

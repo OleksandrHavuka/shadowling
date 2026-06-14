@@ -48,18 +48,19 @@ def load_config():
     config), so the UserPromptSubmit hook just emits cfg["notice"]. Both are
     in-memory only — save_config persists raw_config, not this."""
     data = raw_config()
-    cfg = {}
+    cfg: dict[str, object] = {}
     for key in CONFIG_KEYS:
         value = data.get(key)
         cfg[key] = value.strip() if isinstance(value, str) else ""
-    cfg["missing"] = [key for key in CONFIG_KEYS if not cfg[key]]
+    missing = [key for key in CONFIG_KEYS if not cfg[key]]
+    cfg["missing"] = missing
     cfg["notice"] = ""
-    if cfg["missing"]:
+    if missing:
         cfg["notice"] = (
             "<shadowling_misconfig>\n"
             "shadowling is not fully configured — vocab glossing and analysis "
             "(/debrief, /tutor) are OFF (your messages are still captured).\n"
-            "Missing required setting(s): " + ", ".join(cfg["missing"]) + ".\n"
+            "Missing required setting(s): " + ", ".join(missing) + ".\n"
             "Run /shadowling:setup (or `config.py set <key> <value>`) to enable.\n"
             "</shadowling_misconfig>"
         )

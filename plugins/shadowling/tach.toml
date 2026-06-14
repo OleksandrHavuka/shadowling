@@ -1,0 +1,77 @@
+source_roots = ["."]
+exclude = ["tests", "docs", "skills"]
+
+[[modules]]
+path = "core"
+depends_on = []
+
+[[modules]]
+path = "tagio"
+depends_on = []
+
+[[modules]]
+path = "appdb"
+depends_on = ["core"]
+
+[[modules]]
+path = "models"
+depends_on = [
+    "models.decode", "models.friction", "models.grammar",
+    "models.idioms", "models.rephrasing", "models.verbs",
+]
+
+[[modules]]
+path = "models.base"
+depends_on = ["appdb", "core"]
+
+[[modules]]
+path = "models.grammar"
+depends_on = ["models.base", "core"]
+
+[[modules]]
+path = "models.friction"
+depends_on = ["models.base", "core"]
+
+[[modules]]
+path = "models.decode"
+depends_on = ["models.base", "core"]
+
+[[modules]]
+path = "models.rephrasing"
+depends_on = ["models.base", "core"]
+
+[[modules]]
+path = "models.idioms"
+depends_on = ["models.base"]
+
+[[modules]]
+path = "models.verbs"
+depends_on = ["models.base"]
+
+[[modules]]
+path = "models.vocab"
+depends_on = ["appdb"]
+
+[[modules]]
+path = "models.messages"
+depends_on = ["appdb"]
+
+[[modules]]
+path = "models.tutor"
+depends_on = ["appdb", "core", "models.friction", "models.grammar", "models.verbs", "models.vocab"]
+
+[[modules]]
+path = "config"
+depends_on = ["core"]
+
+[[modules]]
+path = "gloss"
+depends_on = ["core", "models.vocab"]
+
+[[modules]]
+path = "capture"
+depends_on = ["core", "models.messages"]
+
+[[modules]]
+path = "sql"
+depends_on = ["appdb", "core"]
