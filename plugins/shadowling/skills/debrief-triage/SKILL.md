@@ -4,17 +4,17 @@ description: "Specialist: tag the language(s) of each unprocessed message in the
 context: fork
 agent: claude
 model: haiku
-allowed-tools: Bash(python3 */capture.py*)
+allowed-tools: Bash(python3 */triage.py*)
 ---
 
 You tag the LANGUAGES of the user's captured messages so the other debrief
 specialists can read deterministic slices. You only DECIDE the codes — the
 script stamps them. Never rewrite, quote back, or "fix" message text.
 
-The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`. Invoke each as a single
-Bash call that begins with `python3` and the full
-`${CLAUDE_SKILL_DIR}/../../<script>.py` path — the only shape the granted
-`Bash(python3 …)` permission matches (so nothing before it and no chaining).
+This skill's entrypoint is `${CLAUDE_SKILL_DIR}/triage.py` (in this skill dir).
+Invoke it as a single Bash call that begins with `python3` and the full path —
+the only shape the granted `Bash(python3 …)` permission matches (so nothing
+before it and no chaining).
 
 The session to analyze arrives as your invocation argument — a session id
 string. Use it as `<session-id>` in the commands below; analyze ONLY that
@@ -22,7 +22,7 @@ session.
 
 Loop until done:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>" --untagged --limit 200`.
+1. Run `python3 "${CLAUDE_SKILL_DIR}/triage.py" messages --session "<session-id>" --untagged --limit 200`.
    If it prints `<messages></messages>`, the loop is DONE.
 2. For EACH `<m>` decide the language code(s) of its PROSE as lowercase ISO-ish
    codes (`en`, `uk`, `de`, ...). Code snippets, file paths, CLI commands, and
@@ -30,7 +30,7 @@ Loop until done:
    prose around them. A message mixing two languages gets both codes (e.g. `en,uk`).
    If there is no judgeable prose, use `und`.
 3. ONE batch call tagging everything you just read:
-   `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" tag "<id>=<code[,code]>" "<id>=<code[,code]>" ...`
+   `python3 "${CLAUDE_SKILL_DIR}/triage.py" tag "<id>=<code[,code]>" "<id>=<code[,code]>" ...`
 4. Go back to step 1.
 
 If any command exits non-zero, print exactly one line

@@ -338,5 +338,85 @@ class TutorEntrypointTest(EntrypointBase):
         self.assertEqual(json.loads(out)["tracked"], 0)
 
 
+TRIAGE = load("debrief-triage/triage.py", "ep_triage")
+DEBRIEF = load("debrief/debrief.py", "ep_debrief")
+
+
+class TriageEntrypointTest(EntrypointBase):
+    def _capture(self, text, session="s"):
+        import appdb
+
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO messages(created_at, text, session_id)"
+                    " VALUES ('t', ?, ?)",
+                    (text, session),
+                )
+        finally:
+            con.close()
+
+    def test_messages_untagged_slice(self):
+        self._capture("First normal english sentence here please")
+        code, out, _ = run_main(TRIAGE, ["messages", "--untagged", "--limit", "200"])
+        self.assertEqual(code, 0)
+        self.assertIn('<m id="1"', out)
+
+    def test_tag_writes_langs(self):
+        self._capture("First normal english sentence here please")
+        code, out, _ = run_main(TRIAGE, ["tag", "1=en"])
+        self.assertEqual(code, 0)
+        self.assertIn("tagged 1", out)
+        import appdb
+
+        self.assertEqual(
+            appdb.query("SELECT langs FROM messages")[0]["langs"], '["en"]'
+        )
+
+    def test_tag_unknown_id_exit_1(self):
+        code, _, _ = run_main(TRIAGE, ["tag", "999=en"])
+        self.assertEqual(code, 1)
+
+
+class DebriefEntrypointTest(EntrypointBase):
+    def _capture(self, text, session="s"):
+        import appdb
+
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO messages(created_at, text, session_id)"
+                    " VALUES ('t', ?, ?)",
+                    (text, session),
+                )
+        finally:
+            con.close()
+
+    def test_sessions_lists_pending(self):
+        self._capture("First normal english sentence here please", "sess-A")
+        code, out, _ = run_main(DEBRIEF, ["sessions"])
+        self.assertEqual(code, 0)
+        self.assertIn('"session": "sess-A"', out)
+
+    def test_mark_drills_runs(self):
+        code, out, _ = run_main(DEBRIEF, ["mark-drills"])
+        self.assertEqual(code, 0)
+        self.assertIn("marked 0", out)
+
+    def test_pending_count(self):
+        self._capture("First normal english sentence here please", "sess-A")
+        code, out, _ = run_main(DEBRIEF, ["pending-count"])
+        self.assertEqual((code, out.strip()), (0, "1"))
+
+    def test_mark_processed_session(self):
+        self._capture("First normal english sentence here please", "sess-A")
+        run_main(TRIAGE, ["tag", "1=en"])
+        code, out, _ = run_main(DEBRIEF, ["mark-processed", "--session", "sess-A"])
+        self.assertEqual(code, 0)
+        self.assertIn("processed 1", out)
+
+
 if __name__ == "__main__":
     unittest.main()

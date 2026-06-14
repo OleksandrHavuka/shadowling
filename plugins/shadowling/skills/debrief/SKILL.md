@@ -1,23 +1,23 @@
 ---
 name: debrief
 description: "Review your buffered writing into per-category frequency docs (grammar / rephrasings / idioms / verbs). Usage: /debrief"
-allowed-tools: Bash(python3 */capture.py*) Skill(shadowling:debrief-triage) Skill(shadowling:debrief-grammar) Skill(shadowling:debrief-rephrasing) Skill(shadowling:debrief-idioms) Skill(shadowling:debrief-verbs) Skill(shadowling:debrief-friction)
+allowed-tools: Bash(python3 */debrief.py*) Skill(shadowling:debrief-triage) Skill(shadowling:debrief-grammar) Skill(shadowling:debrief-rephrasing) Skill(shadowling:debrief-idioms) Skill(shadowling:debrief-verbs) Skill(shadowling:debrief-friction)
 ---
 
 You orchestrate the per-session debrief: triage + five per-category
 specialists run once PER SESSION. You run in the MAIN agent (this
 is not a `context: fork` skill), so you can invoke other skills with the Skill
-tool. The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`. Invoke each as a
-single Bash call that begins with `python3` and the full
-`${CLAUDE_SKILL_DIR}/../../<script>.py` path — the only shape the granted
-`Bash(python3 …)` permission matches (so nothing before it and no chaining).
+tool. This skill's entrypoint is `${CLAUDE_SKILL_DIR}/debrief.py` (in this skill
+dir). Invoke it as a single Bash call that begins with `python3` and the full
+path — the only shape the granted `Bash(python3 …)` permission matches (so
+nothing before it and no chaining).
 
 Steps:
 
-1. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" mark-drills` — ONCE,
+1. Run `python3 "${CLAUDE_SKILL_DIR}/debrief.py" mark-drills` — ONCE,
    before anything else (it fences off tutor answers). Keep its one-line
    output for the final summary.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" sessions`. If it prints
+2. Run `python3 "${CLAUDE_SKILL_DIR}/debrief.py" sessions`. If it prints
    nothing, tell the user there's nothing to review and STOP.
 3. FOR EACH session from step 2, SEQUENTIALLY (finish one session before
    starting the next):
@@ -30,7 +30,7 @@ Steps:
       `debrief-verbs`, `debrief-friction`. Each returns exactly one
       `OK <cat>: …` or `ERROR <cat>: <reason>` line.
    c. ONLY if all six lines for this session were `OK `: run
-      `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" mark-processed --session <id>`.
+      `python3 "${CLAUDE_SKILL_DIR}/debrief.py" mark-processed --session <id>`.
       Otherwise leave the session pending — it will be retried by the next
       /debrief — and continue with the next session.
 4. Print a compact final summary: the mark-drills line, then one line per
