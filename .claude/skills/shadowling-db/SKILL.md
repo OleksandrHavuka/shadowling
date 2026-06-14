@@ -65,8 +65,8 @@ COMPUTED from incident rows — never stored.
 - Always parameterized queries (`?`), transactions via `with con:`.
 
 **Enforced — run after any rename.** `traceability.py` proves the field-name
-contract end-to-end (schema → `models/*.insert_cols` → skill `record "<…>"`
-placeholders → `tutor.PROMPT_SQL`) as a test, a CLI (`python3 traceability.py`),
+contract end-to-end (schema → `models/*.insert_cols` → skill `record <<'SL_IN'`
+tags → `tutor.PROMPT_SQL`) as a test, a CLI (`python3 traceability.py`),
 and a PostToolUse hook. It names the exact layer that drifted.
 
 ## Ad-hoc queries & dev surgery (sql.py)

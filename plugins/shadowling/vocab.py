@@ -8,6 +8,7 @@ from datetime import datetime
 
 from appdb import connect
 from core import config_ready, last_assistant_text, load_config
+from tagio import read_fields, rows
 
 START_REMAINING = 10
 STEM_MIN_LEN = 4
@@ -206,16 +207,22 @@ def main(argv):
         if cfg["missing"]:
             print(cfg["notice"], file=sys.stderr)
             return 1
-        pairs = argv[1:]
-        if not pairs or len(pairs) % 2 != 0:
+        # Pairs arrive as TSV inside an <items> tag on stdin (one per line,
+        # word<TAB>translation) — no shell escaping, commas/quotes are free.
+        try:
+            items = read_fields({"items": rows("word", "translation")})["items"]
+        except ValueError as e:
+            print("error: " + str(e), file=sys.stderr)
+            return 1
+        if not items:
             print(
-                'usage: vocab.py add "<word>" "<translation>" ['
-                '"<word>" "<translation>" ...]',
+                "usage: vocab.py add (word<TAB>translation lines in an "
+                "<items>...</items> tag on stdin)",
                 file=sys.stderr,
             )
             return 1
-        for i in range(0, len(pairs), 2):
-            action, row = add(pairs[i], pairs[i + 1])
+        for item in items:
+            action, row = add(item["word"], item["translation"])
             print(
                 "{}: {} = {} (remaining {}, {})".format(
                     action,

@@ -35,14 +35,22 @@ Steps:
       Teach it INLINE: the verdict, the real meaning, for `method` the rule and how it
       is derived, and — comparing with the user's hunch — exactly where their read
       went wrong.
-   d. Record it with ONE call:
-      `python3 "${CLAUDE_SKILL_DIR}/../../db.py" decode record "<slug>" "<type>" "<expression>" "<meaning>" "<takeaway>" "<learner_wrote>" "<context>"`
-      where `type` is `fixed` or `method`; `expression` the phrase; `meaning` the real
-      meaning; `takeaway` the action (`fixed` → `memorize: set phrase`; `method` →
-      `rule: <how>`); `learner_wrote` the user's guess/hunch (empty string `""` if none given);
-      `context` where it appeared (from this conversation or the user). When a value
-      contains `\`, `"`, `` ` `` or `$`, backslash-escape it inside the quoted arg so
-      bash passes it literally.
+   d. Record it with ONE call. Put each field's value between its tags VERBATIM —
+      values may span lines; never escape anything (the quoted `<<'SL_IN'` stops the
+      shell from touching it). The body and the closing `SL_IN` MUST start at
+      column 0 (an indented `SL_IN` will not close the heredoc):
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" decode record <<'SL_IN'
+<slug>the canonical slug</slug>
+<type>fixed or method</type>
+<expression>the phrase</expression>
+<meaning>the real meaning</meaning>
+<takeaway>fixed → memorize: set phrase; method → rule: how</takeaway>
+<learner_wrote>the user's guess/hunch (empty if none given)</learner_wrote>
+<context>where it appeared (from this conversation or the user)</context>
+SL_IN
+```
    e. If the command exits non-zero, tell the user that item failed to save (show the
       error) but keep your inline explanation — the teaching is not lost.
 3. Close with a one-line note of what was saved (e.g. `saved: 2 (1 fixed, 1 method)`),

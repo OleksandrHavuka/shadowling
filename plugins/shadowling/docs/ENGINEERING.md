@@ -74,15 +74,15 @@ so steady-state connects write nothing and parallel readers cannot race.
 
 A column has **one name** from schema → repository → SQL consumer → skill. Views may
 alias a column to a human-readable display header (`learner_wrote AS "you wrote"`) —
-that is a documented presentation layer, not drift. The `db.py … record` CLI is
-positional, so a skill's placeholder at position *i* must name the column the argument
-lands in.
+that is a documented presentation layer, not drift. The `db.py … record` CLI reads
+each field from a `<tag>` on stdin (a `<<'SL_IN'` heredoc — zero shell escaping), so a
+skill's tag at position *i* must name the column the value lands in.
 
 This is machine-checkable in both directions (see
 [Verify it yourself](#verify-it-yourself)):
 
 - every model's `insert_cols` ⊆ the real table columns;
-- every skill's `record "<…>"` placeholder sequence **equals** the column sequence;
+- every skill's `record <<'SL_IN'` tag sequence **equals** the column sequence;
 - every `tutor.PROMPT_SQL` statement selects only real columns.
 
 - Convention documented in: the `shadowling-db` project skill (column naming, the
@@ -160,7 +160,7 @@ that re-checks after edits to `appdb.py`, `tutor.py`, `models/`, or `skills/`
 ```bash
 python3 traceability.py
 # asserts, per category: every insert_col ⊆ the table columns; each skill's
-# `record "<…>"` placeholder sequence == the column sequence its args land in;
+# `record <<'SL_IN'` tag sequence == the column sequence its values land in;
 # tutor.PROMPT_SQL selects only real columns. Exit 1 + the exact mismatch on
 # drift, else "OK".
 ```

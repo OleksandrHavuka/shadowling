@@ -33,11 +33,20 @@ Steps:
    either ones the user attempted (possibly wrong) or a genuinely apt idiom for
    what they meant. The key is the idiom itself in its canonical dictionary form
    (lowercase, no surrounding punctuation, e.g. `break the ice`); reuse an existing
-   key when it's the same idiom. Record each with ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms record "<idiom>" "<meaning>" "<context>" "<learner_wrote>"`
-   where `meaning` is the meaning in the explanation language, `context` the situation,
-   `learner_wrote` the user's actual wording. Don't invent idioms. Backslash-escape
-   `\`, `"`, `` ` `` or `$` inside the quoted args.
+   key when it's the same idiom. Record each with ONE call. Put each value between
+   its tags VERBATIM (values may span lines; never escape anything — the quoted
+   `<<'SL_IN'` stops the shell). The body and the closing `SL_IN` MUST start at
+   column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" idioms record <<'SL_IN'
+<idiom>the idiom in canonical dictionary form</idiom>
+<meaning>the meaning in the explanation language</meaning>
+<context>the situation</context>
+<learner_wrote>the user's actual wording</learner_wrote>
+SL_IN
+```
+   Don't invent idioms.
 5. Print exactly one line and nothing else:
    `OK idioms: <N> incremented, <M> inserted` (or `OK idioms: nothing found`).
 6. If ANY command fails (non-zero exit, missing/garbled output) or you cannot finish

@@ -47,12 +47,20 @@ Steps:
      one only if none truly fits): `article preposition agreement tense modal
      conditional verb-complement word-form word-order countability pronoun
      conjunction negation comparison possessive punctuation`.
-   Then record it with ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar record "<slug>" "<problem>" "<original>" "<fixed>" "<rule>"`
-   where `problem` is a short description of the error class, `original` the user's
-   wording, `fixed` the correction, `rule` the short rule. Don't invent errors —
-   only record genuine ones. When a value contains `\`, `"`, `` ` `` or `$`,
-   backslash-escape it inside the quoted arg so bash passes it literally.
+   Then record it with ONE call. Put each value between its tags VERBATIM (values
+   may span lines; never escape anything — the quoted `<<'SL_IN'` stops the shell).
+   The body and the closing `SL_IN` MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar record <<'SL_IN'
+<slug>the canonical kebab-case slug</slug>
+<problem>short description of the error class</problem>
+<original>the user's wording</original>
+<fixed>the correction</fixed>
+<rule>the short rule</rule>
+SL_IN
+```
+   Don't invent errors — only record genuine ones.
 5. Print exactly one line and nothing else:
    `OK grammar: <N> incremented, <M> inserted` — counting the `incremented` /
    `inserted` results from step 4 (or `OK grammar: nothing found` if there were no

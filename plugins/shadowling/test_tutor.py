@@ -10,7 +10,12 @@ import appdb
 import tutor
 
 
-def run_main(argv, stdin_text=""):
+def run_main(argv, stdin_text="", wrap=True):
+    # `record` now reads the answer from an <answer> tag; wrap the raw answer in
+    # the envelope the tutor skill produces. wrap=False feeds stdin as-is (to
+    # exercise the parser's own error path).
+    if wrap and argv[:1] == ["record"]:
+        stdin_text = "<answer>\n" + stdin_text + "\n</answer>"
     out, err = io.StringIO(), io.StringIO()
     old = tutor.sys.stdin
     tutor.sys.stdin = io.StringIO(stdin_text)
@@ -152,6 +157,16 @@ class RecordTest(TutorTestBase):
         self.assertEqual(
             appdb.query("SELECT answer FROM attempts")[0]["answer"], tricky
         )
+
+    def test_missing_answer_tag_is_error_with_guidance(self):
+        self.seed_grammar()
+        code, _, err = run_main(
+            ["record", "grammar", "article-omission", "fix", "pass"],
+            stdin_text="bare answer, no tag",
+            wrap=False,
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("<answer>", err)  # self-correcting message names the tag
 
     def test_vocab_fail_triggers_relearn(self):
         self.seed_vocab("throughput", status="learned")

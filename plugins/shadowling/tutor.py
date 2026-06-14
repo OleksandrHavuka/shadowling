@@ -2,7 +2,7 @@
 """tutor.py - spaced-repetition engine over the incident datasets (stdlib only).
 
   python3 tutor.py deck [--size N]      # today's cards, JSON per card
-  python3 tutor.py record <kind> <key> <exercise> <verdict>  # answer on STDIN
+  python3 tutor.py record <kind> <key> <exercise> <verdict>  # <answer> tag on STDIN
   python3 tutor.py stats               # due counts, JSON
 
 Leitner: 5 boxes, intervals 1/3/7/16/35 days. pass -> box+1 (cap 5),
@@ -19,6 +19,7 @@ from datetime import date, datetime, timedelta
 
 from appdb import connect
 from core import today
+from tagio import TEXT, read_fields
 
 INTERVALS = {1: 1, 2: 3, 3: 7, 4: 16, 5: 35}
 VERDICTS = ("pass", "partial", "fail")
@@ -244,12 +245,12 @@ def main(argv):
         if len(argv) != 5:
             print(
                 "usage: tutor.py record <kind> <key> <exercise> <verdict>"
-                " (answer on stdin)",
+                " (answer in an <answer>...</answer> tag on stdin)",
                 file=sys.stderr,
             )
             return 1
-        answer = sys.stdin.read()
         try:
+            answer = read_fields({"answer": TEXT})["answer"]
             print(record(argv[1], argv[2], argv[3], argv[4], answer))
         except ValueError as e:
             print("error: " + str(e), file=sys.stderr)

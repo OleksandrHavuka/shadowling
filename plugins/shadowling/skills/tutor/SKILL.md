@@ -18,9 +18,18 @@ Steps:
    the user passed a number). If it prints nothing: say there is nothing due
    and nothing new — come back after a /debrief — and STOP.
 3. For EACH card, one at a time: print the exercise (number it `[i/N]`), WAIT
-   for the user's reply, judge it, then record with ONE call feeding the
-   user's reply to stdin VERBATIM (do not re-quote, trim, or fix it):
-   `printf '%s' "<their reply>" | python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" record <item_kind> <item_key> <exercise> <verdict>`
+   for the user's reply, judge it, then record with ONE call. Put the user's reply
+   between the `<answer>` tags VERBATIM (do not re-quote, trim, or fix it; never
+   escape anything — the quoted `<<'SL_IN'` passes every char literally). The body
+   and the closing `SL_IN` MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../tutor.py" record <item_kind> <item_key> <exercise> <verdict> <<'SL_IN'
+<answer>
+their reply, verbatim
+</answer>
+SL_IN
+```
    Exercises and verdicts:
    - `friction`/`production` — ask: how would you say (prompt_data
      `learner_wrote`, mention the zone)? PASS = conveys the meaning of

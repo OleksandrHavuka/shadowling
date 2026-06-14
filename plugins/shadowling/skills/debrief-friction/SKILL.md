@@ -48,20 +48,35 @@ Steps:
    For `structural` zones, check the grammar slugs from step 3 — if the same
    construction already has a high counter there, say so in the `zone` text
    ("also a frequent grammar error — confirmed avoidance").
-6. For EACH incident, ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" friction record "<slug>" "<type>" "<zone>" "<learner_wrote>" "<native_phrase>" "<context>"`
-   where `slug` is the ZONE (kebab-case, stable across phrasings — the same
-   zone must hit the same slug); `zone` a one-line description (in the explanation
-   language); `learner_wrote` the verbatim native fragment/message the user
-   reached for; `native_phrase` how a native speaker of the learning language
-   would put it; `context` what was going on. Backslash-escape `\`, `"`, `` ` ``
-   and `$` inside quoted args.
+6. For EACH incident, ONE call. Put each value between its tags VERBATIM (values
+   may span lines; never escape anything — the quoted `<<'SL_IN'` stops the shell).
+   The body and the closing `SL_IN` MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" friction record <<'SL_IN'
+<slug>the ZONE as a kebab-case slug, stable across phrasings</slug>
+<type>lexical / phrasal / structural / topical / register</type>
+<zone>a one-line description (in the explanation language)</zone>
+<learner_wrote>the verbatim native fragment/message the user reached for</learner_wrote>
+<native_phrase>how a native speaker of the learning language would put it</native_phrase>
+<context>what was going on</context>
+SL_IN
+```
+   The same zone must hit the same `slug`.
 7. Vocabulary auto-loot: for native fragments from MIXED messages that are
    1–3 words with a CLEAN learning-language equivalent (skip idiomatic or diffuse
-   ones), make ONE batch call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add "<word>" "<translation>" ...`
-   — the learning-language equivalent as the `word`, the user's native word as the
-   `translation`.
+   ones), make ONE batch call. One pair per line, the two columns separated by a
+   single TAB (column 1 = the learning-language equivalent, column 2 = the user's
+   native word). The body and the closing `SL_IN` MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add <<'SL_IN'
+<items>
+learning-language word or phrase	the user's native-language word
+another learning-language term	its native-language word
+</items>
+SL_IN
+```
    The script prints `add`/`refresh`/`relearn` per word; `relearn` means the
    user had "learned" that word but doesn't produce it — report those.
 8. If any command exits non-zero, print exactly one line

@@ -45,12 +45,20 @@ Steps:
    - Match first: reuse an existing slug for the same class; mint only if none
      fits. Prefer these areas (mint a new one only if none truly fits):
      `collocation word-choice register wordiness phrasing calque idiomaticity`.
-   Then record it with ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing record "<slug>" "<problem>" "<learner_wrote>" "<native_phrase>" "<why>"`
-   where `problem` is a short description of the class, `learner_wrote` the user's wording,
-   `native_phrase` how a native speaker of the learning language would phrase it, `why`
-   a short reason written in the explanation language. Don't invent issues.
-   Backslash-escape `\`, `"`, `` ` `` or `$` inside the quoted args.
+   Then record it with ONE call. Put each value between its tags VERBATIM (values
+   may span lines; never escape anything — the quoted `<<'SL_IN'` stops the shell).
+   The body and the closing `SL_IN` MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" rephrasing record <<'SL_IN'
+<slug>the canonical kebab-case slug</slug>
+<problem>short description of the class</problem>
+<learner_wrote>the user's wording</learner_wrote>
+<native_phrase>how a native speaker of the learning language would phrase it</native_phrase>
+<why>a short reason written in the explanation language</why>
+SL_IN
+```
+   Don't invent issues.
 5. Print exactly one line and nothing else:
    `OK rephrasing: <N> incremented, <M> inserted` (or `OK rephrasing: nothing found`).
 6. If ANY command fails (non-zero exit, missing/garbled output) or you cannot finish

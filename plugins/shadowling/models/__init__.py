@@ -25,3 +25,9 @@ RECORDERS = {
     "decode": decode.record,
     "friction": friction.record,
 }
+
+# A recorder's local param name -> the column/tag its value actually lands in.
+# The lone entry is the intentional divergence: the decode/friction recorders
+# take `kind` (the column `type` is a Python builtin), so the tag/column is
+# `type`. Shared by db.py (reading tags) and traceability.py (the contract).
+PARAM_TO_COLUMN = {"kind": "type"}

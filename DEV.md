@@ -70,7 +70,7 @@ python3 -m unittest discover -p 'test_*.py' -v    # full suite, stdlib only
 ## Data-structure traceability
 
 `traceability.py` enforces the field-name contract end-to-end — schema →
-`models/*.insert_cols` → skill `record "<…>"` placeholders → `tutor.PROMPT_SQL` —
+`models/*.insert_cols` → skill `record <<'SL_IN'` tags → `tutor.PROMPT_SQL` —
 so a rename that drifts any layer fails loudly instead of silently. One `check()`,
 three surfaces:
 
@@ -113,7 +113,12 @@ python3 plugins/shadowling/config.py set first_language Spanish
 python3 plugins/shadowling/config.py set learning_language English
 python3 plugins/shadowling/config.py set explanation_language Spanish
 python3 plugins/shadowling/config.py get first_language         # exit 1 + setup hint until ALL THREE keys are set
-python3 plugins/shadowling/vocab.py add hello hola "machine learning" "aprendizaje automatico"
+python3 plugins/shadowling/vocab.py add <<'SL_IN'
+<items>
+hello	hola
+machine learning	aprendizaje automatico
+</items>
+SL_IN
 python3 plugins/shadowling/vocab.py list-active
 python3 plugins/shadowling/vocab.py remove hello ghost
 ```
@@ -133,7 +138,13 @@ python3 plugins/shadowling/capture.py query "SELECT id, langs, processed_at FROM
 export), and any view is queryable read-only via `capture.py query`:
 
 ```
-python3 plugins/shadowling/db.py grammar record "article-omission" "drops 'the'" "I went to store" "I went to the store" "use the"
+python3 plugins/shadowling/db.py grammar record <<'SL_IN'
+<slug>article-omission</slug>
+<problem>drops 'the'</problem>
+<original>I went to store</original>
+<fixed>I went to the store</fixed>
+<rule>use the</rule>
+SL_IN
 python3 plugins/shadowling/db.py grammar select            # ranked view, JSON per row
 python3 plugins/shadowling/db.py grammar export            # same, as a markdown table
 python3 plugins/shadowling/capture.py query "SELECT slug, counter FROM grammar_ranked"
@@ -152,7 +163,11 @@ Tutor + per-session debrief plumbing:
 
 ```
 python3 plugins/shadowling/tutor.py deck --size 4          # today's cards, JSON per card
-printf '%s' "I went to the store" | python3 plugins/shadowling/tutor.py record grammar article-omission fix pass
+python3 plugins/shadowling/tutor.py record grammar article-omission fix pass <<'SL_IN'
+<answer>
+I went to the store
+</answer>
+SL_IN
 python3 plugins/shadowling/tutor.py stats
 python3 plugins/shadowling/capture.py sessions             # debrief worklist
 python3 plugins/shadowling/capture.py messages --session <id> --lang en

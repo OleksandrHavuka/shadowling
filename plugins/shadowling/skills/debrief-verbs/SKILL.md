@@ -33,13 +33,21 @@ Steps:
 4. Read every `<m>` message and find misused or otherwise noteworthy IRREGULAR
    verbs (e.g. a wrong form like English `I have went`, `I buyed`). The key is the
    verb base form (lowercase, e.g. `go`); reuse an existing key for the same verb.
-   Record each with ONE call:
-   `python3 "${CLAUDE_SKILL_DIR}/../../db.py" verbs record "<verb>" "<past>" "<participle>" "<used_form>" "<correction>" "<context>"`
-   where `verb` is the base form, `past` the simple past, `participle` the past
-   participle, `used_form` the wrong form the user actually wrote, `correction` the
-   fixed version, `context` a short excerpt of where it appeared (useful for drills).
-   Only record genuine irregular-verb issues. Backslash-escape `\`, `"`, `` ` `` or
-   `$` inside the quoted args.
+   Record each with ONE call. Put each value between its tags VERBATIM (values may
+   span lines; never escape anything — the quoted `<<'SL_IN'` stops the shell). The
+   body and the closing `SL_IN` MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../db.py" verbs record <<'SL_IN'
+<verb>the base form</verb>
+<past>the simple past</past>
+<participle>the past participle</participle>
+<used_form>the wrong form the user actually wrote</used_form>
+<correction>the fixed version</correction>
+<context>a short excerpt of where it appeared (useful for drills)</context>
+SL_IN
+```
+   Only record genuine irregular-verb issues.
 5. Print exactly one line and nothing else:
    `OK verbs: <N> incremented, <M> inserted` (or `OK verbs: nothing found`).
 6. If ANY command fails (non-zero exit, missing/garbled output) or you cannot finish

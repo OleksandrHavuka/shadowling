@@ -12,12 +12,23 @@ import core
 import vocab
 
 
-def run_main(argv):
-    """Run vocab.main(argv), returning (exit_code, stdout)."""
+def run_main(argv, stdin_text=""):
+    """Run vocab.main(argv) with stdin_text on stdin, returning (exit_code, stdout)."""
     buf = io.StringIO()
-    with contextlib.redirect_stdout(buf):
-        code = vocab.main(argv)
+    old = vocab.sys.stdin
+    vocab.sys.stdin = io.StringIO(stdin_text)
+    try:
+        with contextlib.redirect_stdout(buf):
+            code = vocab.main(argv)
+    finally:
+        vocab.sys.stdin = old
     return code, buf.getvalue()
+
+
+def items(*pairs):
+    """Build the <items> TSV envelope vocab add now reads from stdin."""
+    body = "\n".join(f"{w}\t{t}" for w, t in pairs)
+    return "<items>\n" + body + "\n</items>"
 
 
 class VocabTestBase(unittest.TestCase):
@@ -121,7 +132,8 @@ class RemoveTest(VocabTestBase):
 class MainAddTest(VocabTestBase):
     def test_add_multiple_pairs_stores_all(self):
         code, out = run_main(
-            ["add", "hello", "привіт", "machine learning", "машинне навчання"]
+            ["add"],
+            items(("hello", "привіт"), ("machine learning", "машинне навчання")),
         )
         self.assertEqual(code, 0)
         rows = self.rows_by_word()
@@ -131,18 +143,24 @@ class MainAddTest(VocabTestBase):
         self.assertEqual(out.count("\n"), 2)
 
     def test_add_single_pair_still_works(self):
-        code, out = run_main(["add", "throughput", "пропускна здатність"])
+        code, out = run_main(["add"], items(("throughput", "пропускна здатність")))
         self.assertEqual(code, 0)
         self.assertEqual(
             self.rows_by_word()["throughput"]["translation"], "пропускна здатність"
         )
 
-    def test_add_odd_arg_count_is_error(self):
-        code, _ = run_main(["add", "hello", "привіт", "orphan"])
+    def test_add_translation_with_comma_survives(self):
+        # tab is the only boundary, so a comma in the translation is free
+        code, _ = run_main(["add"], items(("however", "однак, проте")))
+        self.assertEqual(code, 0)
+        self.assertEqual(self.rows_by_word()["however"]["translation"], "однак, проте")
+
+    def test_add_malformed_row_is_error(self):
+        code, _ = run_main(["add"], "<items>\nhello\tпривіт\torphan\n</items>")
         self.assertEqual(code, 1)
 
-    def test_add_no_args_is_error(self):
-        code, _ = run_main(["add"])
+    def test_add_empty_items_is_error(self):
+        code, _ = run_main(["add"], "<items>\n</items>")
         self.assertEqual(code, 1)
 
 

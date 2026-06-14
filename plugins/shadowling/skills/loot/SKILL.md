@@ -28,9 +28,19 @@ Steps:
    loanwords, slang, or other non-standard variants. Near-synonyms may share the
    same translation — do NOT invent an artificial variant just to make entries
    differ. The translation MUST differ from the source term; never echo the term back.
-4. One call: `python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add "<term1>" "<tr1>" "<term2>" "<tr2>" ...`.
-   When interpolating a value into the quoted args, backslash-escape any `\`, `"`,
-   `` ` `` or `$` it contains so bash passes it literally.
+4. One call. One pair per line, the two columns separated by a single TAB
+   (column 1 = the term, column 2 = its translation) — never escape anything, the
+   quoted `<<'SL_IN'` passes every char literally. The body and the closing `SL_IN`
+   MUST start at column 0:
+
+```bash
+python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add <<'SL_IN'
+<items>
+the term	its translation
+another term	its translation
+</items>
+SL_IN
+```
 5. Report the per-word results (the script prints `add`/`refresh`/`relearn`; it
    prints `untranslated` and skips a row if a translation was missing/identical —
    if so, say it couldn't be translated and suggest re-running).

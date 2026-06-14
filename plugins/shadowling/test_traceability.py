@@ -1,6 +1,27 @@
+import re
 import unittest
 
 import traceability
+
+
+class HeredocDiscoveryTest(unittest.TestCase):
+    def test_regex_extracts_cat_and_ordered_tags(self):
+        sample = (
+            "python3 \"x/../db.py\" grammar record <<'SL_IN'\n"
+            "<slug>s</slug>\n<problem>p</problem>\n<rule>r</rule>\nSL_IN\n"
+        )
+        m = traceability._RECORD_HEREDOC.search(sample)
+        self.assertEqual(m.group(1), "grammar")
+        tags = re.findall(r"(?m)^<(\w+)>", m.group(3))
+        self.assertEqual(tags, ["slug", "problem", "rule"])
+
+    def test_real_skills_discovered_with_signature_tags(self):
+        found = {cat: tags for cat, tags, _ in traceability._discover_record_lines()}
+        self.assertEqual(
+            found["grammar"], ["slug", "problem", "original", "fixed", "rule"]
+        )
+        # decode documents the enum as a <type> tag (recorder param is `kind`)
+        self.assertIn("type", found["decode"])
 
 
 class TraceabilityTest(unittest.TestCase):

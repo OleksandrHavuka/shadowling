@@ -12,11 +12,11 @@ drifts any layer fails loudly instead of silently. Three surfaces share one
 
 What it proves:
   1. every model `insert_col` (and the `key`) is a real table column;
-  2. every skill `db.py <cat> record "<...>"` line — DISCOVERED across
-     skills/**/SKILL.md, not hardcoded — has a placeholder sequence equal to the
-     column sequence its positional args land in (recorder params, kind->type);
-     plus the reverse: a record line for an unregistered category, or a
-     registered recorder with no documenting skill line, is a violation;
+  2. every skill `db.py <cat> record <<'SL_IN'` heredoc — DISCOVERED across
+     skills/**/SKILL.md, not hardcoded — has a tag sequence equal to the column
+     sequence its values land in (recorder params, kind->type); plus the
+     reverse: a record heredoc for an unregistered category, or a registered
+     recorder with no documenting skill line, is a violation;
   3. every `tutor.PROMPT_SQL` statement selects only real columns.
 
 Scope (honest): this guards the incident-category record path + tutor prompts,
@@ -36,21 +36,22 @@ import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
-# A recorder's local param name -> the column its positional arg actually lands
-# in. The lone entry is the intentional divergence: decode/friction recorders
-# take `kind` (the column `type` is a Python builtin), so the skill says <type>.
-_PARAM_TO_COLUMN = {"kind": "type"}
-
 # A PostToolUse edit whose path contains one of these can break the contract.
 _RELEVANT = ("appdb.py", "tutor.py", "/models/", "/skills/")
 
+# `db.py <cat> record <<'DELIM'` ... `DELIM` — the heredoc skills feed record
+# fields through. Captures the category and the body between the delimiters.
+_RECORD_HEREDOC = re.compile(
+    r"db\.py\"\s+(\w+)\s+record\s+<<'(\w+)'\n(.*?)\n\2(?=\n|$)", re.DOTALL
+)
+
 
 def _discover_record_lines():
-    """Every `<cat> record "<a>" "<b>" ...` command across skills/**/SKILL.md, as
-    (cat, [placeholders], relpath). Format-coupled to the documented quoted-
-    angle-bracket placeholder syntax: a reformat that breaks the match drops the
-    line from discovery, which the reverse "recorder has no skill line" check
-    then flags — so it surfaces, never silently passes."""
+    """Every `db.py <cat> record <<'SL_IN'` heredoc across skills/**/SKILL.md, as
+    (cat, [tag_names_in_order], relpath). Format-coupled to the documented
+    heredoc-of-tags syntax: a reformat that breaks the match drops the line from
+    discovery, which the reverse "recorder has no skill line" check then flags —
+    so it surfaces, never silently passes."""
     found = []
     for root, _dirs, files in os.walk(os.path.join(HERE, "skills")):
         if "SKILL.md" not in files:
@@ -58,11 +59,11 @@ def _discover_record_lines():
         path = os.path.join(root, "SKILL.md")
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        for m in re.finditer(r'(\w+) record ((?:"<[^>]+>" ?)+)', text):
+        for m in _RECORD_HEREDOC.finditer(text):
             found.append(
                 (
                     m.group(1),
-                    re.findall(r"<([^>]+)>", m.group(2)),
+                    re.findall(r"(?m)^<(\w+)>", m.group(3)),
                     os.path.relpath(path, HERE),
                 )
             )
@@ -104,7 +105,7 @@ def check():
 
             # 2. skills: discovered record lines <-> the recorder column sequence
             documented = set()
-            for cat, placeholders, rel in _discover_record_lines():
+            for cat, tags, rel in _discover_record_lines():
                 documented.add(cat)
                 rec = models.RECORDERS.get(cat)
                 if rec is None:
@@ -114,13 +115,12 @@ def check():
                     )
                     continue
                 expected = [
-                    _PARAM_TO_COLUMN.get(p, p)
+                    models.PARAM_TO_COLUMN.get(p, p)
                     for p in inspect.signature(rec).parameters
                 ]
-                if placeholders != expected:
+                if tags != expected:
                     violations.append(
-                        f"{cat}: {rel} placeholders {placeholders} != "
-                        f"column sequence {expected}"
+                        f"{cat}: {rel} tags {tags} != column sequence {expected}"
                     )
             for cat in models.RECORDERS:
                 if cat not in documented:
