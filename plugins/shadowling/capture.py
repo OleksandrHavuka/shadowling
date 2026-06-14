@@ -9,14 +9,17 @@ debrief entrypoints + sql.py; this file is now just the hook."""
 import json
 import sys
 
-from core import config_ready, last_user_text
+from core import last_user_text
 from models.messages import Messages
 
 
 def capture(stdin_text):
-    """Stop-hook entry: store the last user message, any language. Never raises."""
-    if not config_ready():
-        return False
+    """Stop-hook entry: store the last user message, any language. Never raises.
+
+    NOT config-gated: messages are logged even before /setup so nothing is lost.
+    Capture uses no config value (language matters only at analysis time). The
+    glossing hook and the analysis skills (/debrief, /tutor, /loot) gate on config
+    themselves and steer the user to /setup; the message log just keeps filling."""
     try:
         data = json.loads(stdin_text) if stdin_text.strip() else {}
     except (json.JSONDecodeError, AttributeError, TypeError):

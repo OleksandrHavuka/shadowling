@@ -136,11 +136,12 @@ class CaptureTest(CaptureTestBase):
             capture.capture(json.dumps({"transcript_path": "/no/such.jsonl"}))
         )
 
-    def test_capture_noop_without_config(self):
+    def test_capture_runs_without_config(self):
+        # capture is NOT config-gated: messages are logged even before /setup so
+        # nothing is lost (the glossing hook + analysis skills gate themselves).
         os.remove(os.path.join(self.home, "config.json"))
-        self.assertFalse(
-            self._capture_text("This is a perfectly fine English sentence")
-        )
+        self.assertTrue(self._capture_text("This is a perfectly fine English sentence"))
+        self.assertEqual(len(self._rows()), 1)
 
 
 class MainTest(CaptureTestBase):

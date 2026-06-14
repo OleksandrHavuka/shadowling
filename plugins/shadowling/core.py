@@ -2,7 +2,7 @@
 """core.py - shared infrastructure for shadowling scripts (stdlib only, Python 3.9+).
 
 Home-directory resolution, config loading, and transcript reading, shared by
-`vocab.py` (glossing) and `capture.py` (message collection).
+`gloss.py` (glossing) and `capture.py` (message collection).
 """
 
 import json
@@ -41,9 +41,9 @@ def load_config():
     """Each CONFIG_KEYS value ("" when missing/malformed; no defaults) plus the
     gate state derived in this one place: "missing" (required keys with no value)
     and "notice" (the user-facing misconfig text, "" when ready). The gate
-    otherwise closes capture + glossing silently, so the UserPromptSubmit hook
-    just emits cfg["notice"]. Both are in-memory only — save_config persists
-    raw_config, not this."""
+    otherwise closes glossing silently (capture keeps logging — it needs no
+    config), so the UserPromptSubmit hook just emits cfg["notice"]. Both are
+    in-memory only — save_config persists raw_config, not this."""
     data = raw_config()
     cfg = {}
     for key in CONFIG_KEYS:
@@ -54,8 +54,8 @@ def load_config():
     if cfg["missing"]:
         cfg["notice"] = (
             "<shadowling_misconfig>\n"
-            "shadowling is not fully configured — message capture and vocab "
-            "glossing are OFF.\n"
+            "shadowling is not fully configured — vocab glossing and analysis "
+            "(/debrief, /tutor) are OFF (your messages are still captured).\n"
             "Missing required setting(s): " + ", ".join(cfg["missing"]) + ".\n"
             "Run /shadowling:setup (or `config.py set <key> <value>`) to enable.\n"
             "</shadowling_misconfig>"
