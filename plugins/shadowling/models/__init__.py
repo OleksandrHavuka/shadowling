@@ -1,10 +1,10 @@
 """models package - product registry (REGISTRY) + record recorders (RECORDERS).
 
 Each category module exports its product Model and a `record` fan-out function.
-This package builds the two name-keyed registries the db.py CLI drives by name —
-explicitly, so the imports stay at the top and the category modules don't depend
-back on the package.
-"""
+These two name-keyed catalogs are no longer a runtime dispatch path (db.py is
+gone); they exist so traceability.py can enumerate every category to prove the
+schema <-> models <-> skill contract. Per-skill entrypoints import their own
+category module directly (e.g. `from models import grammar`)."""
 
 from . import decode, friction, grammar, idioms, rephrasing, verbs
 
@@ -25,9 +25,3 @@ RECORDERS = {
     "decode": decode.record,
     "friction": friction.record,
 }
-
-# A recorder's local param name -> the column/tag its value actually lands in.
-# The lone entry is the intentional divergence: the decode/friction recorders
-# take `kind` (the column `type` is a Python builtin), so the tag/column is
-# `type`. Shared by db.py (reading tags) and traceability.py (the contract).
-PARAM_TO_COLUMN = {"kind": "type"}

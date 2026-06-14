@@ -17,6 +17,11 @@ import sys
 import models
 from tagio import TEXT, read_fields
 
+# Local copy for this dispatcher's remaining lifetime (db.py is removed once
+# sql.py absorbs render_md). The contract owner is now traceability.PARAM_TO_COLUMN;
+# the decode/friction recorders take `kind`, but the tag/column is `type`.
+PARAM_TO_COLUMN = {"kind": "type"}
+
 
 def _cell(value):
     return str(value).replace("|", "\\|").replace("\n", " ")
@@ -54,10 +59,10 @@ def main(argv):
         # All fields arrive as tags on stdin; the schema (and the call order) is
         # the recorder's own signature, mapped param->tag (kind->type).
         params = list(inspect.signature(recorder).parameters)
-        schema = {models.PARAM_TO_COLUMN.get(p, p): TEXT for p in params}
+        schema = {PARAM_TO_COLUMN.get(p, p): TEXT for p in params}
         try:
             fields = read_fields(schema)
-            print(recorder(*[fields[models.PARAM_TO_COLUMN.get(p, p)] for p in params]))
+            print(recorder(*[fields[PARAM_TO_COLUMN.get(p, p)] for p in params]))
         except (TypeError, ValueError, KeyError) as e:
             print("error: " + str(e), file=sys.stderr)
             return 1

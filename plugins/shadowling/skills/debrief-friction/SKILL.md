@@ -3,7 +3,7 @@ name: debrief-friction
 description: "Specialist: turn code-switching (bailing from the learning language into the native language) into the friction dataset, auto-looting vocabulary gaps. Usually invoked by /debrief."
 context: fork
 agent: claude
-allowed-tools: Bash(python3 */capture.py*) Bash(python3 */db.py*) Bash(python3 */config.py*) Bash(python3 */vocab.py*)
+allowed-tools: Bash(python3 */friction.py*) Bash(python3 */config.py*)
 ---
 
 You analyze WHERE the user's learning language fails them: the moments they bail
@@ -11,10 +11,11 @@ into their native language. You read the full tagged batch (you are the one
 specialist that needs the timeline), record friction zones, and auto-add
 clean vocabulary gaps.
 
-The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`. Invoke each as a single
-Bash call that begins with `python3` and the full
-`${CLAUDE_SKILL_DIR}/../../<script>.py` path — the only shape the granted
-`Bash(python3 …)` permission matches (so nothing before it and no chaining).
+This skill's entrypoint is `${CLAUDE_SKILL_DIR}/friction.py` (in this skill dir);
+the shared `config.py` is at `${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each as
+a single Bash call that begins with `python3` and the full path — the only shape
+the granted `Bash(python3 …)` permission matches (so nothing before it and no
+chaining).
 
 The session to analyze arrives as your invocation argument — a session id
 string. Use it as `<session-id>` in the commands below; analyze ONLY that
@@ -25,11 +26,11 @@ Steps:
 1. Run `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`.
    Refer to the learning language by its ISO 639-1 code (English → `en`,
    German → `de`, …) when reading the `langs` attributes below.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/../../capture.py" messages --session "<session-id>"` — the full
+2. Run `python3 "${CLAUDE_SKILL_DIR}/friction.py" messages --session "<session-id>"` — the full
    batch with `langs` attributes. If empty, print `OK friction: nothing found`
    and STOP.
-3. Run `python3 "${CLAUDE_SKILL_DIR}/../../db.py" friction select` (existing
-   zones — your dedup context) and `python3 "${CLAUDE_SKILL_DIR}/../../db.py" grammar select`
+3. Run `python3 "${CLAUDE_SKILL_DIR}/friction.py" select` (existing
+   zones — your dedup context) and `python3 "${CLAUDE_SKILL_DIR}/friction.py" grammar-select`
    (for cross-correlation).
 4. Find friction incidents (let `<L>` be the learning-language code):
    - a MIXED message (langs has `<L>` + another code): the native fragments are
@@ -53,7 +54,7 @@ Steps:
    The body and the closing `SL_IN` MUST start at column 0:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../db.py" friction record <<'SL_IN'
+python3 "${CLAUDE_SKILL_DIR}/friction.py" record <<'SL_IN'
 <slug>the ZONE as a kebab-case slug, stable across phrasings</slug>
 <type>lexical / phrasal / structural / topical / register</type>
 <zone>a one-line description (in the explanation language)</zone>
@@ -70,7 +71,7 @@ SL_IN
    native word). The body and the closing `SL_IN` MUST start at column 0:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add <<'SL_IN'
+python3 "${CLAUDE_SKILL_DIR}/friction.py" loot <<'SL_IN'
 <items>
 learning-language word or phrase	the user's native-language word
 another learning-language term	its native-language word

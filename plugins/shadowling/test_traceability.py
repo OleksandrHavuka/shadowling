@@ -7,11 +7,11 @@ import traceability
 class HeredocDiscoveryTest(unittest.TestCase):
     def test_regex_extracts_cat_and_ordered_tags(self):
         sample = (
-            "python3 \"x/../db.py\" grammar record <<'SL_IN'\n"
+            "python3 \"${CLAUDE_SKILL_DIR}/grammar.py\" record <<'SL_IN'\n"
             "<slug>s</slug>\n<problem>p</problem>\n<rule>r</rule>\nSL_IN\n"
         )
         m = traceability._RECORD_HEREDOC.search(sample)
-        self.assertEqual(m.group(1), "grammar")
+        self.assertEqual(m.group(1), "grammar")  # category = entrypoint basename
         tags = re.findall(r"(?m)^<(\w+)>", m.group(3))
         self.assertEqual(tags, ["slug", "problem", "rule"])
 
