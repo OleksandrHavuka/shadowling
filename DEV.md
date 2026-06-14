@@ -26,8 +26,8 @@ plugins/shadowling/
                      #   debrief-{grammar,rephrasing,idioms,verbs,friction}/<cat>.py — fork: record / select / messages
                      #   vipe/                                      — dev: wipe incident tables via sql.py --write
   hooks/hooks.json   # UserPromptSubmit (gloss inject) + Stop (gloss scan, capture)
-  test_*.py          # appdb, capture, config, core, entrypoints, gloss, models, models_messages,
-                     #   models_tutor, models_vocab, record, sql, traceability
+  tests/             # the unittest suite (test_appdb … test_entrypoints, test_gloss,
+                     #   test_models*, test_sql, test_traceability) — `python3 -m unittest` discovers it
 ```
 
 ## Apply local changes

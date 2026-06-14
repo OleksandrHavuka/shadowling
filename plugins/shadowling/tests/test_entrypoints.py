@@ -7,7 +7,8 @@ import sys
 import tempfile
 import unittest
 
-PLUGIN_ROOT = os.path.dirname(os.path.abspath(__file__))
+# tests/ lives one level under the plugin root; go up two to reach it.
+PLUGIN_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
 def load(relpath, name):
