@@ -4,14 +4,15 @@ description: "Add words/terms you're learning, auto-translated into your native 
 context: fork
 agent: claude
 model: sonnet
-allowed-tools: Bash(python3 */config.py*) Bash(python3 */vocab.py*)
+allowed-tools: Bash(python3 */config.py*) Bash(python3 */loot.py*)
 ---
 
 You translate the given terms and add them to the vocab store. Add everything you
 are given — do NOT ask, do NOT block on typos.
 
-The plugin's scripts live at `${CLAUDE_SKILL_DIR}/../..`; invoke them directly so
-each command starts with `python3` (e.g.
+This skill's entrypoint is `${CLAUDE_SKILL_DIR}/loot.py` (in this skill dir); the
+shared `config.py` is at `${CLAUDE_SKILL_DIR}/../../config.py`. Invoke each
+directly so the command starts with `python3` (e.g.
 `python3 "${CLAUDE_SKILL_DIR}/../../config.py" show`).
 
 Terms (comma-separated): `$ARGUMENTS`
@@ -34,7 +35,7 @@ Steps:
    MUST start at column 0:
 
 ```bash
-python3 "${CLAUDE_SKILL_DIR}/../../vocab.py" add <<'SL_IN'
+python3 "${CLAUDE_SKILL_DIR}/loot.py" add <<'SL_IN'
 <items>
 the term	its translation
 another term	its translation

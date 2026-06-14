@@ -228,5 +228,55 @@ class FrictionTest(EntrypointBase):
         self.assertEqual((code, out.strip()), (0, "<messages></messages>"))
 
 
+LOOT = load("loot/loot.py", "ep_loot")
+DROP = load("drop/drop.py", "ep_drop")
+
+
+class LootTest(EntrypointBase):
+    def test_add_multiple_pairs(self):
+        code, out, _ = run_main(
+            LOOT,
+            ["add"],
+            items(("hello", "привіт"), ("machine learning", "машинне навчання")),
+        )
+        self.assertEqual(code, 0)
+        import appdb
+
+        rows = {r["word"]: r for r in appdb.query("SELECT * FROM vocab")}
+        self.assertEqual(rows["hello"]["translation"], "привіт")
+        self.assertEqual(rows["machine learning"]["translation"], "машинне навчання")
+        self.assertEqual(out.count("\n"), 2)
+
+    def test_add_comma_in_translation_survives(self):
+        code, _, _ = run_main(LOOT, ["add"], items(("however", "однак, проте")))
+        import appdb
+
+        self.assertEqual(
+            appdb.query("SELECT translation FROM vocab WHERE word='however'")[0][
+                "translation"
+            ],
+            "однак, проте",
+        )
+
+    def test_add_empty_items_is_error(self):
+        code, _, _ = run_main(LOOT, ["add"], "<items>\n</items>")
+        self.assertEqual(code, 1)
+
+
+class DropTest(EntrypointBase):
+    def test_remove_multiple(self):
+        run_main(LOOT, ["add"], items(("alpha", "а"), ("beta", "б")))
+        code, out, _ = run_main(DROP, ["remove", "alpha", "beta"])
+        self.assertEqual(code, 0)
+        self.assertIn("alpha: removed", out)
+        self.assertIn("beta: removed", out)
+
+    def test_remove_reports_unknown(self):
+        run_main(LOOT, ["add"], items(("alpha", "а")))
+        code, out, _ = run_main(DROP, ["remove", "alpha", "ghost"])
+        self.assertIn("alpha: removed", out)
+        self.assertIn("ghost: not found", out)
+
+
 if __name__ == "__main__":
     unittest.main()
