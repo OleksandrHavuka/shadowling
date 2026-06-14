@@ -7,25 +7,27 @@ Local dev notes for working on the shadowling plugin.
 ```
 plugins/shadowling/
   core.py            # shared: data dir, config load/save, transcript reading
-  config.py          # plugin-wide language config CLI (get / set)
-  vocab.py           # vocab store (add / remove / list-active) + glossing hooks (inject / scan)
-  capture.py         # message capture + sqlite store (tag / slices / mark-processed / ro query)
+  config.py          # plugin-wide language config CLI (show / get / set)
+  gloss.py           # glossing hooks (inject / scan) over models/vocab
+  capture.py         # Stop-hook message capture over models/messages
   appdb.py           # single sqlite home: connect(), MIGRATIONS (user_version), ranked views, ro query
-  db.py              # CLI over models/ (record / select / export / drop)
-  sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup verb
-  tutor.py           # spaced repetition: deck (due+new+hot-zone boost) / record (Leitner) / stats
-  traceability.py    # enforce the schema <-> models <-> skills <-> PROMPT_SQL field-name contract (CLI / test / hook)
-  models/            # incident models + record fan-out (grammar, rephrasing, idioms, verbs, decode, friction)
-  skills/            # skill bodies:
-                     #   loot/, drop/          — fork: translate+add / remove terms
-                     #   setup/                — main: ask + set the three plugin languages
-                     #   debrief/              — main: orchestrate triage + five specialists
-                     #   debrief-triage/       — fork: tag each message's language(s)
-                     #   debrief-{grammar,rephrasing,idioms,verbs,friction}/ — fork: analyze batch slice → datasets
-                     #   aha/                  — main: explain expressions you can't read literally
-                     #   vipe/                 — dev: drop the six category datasets for a clean test run
-  hooks/hooks.json   # UserPromptSubmit (inject) + Stop (scan, capture)
-  test_*.py          # appdb, capture, config, core, db, models, record, sql, traceability, tutor, vocab
+  sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup, paths
+  traceability.py    # enforce the schema <-> models <-> skill record heredoc <-> tutor.PROMPT_SQL contract
+  models/            # the repository layer — owns ALL SQL:
+                     #   base.py + 6 incident repos (grammar, rephrasing, idioms, verbs, decode, friction)
+                     #   vocab.py (Vocab), messages.py (Messages), tutor.py (Tutor)
+  skills/            # skill bodies, each with its own thin entrypoint .py (tagio parse + repo call + output):
+                     #   aha/decode.py                              — main: explain expressions; record decode
+                     #   loot/loot.py, drop/drop.py                 — fork: add / remove vocab
+                     #   setup/                                     — main: ask + set the three plugin languages
+                     #   tutor/tutor.py                             — main: deck / record / stats
+                     #   debrief/debrief.py                         — main: sessions / mark-processed / mark-drills
+                     #   debrief-triage/triage.py                   — fork: messages / tag
+                     #   debrief-{grammar,rephrasing,idioms,verbs,friction}/<cat>.py — fork: record / select / messages
+                     #   vipe/                                      — dev: wipe incident tables via sql.py --write
+  hooks/hooks.json   # UserPromptSubmit (gloss inject) + Stop (gloss scan, capture)
+  test_*.py          # appdb, capture, config, core, entrypoints, gloss, models, models_messages,
+                     #   models_tutor, models_vocab, record, sql, traceability
 ```
 
 ## Apply local changes
@@ -80,7 +82,7 @@ python3 plugins/shadowling/traceability.py    # dev CLI: exit 1 + the offending 
 
 - **test** — `test_traceability.py`, part of the suite above (and the pre-push hook);
 - **hook** — `.claude/settings.json` re-runs it (PostToolUse) after any edit to
-  `appdb.py`, `tutor.py`, `models/`, or `skills/`, surfacing a break in-session (exit 2);
+  `appdb.py`, `models/`, or `skills/`, surfacing a break in-session (exit 2);
 - view aliases (`learner_wrote AS "you wrote"`) are a display layer and are not asserted.
 
 ## Git hooks
@@ -113,41 +115,45 @@ python3 plugins/shadowling/config.py set first_language Spanish
 python3 plugins/shadowling/config.py set learning_language English
 python3 plugins/shadowling/config.py set explanation_language Spanish
 python3 plugins/shadowling/config.py get first_language         # exit 1 + setup hint until ALL THREE keys are set
-python3 plugins/shadowling/vocab.py add <<'SL_IN'
+```
+
+Vocab (loot/drop entrypoints):
+
+```
+python3 plugins/shadowling/skills/loot/loot.py add <<'SL_IN'
 <items>
 hello	hola
 machine learning	aprendizaje automatico
 </items>
 SL_IN
-python3 plugins/shadowling/vocab.py list-active
-python3 plugins/shadowling/vocab.py remove hello ghost
+python3 plugins/shadowling/skills/drop/drop.py remove hello ghost
+python3 plugins/shadowling/sql.py "SELECT word, translation, remaining FROM vocab"
 ```
 
-`/debrief` message store (Stop hook feeds this; inspect by hand):
+Message store + debrief plumbing (capture.py is the Stop hook; reads/admin via entrypoints + sql.py):
 
 ```
-python3 plugins/shadowling/capture.py paths            # show the sqlite db path
-python3 plugins/shadowling/capture.py pending-count    # unprocessed messages
-python3 plugins/shadowling/capture.py messages         # current batch as XML
-python3 plugins/shadowling/capture.py tag "1=en" "2=en,uk"
-python3 plugins/shadowling/capture.py mark-processed   # stamp tagged rows
-python3 plugins/shadowling/capture.py query "SELECT id, langs, processed_at FROM messages ORDER BY id DESC LIMIT 5"
+python3 plugins/shadowling/sql.py paths                     # show the sqlite db path
+python3 plugins/shadowling/skills/debrief/debrief.py sessions
+python3 plugins/shadowling/skills/debrief-triage/triage.py messages --untagged --limit 200
+python3 plugins/shadowling/skills/debrief-triage/triage.py tag "1=en" "2=en,uk"
+python3 plugins/shadowling/skills/debrief/debrief.py mark-processed --session <id>
+python3 plugins/shadowling/sql.py "SELECT id, langs, processed_at FROM messages ORDER BY id DESC LIMIT 5"
 ```
 
-`/aha` and `/debrief` incidents go through the `db.py` CLI (record / select /
-export), and any view is queryable read-only via `capture.py query`:
+`/aha` and `/debrief` incidents go through each skill's entrypoint
+(`record`/`select`); any view is queryable read-only via `sql.py`:
 
 ```
-python3 plugins/shadowling/db.py grammar record <<'SL_IN'
+python3 plugins/shadowling/skills/debrief-grammar/grammar.py record <<'SL_IN'
 <slug>article-omission</slug>
 <problem>drops 'the'</problem>
 <original>I went to store</original>
 <fixed>I went to the store</fixed>
 <rule>use the</rule>
 SL_IN
-python3 plugins/shadowling/db.py grammar select            # ranked view, JSON per row
-python3 plugins/shadowling/db.py grammar export            # same, as a markdown table
-python3 plugins/shadowling/capture.py query "SELECT slug, counter FROM grammar_ranked"
+python3 plugins/shadowling/skills/debrief-grammar/grammar.py select        # ranked view, JSON per row
+python3 plugins/shadowling/sql.py --md "SELECT * FROM grammar_ranked"      # same, markdown table
 ```
 
 Ad-hoc SQL (dev console; ro unless `--write`, which snapshots first):
@@ -159,20 +165,17 @@ python3 plugins/shadowling/sql.py --write "DELETE FROM messages WHERE id = ?" 3
 python3 plugins/shadowling/sql.py backup
 ```
 
-Tutor + per-session debrief plumbing:
+Tutor + drills:
 
 ```
-python3 plugins/shadowling/tutor.py deck --size 4          # today's cards, JSON per card
-python3 plugins/shadowling/tutor.py record grammar article-omission fix pass <<'SL_IN'
+python3 plugins/shadowling/skills/tutor/tutor.py deck --size 4
+python3 plugins/shadowling/skills/tutor/tutor.py record grammar article-omission fix pass <<'SL_IN'
 <answer>
 I went to the store
 </answer>
 SL_IN
-python3 plugins/shadowling/tutor.py stats
-python3 plugins/shadowling/capture.py sessions             # debrief worklist
-python3 plugins/shadowling/capture.py messages --session <id> --lang en
-python3 plugins/shadowling/capture.py mark-drills          # fence tutor answers
-python3 plugins/shadowling/capture.py mark-processed --session <id>
+python3 plugins/shadowling/skills/tutor/tutor.py stats
+python3 plugins/shadowling/skills/debrief/debrief.py mark-drills
 ```
 
 ## Data & env overrides
@@ -205,7 +208,7 @@ See `.claude/skills/shadowling-db` for the full conventions.
 
 - stdlib only (Python 3.9+), no third-party deps.
 - `/loot` runs as a forked subagent (`context: fork`): translation happens off
-  the main context; deterministic work lives in `vocab.py`.
+  the main context; deterministic work lives in `models/vocab.py` (called by `loot.py`).
 - `/aha` runs in the **main** agent (it needs the live conversation for context);
   `/debrief` runs in main but forks triage + the five specialists into their own windows.
-- Hooks must never crash the session — `scan` and `capture` swallow exceptions.
+- Hooks must never crash the session — `scan` (in `gloss.py`) and `capture` swallow exceptions.

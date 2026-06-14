@@ -116,16 +116,16 @@ See `config.example.json`.
 
 ```
 /loot throughput
-   └─ Claude translates → vocab.py add → vocab table in ~/.shadowling/shadowling.db
+   └─ Claude translates → loot.py add → vocab table in ~/.shadowling/shadowling.db
         throughput, rendimiento, remaining=10, active
 
-(before every reply)  UserPromptSubmit hook → vocab.py inject
+(before every reply)  UserPromptSubmit hook → gloss.py inject
    └─ injects <vocab_glossing> block: rules + active words
 
 (Claude replies)
    └─ first occurrence glossed inline + 📖 Vocabulary footer
 
-(after the reply)  Stop hook → vocab.py scan
+(after the reply)  Stop hook → gloss.py scan
    └─ reads the reply, remaining−1 per used word; at 0 → "learned"
 ```
 
@@ -184,8 +184,8 @@ Each category is an **append-only incident table** — one row per occurrence,
 nothing overwritten. The matching `*_ranked` **view** computes the frequency
 ranking on the fly (a `counter` per stable key, plus the latest example), so a
 recurring mistake climbs the ranking while every verbatim instance stays
-queryable. `python3 <plugin>/db.py <category> export` renders any ranking as a
-markdown table.
+queryable. `python3 <plugin>/sql.py --md "SELECT * FROM <category>_ranked"` renders
+any ranking as a markdown table.
 
 Everything stays local — it all lives in `~/.shadowling/shadowling.db`, no
 network calls.
@@ -248,8 +248,8 @@ tutoring works, but drill answers may reach `/debrief` analysis).
 | `~/.shadowling/shadowling.db` | everything: message store (language tags, processed flags), the six category incident datasets with their computed rankings, your vocabulary, and the tutor's attempt log + spaced-repetition state |
 | `~/.shadowling/config.json` | language settings |
 
-Want a human-readable table? `python3 <plugin>/db.py <category> export` prints
-any category's ranking as markdown (categories: grammar, rephrasing, idioms,
+Want a human-readable table? `python3 <plugin>/sql.py --md "SELECT * FROM <category>_ranked"`
+renders any ranking as a markdown table (categories: grammar, rephrasing, idioms,
 verbs, decode, friction).
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
@@ -291,9 +291,9 @@ claude plugin validate . --strict                 # validate the manifest
 
 The tool is dependency-free stdlib Python: `core.py` (shared infra), `config.py`
 (plugin-wide language config), `appdb.py` (the single sqlite home: connection,
-`user_version` migrations, ranked views, read-only query), `vocab.py` (glossing),
-`capture.py` (message capture), and the sqlite data layer (`db.py` CLI, `models/`)
-plus tests.
+`user_version` migrations, ranked views, read-only query), `gloss.py` (glossing),
+`capture.py` (message capture), and the sqlite data layer (`models/` repositories +
+per-skill entrypoints) plus tests.
 
 See **[docs/ENGINEERING.md](docs/ENGINEERING.md)** for the design principles, the
 guarantees behind them, and a reproducible end-to-end traceability proof.

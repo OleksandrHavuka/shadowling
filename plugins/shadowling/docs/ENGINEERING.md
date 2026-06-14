@@ -21,17 +21,16 @@ plugin updates); the location is `$SHADOWLING_HOME` or `~/.shadowling` (`core.da
 ```
 config.py    ── plugin-wide language config (3 mandatory keys), the whole-plugin gate
 appdb.py     ── the single owner of the connection: WAL, migrations, ranked views, RO escape hatch
-models/      ── one repository per incident category over appdb (append-only INSERT, read via view)
-db.py        ── CLI over the repositories (record / select / export / drop)
-vocab.py     ── vocabulary glossing store + hook entry points
-capture.py   ── message collector (Stop hook) + debrief-pipeline read/write verbs
-tutor.py     ── spaced-repetition engine (Leitner) over the datasets
-sql.py       ── dev console: arbitrary SQL, read-only by default, snapshot-before-write
-skills/      ── the LLM-driven workflows (/debrief, /aha, /tutor, /loot, setup, …)
+models/      ── the repository layer: each module owns its table and ALL its SQL
+               (6 incident repos + vocab / messages / tutor)
+gloss.py     ── glossing hooks (inject / scan) over models/vocab
+capture.py   ── Stop-hook message capture over models/messages
+sql.py       ── dev console: arbitrary SQL, read-only by default, snapshot-before-write, paths
+skills/      ── LLM workflows, each with a thin entrypoint .py (tagio parse → repository → output)
 ```
 
-The dividing line that matters: **`appdb.py` + `models/` + the CLIs are deterministic
-code**; **`skills/` are instructions a model follows.** See
+The dividing line that matters: **`appdb.py` + `models/` + the entrypoints are deterministic
+code**; **`skills/` SKILL.md are instructions a model follows.** See
 [The deterministic boundary](#the-deterministic-boundary) below.
 
 ---
@@ -74,7 +73,7 @@ so steady-state connects write nothing and parallel readers cannot race.
 
 A column has **one name** from schema → repository → SQL consumer → skill. Views may
 alias a column to a human-readable display header (`learner_wrote AS "you wrote"`) —
-that is a documented presentation layer, not drift. The `db.py … record` CLI reads
+that is a documented presentation layer, not drift. Each incident skill's entrypoint reads
 each field from a `<tag>` on stdin (a `<<'SL_IN'` heredoc — zero shell escaping), so a
 skill's tag at position *i* must name the column the value lands in.
 
@@ -82,7 +81,7 @@ This is machine-checkable in both directions (see
 [Verify it yourself](#verify-it-yourself)):
 
 - every model's `insert_cols` ⊆ the real table columns;
-- every skill's `record <<'SL_IN'` tag sequence **equals** the column sequence;
+- every skill's `record <<'SL_IN'` tag sequence **equals** the column sequence its entrypoint's recorder writes;
 - every `tutor.PROMPT_SQL` statement selects only real columns.
 
 - Convention documented in: the `shadowling-db` project skill (column naming, the
@@ -154,7 +153,7 @@ python3 -m unittest                       # 186 tests, ~1s
 
 **End-to-end traceability proof** — productized as `traceability.py`. The same
 `check()` also runs as a test (`test_traceability.py`) and as a PostToolUse hook
-that re-checks after edits to `appdb.py`, `tutor.py`, `models/`, or `skills/`
+that re-checks after edits to `appdb.py`, `models/`, or `skills/`
 (see the repo-root `DEV.md`):
 
 ```bash
@@ -181,7 +180,7 @@ grep -rn -- '--lang en' skills/
 Tracked honestly (full list in the local `TODO.md`):
 
 - **Retry idempotency** — a debrief specialist records findings one at a time (each
-  `db.py record` is its own committed transaction), so a mid-batch failure leaves the
+  entrypoint `record` is its own committed transaction), so a mid-batch failure leaves the
   earlier findings committed; the retry re-records them and inflates the counter. The
   clean fix rides on the headless-driver refactor (debrief 3.0): have the specialists
   *return* validated JSON findings instead of writing, and let the driver persist a

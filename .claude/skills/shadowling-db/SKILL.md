@@ -1,6 +1,6 @@
 ---
 name: shadowling-db
-description: Use whenever you read, query, or mutate shadowling's sqlite database (shadowling.db) — any SELECT/INSERT/UPDATE/DELETE, ad-hoc SQL, dropping/clearing/resetting rows, inspecting data, or checking a migration's result. All DB access goes through sql.py or the data-layer verbs (db.py / vocab.py / capture.py), never raw sqlite3. Schema/data-layer changes are NOT made here — they go through an appended migration in appdb.py; this skill only documents that rule and verifies the outcome.
+description: Use whenever you read, query, or mutate shadowling's sqlite database (shadowling.db) — any SELECT/INSERT/UPDATE/DELETE, ad-hoc SQL, dropping/clearing/resetting rows, inspecting data, or checking a migration's result. All DB access goes through a skill entrypoint, a repository method (`models/*`), or `sql.py` — never raw sqlite3. Schema/data-layer changes are NOT made here — they go through an appended migration in appdb.py; this skill only documents that rule and verifies the outcome.
 ---
 
 # shadowling DB conventions
@@ -9,7 +9,7 @@ One sqlite database (`~/.shadowling/shadowling.db`), stdlib `sqlite3` only.
 `plugins/shadowling/appdb.py` owns the connection (`connect()`: WAL,
 `busy_timeout=5000`, `row_factory=Row`, migration runner, view recreation).
 Never open the DB another way; ad-hoc reads and dev surgery go through
-`sql.py` (capture.py's `query` verb remains for the debrief pipeline).
+`sql.py` (the old `capture.py query` verb is folded into `sql.py`).
 
 ## Schema changes: MIGRATIONS only
 
@@ -75,8 +75,10 @@ and a PostToolUse hook. It names the exact layer that drifted.
 MCP / raw `sqlite3` use. Raw `sqlite3` against the live db is forbidden
 (WAL-consistency + perms).
 
-- Prefer data-layer verbs first: `db.py <cat> record/select/export/drop`,
-  `vocab.py add/remove`, `capture.py tag/mark-processed`.
+- Prefer the data layer first: each skill's entrypoint (`<cat>.py record/select`,
+  `loot.py add`, `drop.py remove`, `triage.py tag`, `debrief.py mark-processed`) and
+  the repository methods in `models/*`. `db.py` export is replaced by
+  `sql.py --md "SELECT …"`.
 - Any read: `python3 sql.py "<SELECT …>" [param …]` (JSON per row) or
   `--md` (markdown table). Params bind to `?` — never inline values.
 - Mutations: `python3 sql.py --write "<SQL>" [param …]` — LAST resort for
