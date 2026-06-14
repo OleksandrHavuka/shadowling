@@ -1,5 +1,6 @@
 import re
 import unittest
+from unittest import mock
 
 import traceability
 
@@ -35,12 +36,12 @@ class TraceabilityTest(unittest.TestCase):
 
     def test_check_catches_drift(self):
         # the check must be able to FAIL — temporarily break one model's
-        # insert_cols and confirm a violation is reported, then restore.
-        import models
+        # insert_cols (the live class that _discover_models finds) and confirm a
+        # violation is reported, then restore.
+        from models.verbs import Verbs
 
-        verbs = models.REGISTRY["verbs"]
-        original = verbs.insert_cols
-        verbs.insert_cols = original + ["ghost_column"]
+        original = Verbs.insert_cols
+        Verbs.insert_cols = original + ["ghost_column"]
         try:
             violations = traceability.check()
             self.assertTrue(
@@ -48,22 +49,25 @@ class TraceabilityTest(unittest.TestCase):
                 "check() failed to catch an injected bad insert_col",
             )
         finally:
-            verbs.insert_cols = original
+            Verbs.insert_cols = original
 
     def test_check_flags_new_recorder_without_skill_line(self):
-        # robustness to growth: a newly registered recorder that no skill
-        # documents must be flagged, not silently ignored.
-        import models
+        # robustness to growth: a discovered recorder that no skill documents must
+        # be flagged. Patch the discovery seam to inject a ghost recorder.
+        real = traceability._discover_models
 
-        models.RECORDERS["__ghost_cat__"] = lambda a, b: "ok"
-        try:
+        def fake():
+            recorders, models_by_cat, prompt_sqls = real()
+            recorders = dict(recorders)
+            recorders["__ghost_cat__"] = lambda a, b: "ok"
+            return recorders, models_by_cat, prompt_sqls
+
+        with mock.patch.object(traceability, "_discover_models", fake):
             violations = traceability.check()
-            self.assertTrue(
-                any("__ghost_cat__" in v for v in violations),
-                "check() failed to flag a recorder with no skill record line",
-            )
-        finally:
-            del models.RECORDERS["__ghost_cat__"]
+        self.assertTrue(
+            any("__ghost_cat__" in v for v in violations),
+            "check() failed to flag a recorder with no skill record line",
+        )
 
     def test_check_reports_unparseable_prompt_sql_instead_of_crashing(self):
         # robustness: a future PROMPT_SQL whose FROM isn't a bare table name must
