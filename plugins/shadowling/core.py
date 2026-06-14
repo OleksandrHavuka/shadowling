@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """core.py - shared infrastructure for shadowling scripts (stdlib only, Python 3.9+).
 
-Home-directory resolution, config loading, and transcript reading, shared by
-`gloss.py` (glossing) and `capture.py` (message collection).
+The dependency-free foundation the rest of the plugin builds on: it imports
+nothing from the project, so the dependency arrow only ever points *into* here.
+Provides data-dir resolution, config load/save + the whole-plugin gate,
+chat-transcript reading, and the write-time date/slug helpers. core stays
+unaware of its callers by design — describe what it offers, never who uses it.
 """
 
 import json
