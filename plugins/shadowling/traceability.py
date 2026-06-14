@@ -38,7 +38,7 @@ import tempfile
 HERE = os.path.dirname(os.path.abspath(__file__))
 
 # A PostToolUse edit whose path contains one of these can break the contract.
-_RELEVANT = ("appdb.py", "tutor.py", "/models/", "/skills/")
+_RELEVANT = ("appdb.py", "/models/", "/skills/")
 
 # `<entrypoint>.py" record <<'DELIM'` ... `DELIM` — the heredoc each incident
 # skill feeds record fields through. The category is the entrypoint's BASENAME
@@ -141,6 +141,12 @@ def check():
             # 3. tutor: PROMPT_SQL reads only real columns
             for kind, sql in tutor.PROMPT_SQL.items():
                 m = re.search(r"SELECT (.+?) FROM (\w+)", sql)
+                if m is None:  # report, never crash, on an unparseable shape
+                    violations.append(
+                        f"tutor PROMPT_SQL[{kind!r}]: cannot parse a "
+                        f"`SELECT <cols> FROM <table>` shape from {sql!r}"
+                    )
+                    continue
                 table = m.group(2)
                 tcols = cols(table)
                 for field in (f.strip() for f in m.group(1).split(",")):

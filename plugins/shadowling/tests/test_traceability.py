@@ -65,6 +65,20 @@ class TraceabilityTest(unittest.TestCase):
         finally:
             del models.RECORDERS["__ghost_cat__"]
 
+    def test_check_reports_unparseable_prompt_sql_instead_of_crashing(self):
+        # robustness: a future PROMPT_SQL whose FROM isn't a bare table name must
+        # become a clean violation, never an AttributeError that crashes the gate.
+        import models.tutor as tutor
+
+        saved = dict(tutor.PROMPT_SQL)
+        tutor.PROMPT_SQL["__probe__"] = "SELECT translation FROM (subquery)"
+        try:
+            violations = traceability.check()  # must not raise
+            self.assertTrue(any("__probe__" in v for v in violations))
+        finally:
+            tutor.PROMPT_SQL.clear()
+            tutor.PROMPT_SQL.update(saved)
+
 
 if __name__ == "__main__":
     unittest.main()
