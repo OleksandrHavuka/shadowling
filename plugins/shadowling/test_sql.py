@@ -185,5 +185,12 @@ class BackupVerbTest(SqlTestBase):
             con.close()
 
 
+class PathsTest(SqlTestBase):
+    def test_paths_prints_db_path(self):
+        code, out, _ = run_main(["paths"])
+        self.assertEqual(code, 0)
+        self.assertEqual(out.strip(), "db: " + os.path.join(self.home, "shadowling.db"))
+
+
 if __name__ == "__main__":
     unittest.main()

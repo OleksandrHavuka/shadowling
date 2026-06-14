@@ -6,13 +6,14 @@ mutation fails at the connection level, not by SQL inspection. Writes need
 the explicit --write flag and are preceded by an automatic consistent
 snapshot (sqlite online backup API — a raw file copy of a WAL db can lose
 unflushed -wal frames) into <data_dir>/backups/, keep-last-10. This is the
-dev escape hatch BEHIND the data layer: prefer db.py / vocab.py / capture.py
-verbs first (see the shadowling-db project skill).
+dev escape hatch BEHIND the data layer: prefer the per-skill entrypoints /
+repository methods (models/*) first (see the shadowling-db project skill).
 
   python3 sql.py "<SQL>" [param ...]          # ro; JSON object per row
   python3 sql.py --md "<SQL>" [param ...]     # ro; markdown table
   python3 sql.py --write "<SQL>" [param ...]  # rw: snapshot, then execute
   python3 sql.py backup                       # manual snapshot; prints path
+  python3 sql.py paths                        # print the sqlite db path
 """
 
 import json
@@ -23,11 +24,28 @@ from datetime import datetime
 
 from appdb import connect, db_path, query
 from core import data_dir
-from db import render_md
 
 KEEP = 10  # snapshots retained in <data_dir>/backups/
 
-USAGE = 'usage: sql.py [--md|--write] "<SQL>" [param ...] | sql.py backup'
+USAGE = (
+    'usage: sql.py [--md|--write] "<SQL>" [param ...] | sql.py backup | sql.py paths'
+)
+
+
+def _cell(value):
+    return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def render_md(rows):
+    """rows: non-empty list of dicts (same keys) -> markdown table string."""
+    headers = list(rows[0].keys())
+    out = [
+        "| " + " | ".join(headers) + " |",
+        "| " + " | ".join("---" for _ in headers) + " |",
+    ]
+    for r in rows:
+        out.append("| " + " | ".join(_cell(r[h]) for h in headers) + " |")
+    return "\n".join(out)
 
 
 def snapshot(con):
@@ -88,6 +106,9 @@ def main(argv):
             print(snapshot(con))
         finally:
             con.close()
+        return 0
+    if argv[0] == "paths":
+        print("db: " + db_path())
         return 0
     md = write = False
     if argv[0] == "--md":
