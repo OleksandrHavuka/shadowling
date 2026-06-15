@@ -90,11 +90,13 @@ def _counter(con, kind, key):
 
 def _card(con, kind, key):
     row = con.execute(PROMPT_SQL[kind], (key,)).fetchone()
+    if row is None:  # hollow: the source incident/vocab row is gone (e.g. dropped)
+        return None
     return {
         "item_kind": kind,
         "item_key": key,
         "exercise": EXERCISES[kind],
-        "prompt_data": dict(row) if row else {},
+        "prompt_data": dict(row),
     }
 
 
@@ -206,9 +208,12 @@ class Tutor:
                     break
                 if per_kind.get(kind, 0) >= cap:
                     continue
-                per_kind[kind] = per_kind.get(kind, 0) + 1
+                card = _card(con, kind, key)
                 taken[i] = True
-                cards.append(_card(con, kind, key))
+                if card is None:
+                    continue
+                per_kind[kind] = per_kind.get(kind, 0) + 1
+                cards.append(card)
             # Pass 2: if the cap left the deck short, backfill the remaining
             # pool ignoring the cap until full or exhausted.
             if len(cards) < size:
@@ -217,7 +222,11 @@ class Tutor:
                         break
                     if taken[i]:
                         continue
-                    cards.append(_card(con, kind, key))
+                    taken[i] = True
+                    card = _card(con, kind, key)
+                    if card is None:
+                        continue
+                    cards.append(card)
             return cards
         finally:
             con.close()

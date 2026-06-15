@@ -193,6 +193,18 @@ class DeckTest(TutorRepoBase):
         self.assertEqual(kinds.count("grammar"), 4)
         self.assertEqual(kinds.count("vocab"), 4)
 
+    def test_hollow_card_skipped_and_does_not_displace_real_card(self):
+        # A vocab key with a due mastery row but NO vocab row (drilled, then
+        # the word was dropped). PROMPT_SQL['vocab'] finds nothing, so the card
+        # is hollow and must neither appear nor consume a slot.
+        self._mastery_row("vocab", "ghost", 1, "2026-06-10")
+        self.seed_grammar("real")
+        with mock.patch("models.tutor._today", return_value="2026-06-12"):
+            cards = Tutor.deck(1)
+        keys = [(c["item_kind"], c["item_key"]) for c in cards]
+        self.assertNotIn(("vocab", "ghost"), keys)
+        self.assertEqual(keys, [("grammar", "real")])
+
 
 class StatsTest(TutorRepoBase):
     def test_stats_counts_due(self):
