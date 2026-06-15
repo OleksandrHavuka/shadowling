@@ -25,7 +25,11 @@ def build_pattern(word):
     left = r"(?<!\w)"
     right = r"(?!\w)"
     if len(word) >= STEM_MIN_LEN and word[-1:].isalnum():
-        body = esc + r"(?:s|es|ed|ing|d)?"
+        # The bare 'd' is for '-e' stems (care -> cared). Applying it to any word
+        # over-matches (bear -> "beard", boar -> "board", bran -> "brand") and
+        # decrements the wrong vocab entry, so gate it on an '-e' ending.
+        tail = "s|es|ed|ing|d" if word.endswith("e") else "s|es|ed|ing"
+        body = esc + f"(?:{tail})?"
     else:
         body = esc
     return re.compile(left + body + right, re.IGNORECASE)

@@ -152,6 +152,17 @@ class MatchTest(VocabRepoBase):
     def test_punctuation_term_matches(self):
         self.assertTrue(word_in_text("c++", "I write C++ every day"))
 
+    def test_d_suffix_only_for_e_final_stems(self):
+        # the bare 'd' inflection is for '-e' stems (care -> cared); applying it
+        # to every word over-matched unrelated words and decremented the wrong
+        # vocab entry.
+        self.assertFalse(word_in_text("bear", "I grew a beard"))
+        self.assertFalse(word_in_text("boar", "a wooden board"))
+        self.assertFalse(word_in_text("bran", "a new brand"))
+        # '-e' stems still match their 'd' inflection:
+        self.assertTrue(word_in_text("care", "she cared"))
+        self.assertTrue(word_in_text("love", "he loved it"))
+
 
 class ListActiveTest(VocabRepoBase):
     def test_list_active_excludes_learned(self):
