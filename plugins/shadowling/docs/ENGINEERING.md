@@ -1,14 +1,7 @@
 # Engineering notes
 
-An engineering due-diligence companion to the [README](../README.md). The README
-explains *what shadowling does*; this document explains *how it is built*, what it
-guarantees, and — crucially — **how to verify every claim here yourself**. Every
-principle below names the code that enforces it and the test that guards it.
-
-shadowling is a Claude Code plugin, but the parts worth reading as engineering are
-platform-agnostic: a disciplined sqlite data layer, a linear migration history, and
-a strict separation between what a script *guarantees* and what a language model
-does *best-effort*.
+How shadowling is built, and how to verify each claim — every principle below names
+the code that enforces it and the test that guards it.
 
 ---
 
@@ -43,8 +36,8 @@ Versioning is `PRAGMA user_version` plus the ordered `MIGRATIONS` list in `appdb
 A schema change **appends** one migration; shipped migrations are never edited, so a
 fresh install replays the exact same history an old install took. The runner copies
 the file to `.bak` (only when the DB is non-empty), then applies each pending step
-and bumps the version **atomically** (`with con:` — a failed step rolls back and
-retries).
+and bumps the version **atomically** (via `tx()` / `BEGIN IMMEDIATE`; a failed step
+rolls back and the next connect resumes).
 
 - Enforced by: `appdb.connect()` (backup + atomic step+bump loop), the `MIGRATIONS` list.
 - **Proof it is followed:** migration 1's `CREATE TABLE` statements still contain the
@@ -93,8 +86,7 @@ No third-party imports, no `requirements.txt`/`pyproject.toml`, no ORM. This is 
 deliberate portability/supply-chain constraint.
 
 - Verified: the import graph is stdlib + local modules only; the suite **compiles and
-  passes under Python 3.9.6**; no `match`/`case`, no PEP-604 (`X | Y`) annotations
-  (the code uses no type annotations and `str.format` over f-strings, by choice).
+  passes under Python 3.9.6**; no `match`/`case`, no PEP-604 (`X | Y`) annotations.
 
 ### 5. Least privilege, read-only by default, parameterized always
 
@@ -125,8 +117,7 @@ the learner's answer verbatim (it doubles as the drill-filter registry).
 
 ## The deterministic boundary
 
-What the script **guarantees** vs what the model does **best-effort** — stated plainly
-because honesty about this line is the point:
+What the script **guarantees** vs what the model does **best-effort**:
 
 | Deterministic (Python) | Instruction-based (a model follows it) |
 |---|---|
@@ -147,7 +138,7 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 186 tests, ~1s
+python3 -m unittest                       # 272 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
@@ -164,7 +155,7 @@ grep -rn -- '--lang en' skills/
 
 ## Known limitations & roadmap
 
-Tracked honestly (full list in the local `TODO.md`):
+Tracked honestly:
 
 - **Retry idempotency** — a debrief specialist records findings one at a time (each
   entrypoint `record` is its own committed transaction), so a mid-batch failure leaves the

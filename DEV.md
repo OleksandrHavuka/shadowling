@@ -1,7 +1,5 @@
 # Development
 
-Local dev notes for working on the shadowling plugin.
-
 ## Requirements
 
 stdlib only — no third-party runtime deps. Floors: **Python ≥ 3.9** (the plugin
@@ -122,9 +120,8 @@ git config core.hooksPath .githooks
 - **pre-push** — runs `check.sh` again before sharing: a safety net in case a commit used
   `--no-verify` or was amended.
 
-`check.sh` resolves each tool to its binary, else `uvx`; if neither is available the gate
-FAILS with an install hint rather than skipping. It checks the working tree, not the
-staged snapshot — fine for whole-file commits; review if you `git add -p`.
+`check.sh` checks the working tree, not the staged snapshot — fine for whole-file
+commits; review if you `git add -p`.
 
 ## Manual CLI smoke
 
@@ -238,7 +235,6 @@ timestamps come from `core.today()` (date) / `core.now()` (ISO seconds). See
 
 ## Notes
 
-- stdlib only (Python 3.9+), no third-party deps.
 - `/loot` runs as a forked subagent (`context: fork`): translation happens off
   the main context; deterministic work lives in `models/vocab.py` (called by `loot.py`).
 - `/aha` runs in the **main** agent (it needs the live conversation for context);

@@ -14,11 +14,6 @@ terminology in the flow of your normal work.
 Works for **any** language pair (set it once): the language you're learning →
 your native language.
 
-<!-- Demo GIF — drop a ~10s recording at docs/demo.gif and uncomment:
-![shadowling demo](docs/demo.gif)
--->
-
-
 ---
 
 ## What it looks like
@@ -43,9 +38,6 @@ queue drains faster.
 📖 Vocabulary:
 - throughput — rendimiento (10 to go)
 ```
-
-After the word has appeared in 10 replies it "graduates" and is no longer glossed.
-Re-adding a graduated word resets it.
 
 ---
 
@@ -81,10 +73,6 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/aha <phrase> [+ your hunch]` | Explain an expression in the language you're learning that you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. |
 | `/vipe` | Dev: wipe the six category datasets for a clean test run (keeps config, vocab, message store). |
 
-Run **`/shadowling:setup`** once to set the three languages; the answers are saved
-to `~/.shadowling/config.json`. (Commands also work fully-qualified, e.g.
-`/shadowling:loot`.)
-
 ---
 
 ## Configuration
@@ -108,8 +96,6 @@ setup).
 - `explanation_language` — the language `/debrief` and `/aha` write meanings,
   rules, and takeaways in.
 
-See `config.example.json`.
-
 ---
 
 ## How it works
@@ -129,12 +115,6 @@ See `config.example.json`.
    └─ reads the reply, remaining−1 per used word; at 0 → "learned"
 ```
 
-- **Deterministic** (in the script): storage, exposure counting, graduation,
-  word matching.
-- **Instruction-based** (Claude follows it): the actual glossing. There's no
-  Claude Code hook that rewrites an assistant message after it's generated, so the
-  gloss is the model following the injected rule (see **Good to know** below).
-
 ### Counting / graduation
 A word starts at `remaining = 10`. Each reply it appears in decrements it by one
 (once per reply, regardless of how many times it occurs). At `0` the word's status
@@ -142,9 +122,9 @@ becomes `learned` and it's no longer injected or glossed. Re-adding a learned wo
 resets it to `10`/`active`.
 
 ### Word matching
-Case-insensitive, whole-word. Words ≥ 4 characters also match common suffixes
-(`s`, `es`, `ed`, `ing`, `d`); shorter words match exactly. Terms with trailing
-punctuation (e.g. `C++`) are matched too.
+Case-insensitive, whole-word. Words ≥ 4 characters also match inflected suffixes
+(`s`, `es`, `ed`, `ing`; plus `d` for `-e` stems like `care` → `cared`); shorter
+words match exactly. Terms with trailing punctuation (e.g. `C++`) are matched too.
 
 ---
 
@@ -184,11 +164,7 @@ Each category is an **append-only incident table** — one row per occurrence,
 nothing overwritten. The matching `*_ranked` **view** computes the frequency
 ranking on the fly (a `counter` per stable key, plus the latest example), so a
 recurring mistake climbs the ranking while every verbatim instance stays
-queryable. `python3 <plugin>/sql.py --md "SELECT * FROM <category>_ranked"` renders
-any ranking as a markdown table.
-
-Everything stays local — it all lives in `~/.shadowling/shadowling.db`, no
-network calls.
+queryable.
 
 The friction specialist deserves a note: it watches for **code-switching** —
 the moments you bail from the language you're learning into your native language.
@@ -227,7 +203,7 @@ unknown word it points you at `/loot` instead.
 
 ## Training (`/tutor`)
 
-The datasets aren't just a mirror — `/tutor` closes the loop. Each session
+`/tutor` closes the loop. Each session
 deals a small deck of cards built from your own incidents: "how would you
 say…?" for code-switching zones, "correct this sentence" for recurring
 grammar errors, quick-fire irregular-verb forms, and reverse checks of
@@ -253,7 +229,7 @@ renders any ranking as a markdown table (categories: grammar, rephrasing, idioms
 verbs, decode, friction).
 
 Data is intentionally stored **outside** the plugin directory so it survives plugin
-updates. Override the location with the `SHADOWLING_HOME` environment variable.
+updates.
 
 ---
 
@@ -283,20 +259,9 @@ A few design notes so nothing surprises you:
 
 ## Development
 
-```
-cd plugins/shadowling
-python3 -m unittest discover -p 'test_*.py' -v    # full suite, stdlib only
-claude plugin validate . --strict                 # validate the manifest
-```
-
-The tool is dependency-free stdlib Python: `core.py` (shared infra), `config.py`
-(plugin-wide language config), `appdb.py` (the single sqlite home: connection,
-`user_version` migrations, ranked views, read-only query), `gloss.py` (glossing),
-`capture.py` (message capture), and the sqlite data layer (`models/` repositories +
-per-skill entrypoints) plus tests.
-
-See **[docs/ENGINEERING.md](docs/ENGINEERING.md)** for the design principles and the
-guarantees behind them.
+See **[../../DEV.md](../../DEV.md)** for dev setup, the test suite, and the
+`check.sh` gate, and **[docs/ENGINEERING.md](docs/ENGINEERING.md)** for the design
+principles and the guarantees behind them.
 
 ---
 

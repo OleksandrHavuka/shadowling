@@ -1,15 +1,15 @@
 # shadowling
 
-A Claude Code plugin marketplace. It currently hosts a single plugin:
+A Claude Code plugin marketplace hosting a single plugin:
 
 ### `shadowling`
 
 Passive language learning for non-native developers. Collect words with `/loot`
 and Claude appends a translation in your native language inline in its replies,
 until you've seen each word enough times to have learned it. `/debrief` quietly
-turns the English you write into personal correction docs — grammar, natural
-phrasing, idioms, and irregular verbs — while `/aha` explains expressions you can't
-read literally. Works for any native language.
+turns what you write in the language you're learning into personal correction docs —
+grammar, natural phrasing, idioms, and irregular verbs — while `/aha` explains
+expressions you can't read literally. Works for any language pair.
 
 → Full documentation: [`plugins/shadowling/README.md`](plugins/shadowling/README.md)
 
