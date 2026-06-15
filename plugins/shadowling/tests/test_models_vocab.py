@@ -89,6 +89,43 @@ class RemoveTest(VocabRepoBase):
     def test_remove_unknown_returns_false(self):
         self.assertFalse(Vocab.remove("nonexistent"))
 
+    def test_remove_cascades_orphaned_mastery_row(self):
+        Vocab.add("throughput", "t")
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO mastery(item_kind, item_key, box, due_date,"
+                    " last_verdict, created_at, updated_at)"
+                    " VALUES ('vocab', 'throughput', 1, '2026-06-12', 'pass', 't', 't')"
+                )
+        finally:
+            con.close()
+        self.assertTrue(Vocab.remove("Throughput"))
+        leftover = appdb.query(
+            "SELECT * FROM mastery WHERE item_kind='vocab' AND item_key='throughput'"
+        )
+        self.assertEqual(leftover, [])
+
+    def test_remove_leaves_other_kinds_mastery_untouched(self):
+        Vocab.add("throughput", "t")
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO mastery(item_kind, item_key, box, due_date,"
+                    " last_verdict, created_at, updated_at)"
+                    " VALUES ('grammar', 'throughput', 1, '2026-06-12',"
+                    " 'pass', 't', 't')"
+                )
+        finally:
+            con.close()
+        Vocab.remove("throughput")
+        kept = appdb.query(
+            "SELECT * FROM mastery WHERE item_kind='grammar' AND item_key='throughput'"
+        )
+        self.assertEqual(len(kept), 1)
+
 
 class RelearnTest(VocabRepoBase):
     def test_relearn_resets_remaining_and_status(self):

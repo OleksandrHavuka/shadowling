@@ -92,8 +92,12 @@ class Vocab:
         word = word.strip().lower()
         con = connect()
         try:
-            with con:
+            with tx(con):  # vocab delete + orphan-mastery cleanup, atomic
                 cur = con.execute("DELETE FROM vocab WHERE word = ?", (word,))
+                con.execute(
+                    "DELETE FROM mastery WHERE item_kind = 'vocab' AND item_key = ?",
+                    (word,),
+                )
             return cur.rowcount > 0
         finally:
             con.close()
