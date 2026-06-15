@@ -48,7 +48,9 @@ except ImportError:  # dev-only tool — keep the stdlib baseline runnable
 # alphanumeric, so values carry no TAB / newline / '<' that the parser is
 # sensitive to — used where the property only needs "ordinary token" inputs.
 TOKEN = st.text(alphabet="abcdefABCDEF0123456789", min_size=1, max_size=8)
-SLUG_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+# Unicode-aware slug shape: runs of word chars (letters/digits of any script,
+# NOT underscore) joined by single hyphens. Matches core.slugify's contract.
+SLUG_RE = re.compile(r"^[^\W_]+(-[^\W_]+)*$")
 
 
 @unittest.skipUnless(HAS_HYPOTHESIS, "hypothesis not installed (dev-only tool)")

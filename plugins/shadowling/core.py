@@ -139,13 +139,18 @@ def today():
 def slugify(s):
     """Canonical kebab-case slug key, robust to whatever the LLM emits.
 
-    Lowercases, turns any run of whitespace/underscores into a single hyphen, drops
-    every remaining char outside [a-z0-9-], collapses repeated hyphens, and trims
-    leading/trailing hyphens. Guarantees the result matches `^[a-z0-9]+(-[a-z0-9]+)*$`
-    (or is empty). So "Word Choice_Plural", "word-choice-plural", and "  word  choice
-    plural " all canonicalize to the same key, keeping the frequency counter honest.
+    Lowercases (casefold, so e.g. ß -> ss), turns any run of whitespace/underscores
+    into a single hyphen, KEEPS Unicode letters/digits of ANY script (Cyrillic,
+    CJK, …) and drops only punctuation/symbols, then collapses repeated hyphens
+    and trims leading/trailing ones. The slug is an internal GROUP BY key, never
+    shown to the user, so native script is preserved (no transliteration). So
+    "Word Choice_Plural", "word-choice-plural", and "  word  choice plural " all
+    canonicalize to the same key, keeping the frequency counter honest. The only
+    degenerate output is all-punctuation input -> "" (rejected at the chokepoint).
     """
-    s = re.sub(r"[\s_]+", "-", s.strip().lower())
-    s = re.sub(r"[^a-z0-9-]+", "", s)
+    s = re.sub(r"[\s_]+", "-", s.strip()).casefold()
+    # Keep Unicode word chars (\w = letters/digits/underscore) and hyphens; the
+    # step above already turned every "_" into "-", so \w won't re-admit "_".
+    s = re.sub(r"[^\w-]+", "", s, flags=re.UNICODE)
     s = re.sub(r"-+", "-", s)
     return s.strip("-")
