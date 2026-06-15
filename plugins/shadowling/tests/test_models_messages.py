@@ -201,6 +201,31 @@ class MarkDrillsTest(MessagesRepoBase):
         self.assertEqual([r["kind"] for r in rows], ["drill", "drill"])
         self.assertIn("marked 2", out)
 
+    def test_return_has_no_unmatched_tail(self):
+        Messages.capture("I have gone to the gym today okay", "sess-A")
+        self._attempt("I have gone to the gym today okay")
+        self._attempt("a recorded answer that was never captured at all")
+        out = Messages.mark_drills()
+        self.assertEqual(out, "marked 1 drill answer(s)")
+        self.assertNotIn("unmatched", out)
+
+    def test_empty_recorded_answer_does_not_mark_drill(self):
+        with closing_con() as con, con:
+            con.execute(
+                "INSERT INTO messages(created_at, text, session_id)"
+                " VALUES ('t', '   ', 'sess-A')"
+            )
+            con.execute(
+                "INSERT INTO messages(created_at, text, session_id)"
+                " VALUES ('t', 'A perfectly ordinary unrelated sentence here',"
+                " 'sess-A')"
+            )
+        self._attempt("")  # blank recorded answer in the same session
+        out = Messages.mark_drills()
+        rows = appdb.query("SELECT kind FROM messages ORDER BY id")
+        self.assertEqual([r["kind"] for r in rows], [None, None])
+        self.assertEqual(out, "marked 0 drill answer(s)")
+
     def test_similarity_characterization(self):
         similarity = Messages._similarity
         self.assertGreaterEqual(

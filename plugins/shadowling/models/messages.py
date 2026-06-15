@@ -194,7 +194,9 @@ class Messages:
     def mark_drills():
         """Stamp unprocessed messages that match a recorded tutor answer for the
         SAME session (kind='drill'). Deterministic: machine-recorded session ids
-        + a fixed similarity threshold; no LLM judgment."""
+        + a fixed similarity threshold; no LLM judgment. similarity() runs ONCE,
+        in this UPDATE; the result persists in `kind`, so no later query
+        recomputes it. The non-empty guards stop ratio('','')==1.0 mislabeling."""
         with closing(connect()) as con:
             con.create_function("similarity", 2, Messages._similarity)
             with con:
@@ -204,16 +206,10 @@ class Messages:
                     "AND session_id IS NOT NULL "
                     "AND EXISTS (SELECT 1 FROM attempts a "
                     "            WHERE a.session_id = messages.session_id "
+                    "              AND length(trim(a.answer)) > 0 "
+                    "              AND length(trim(messages.text)) > 0 "
                     "              AND similarity(a.answer, messages.text) >= ?)",
                     (DRILL_SIMILARITY,),
                 )
                 marked = cur.rowcount
-            unmatched = con.execute(
-                "SELECT COUNT(*) FROM attempts a "
-                "WHERE a.session_id IS NOT NULL "
-                "AND NOT EXISTS (SELECT 1 FROM messages m "
-                "                WHERE m.session_id = a.session_id "
-                "                  AND similarity(a.answer, m.text) >= ?)",
-                (DRILL_SIMILARITY,),
-            ).fetchone()[0]
-        return f"marked {marked} drill answer(s); {unmatched} attempt(s) unmatched"
+        return f"marked {marked} drill answer(s)"
