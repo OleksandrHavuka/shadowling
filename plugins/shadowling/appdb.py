@@ -326,13 +326,20 @@ def connect():
                 con.backup(dest)
             finally:
                 dest.close()
-        for i in range(version, len(MIGRATIONS)):
-            # tx() takes BEGIN IMMEDIATE with isolation_level=None, so the DDL
-            # body AND the version bump commit/roll back together — unlike
-            # `with con:`, which implicitly COMMITs before each DDL statement.
-            with tx(con):  # step + version bump are atomic; a failed step retries
-                MIGRATIONS[i](con)
-                con.execute(f"PRAGMA user_version = {i + 1}")
+        # Re-read user_version INSIDE each step's tx() instead of trusting the
+        # pre-loop read. Two processes can connect during the same upgrade window;
+        # without the re-read, the loser (released from BEGIN IMMEDIATE after the
+        # winner committed) would replay already-applied steps — re-running
+        # _migration_2's `DELETE FROM messages` and then crashing on _migration_3's
+        # `RENAME COLUMN ts`. BEGIN IMMEDIATE takes the write lock before the read,
+        # so read + migrate + bump are one serialized unit.
+        while True:
+            with tx(con):
+                v = con.execute("PRAGMA user_version").fetchone()[0]
+                if v >= len(MIGRATIONS):
+                    break
+                MIGRATIONS[v](con)
+                con.execute(f"PRAGMA user_version = {v + 1}")
     _ensure_views(con)
     _chmod_private(path)
     return con
