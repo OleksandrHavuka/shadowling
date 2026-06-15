@@ -126,6 +126,7 @@ class Tutor:
                     (kind, key),
                 ).fetchone()
                 box = _next_box(row["box"] if row else 1, verdict)
+                counter = _counter(con, kind, key)  # one ranked-view read, reused below
                 con.execute(
                     "INSERT INTO mastery(item_kind, item_key, box, due_date,"
                     " last_verdict, counter_seen, created_at, updated_at)"
@@ -138,13 +139,13 @@ class Tutor:
                         box,
                         _due(box, t),
                         verdict,
-                        _counter(con, kind, key),
+                        counter,
                         now,
                         now,
                         box,
                         _due(box, t),
                         verdict,
-                        _counter(con, kind, key),
+                        counter,
                         now,
                     ),
                 )

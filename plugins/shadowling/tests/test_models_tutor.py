@@ -97,6 +97,17 @@ class RecordTest(TutorRepoBase):
         with self.assertRaises(ValueError):
             Tutor.record("nosuch", "k", "fix", "pass", "x")
 
+    def test_record_stamps_counter_seen_calling_counter_once(self):
+        import models.tutor as tutor_mod
+
+        self.seed_grammar("article-omission", n=2)  # counter == 2 in the view
+        with mock.patch.object(tutor_mod, "_counter", wraps=tutor_mod._counter) as spy:
+            with mock.patch("models.tutor._today", return_value="2026-06-12"):
+                Tutor.record("grammar", "article-omission", "fix", "pass", "x")
+        m = self.mastery("grammar", "article-omission")
+        self.assertEqual(m["counter_seen"], 2)
+        self.assertEqual(spy.call_count, 1)
+
 
 class DeckTest(TutorRepoBase):
     def _mastery_row(self, kind, key, box, due, counter_seen=None):
