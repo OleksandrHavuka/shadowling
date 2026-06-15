@@ -213,11 +213,21 @@ Env overrides (used by tests and smoke runs):
 
 All data lives in `shadowling.db`, owned by `appdb.py`. To evolve the schema,
 **append** a migration callable to `MIGRATIONS` — never edit a shipped one. The
-runner keys off `PRAGMA user_version`, takes an automatic `.bak` backup before
-upgrading, and applies each pending step in a transaction that also bumps the
-version. The `*_ranked` views are derived code (not migrated): `connect()`
-recreates a view only when its definition in code differs from the stored one.
-See `.claude/skills/shadowling-db` for the full conventions.
+runner keys off `PRAGMA user_version`, takes a consistent online `.bak` snapshot
+(`con.backup()`, WAL-safe) before upgrading, and runs each pending step inside an
+immediate `tx()` so the step body AND the version bump commit (or roll back)
+together. Write each migration as single `con.execute()` statements — not
+`executescript`, which implicitly COMMITs before each DDL and breaks atomicity.
+The `*_ranked` views are derived code (not migrated): `connect()` recreates a view
+only when its definition in code differs from the stored one, and each pins every
+display column to the group's newest incident via a JOIN on `MAX(id)`.
+
+All writes go through the `models/` repositories; `base.Model.insert` is the
+single chokepoint that normalizes the key (`key_norm`: `slugify` for slug models,
+`norm_key` for idiom/verb), rejects a key that normalizes to empty, and validates
+`enums` columns — so a bad key or out-of-taxonomy `type` can never persist. Write
+timestamps come from `core.today()` (date) / `core.now()` (ISO seconds). See
+`.claude/skills/shadowling-db` for the full conventions.
 
 ## Notes
 
