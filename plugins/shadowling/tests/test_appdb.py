@@ -340,5 +340,54 @@ class QueryTest(AppDbTestBase):
         self.assertEqual(rows, [{"slug": "s2"}])
 
 
+class TxHelperTest(AppDbTestBase):
+    def test_block_commits_atomically(self):
+        con = appdb.connect()
+        try:
+            with appdb.tx(con):
+                con.execute("INSERT INTO grammar(created_at, slug) VALUES ('d', 'a')")
+                con.execute("INSERT INTO grammar(created_at, slug) VALUES ('d', 'b')")
+        finally:
+            con.close()
+        self.assertEqual(
+            appdb.query("SELECT slug FROM grammar ORDER BY slug"),
+            [{"slug": "a"}, {"slug": "b"}],
+        )
+
+    def test_exception_inside_rolls_back(self):
+        con = appdb.connect()
+        try:
+            with self.assertRaises(RuntimeError):
+                with appdb.tx(con):
+                    con.execute(
+                        "INSERT INTO grammar(created_at, slug) VALUES ('d', 'x')"
+                    )
+                    raise RuntimeError("boom")
+        finally:
+            con.close()
+        self.assertEqual(appdb.query("SELECT COUNT(*) AS n FROM grammar"), [{"n": 0}])
+
+    def test_isolation_level_restored_on_success(self):
+        con = appdb.connect()
+        try:
+            prev = con.isolation_level
+            with appdb.tx(con):
+                con.execute("INSERT INTO grammar(created_at, slug) VALUES ('d', 's')")
+            self.assertEqual(con.isolation_level, prev)
+        finally:
+            con.close()
+
+    def test_isolation_level_restored_on_exception(self):
+        con = appdb.connect()
+        try:
+            prev = con.isolation_level
+            with self.assertRaises(RuntimeError):
+                with appdb.tx(con):
+                    raise RuntimeError("boom")
+            self.assertEqual(con.isolation_level, prev)
+        finally:
+            con.close()
+
+
 if __name__ == "__main__":
     unittest.main()

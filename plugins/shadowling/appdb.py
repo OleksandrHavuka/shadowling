@@ -10,6 +10,7 @@ schema, APPEND a migration — never edit a shipped one (see the
 shadowling-db project skill).
 """
 
+import contextlib
 import os
 import shutil
 import sqlite3
@@ -19,6 +20,27 @@ from core import data_dir
 
 def db_path():
     return os.path.join(data_dir(), "shadowling.db")
+
+
+@contextlib.contextmanager
+def tx(con):
+    """Atomic, write-locked transaction. Unlike `with con:`, this is safe for
+    DDL and for read-then-write: isolation_level=None disables sqlite3's
+    implicit COMMIT-before-DDL, and BEGIN IMMEDIATE takes the write lock up
+    front so a read-then-write sequence is serialized. Restores the prior
+    isolation_level in finally, leaving the rest of the app's `with con:`
+    semantics unchanged."""
+    prev = con.isolation_level
+    con.isolation_level = None  # manual control; no implicit COMMIT-before-DDL
+    try:
+        con.execute("BEGIN IMMEDIATE")
+        yield con
+        con.execute("COMMIT")
+    except BaseException:
+        con.execute("ROLLBACK")
+        raise
+    finally:
+        con.isolation_level = prev  # restore default for the rest of the app
 
 
 # --- migrations ---------------------------------------------------------------
