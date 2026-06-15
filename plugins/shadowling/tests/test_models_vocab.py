@@ -60,12 +60,12 @@ class AddTest(VocabRepoBase):
         self.assertNotIn("throughput", self.rows_by_word())
 
     def test_add_stamps_created_and_updated(self):
-        with mock.patch("models.vocab._now", return_value="2026-06-12T08:00:00"):
+        with mock.patch("core.now", return_value="2026-06-12T08:00:00"):
             Vocab.add("throughput", "переклад")
         r = self.rows_by_word()["throughput"]
         self.assertEqual(r["created_at"], "2026-06-12T08:00:00")
         self.assertEqual(r["updated_at"], "2026-06-12T08:00:00")
-        with mock.patch("models.vocab._now", return_value="2026-06-12T09:30:00"):
+        with mock.patch("core.now", return_value="2026-06-12T09:30:00"):
             Vocab.add("throughput", "новий переклад")
         r2 = self.rows_by_word()["throughput"]
         self.assertEqual(r2["created_at"], "2026-06-12T08:00:00")

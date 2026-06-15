@@ -10,9 +10,9 @@ verb over this one table — all message SQL lives here.
 import json
 import re
 from contextlib import closing
-from datetime import datetime
 from difflib import SequenceMatcher
 
+import core
 from appdb import connect
 
 MIN_LETTERS = 8  # below this it's not analyzable prose / not worth logging
@@ -24,10 +24,6 @@ COMMAND_WRAPPERS = ("<command-", "<local-command-")
 LANG_CODE = re.compile(r"^[a-z]{2,3}$")  # ISO-style; "und" fits too
 
 DRILL_SIMILARITY = 0.90  # gate threshold; width characterized in MarkDrillsTest
-
-
-def _now():
-    return datetime.now().isoformat(timespec="seconds")
 
 
 def _enough_letters(text):
@@ -65,7 +61,7 @@ class Messages:
                 return False  # guard against repeated Stop on the same turn
             con.execute(
                 "INSERT INTO messages(created_at, text, session_id) VALUES (?, ?, ?)",
-                (_now(), text, session_id),
+                (core.now(), text, session_id),
             )
         return True
 
@@ -170,7 +166,7 @@ class Messages:
             "UPDATE messages SET processed_at=? WHERE processed_at IS NULL "
             "AND (langs IS NOT NULL OR kind = 'drill')"
         )
-        params = [_now()]
+        params = [core.now()]
         if session:
             sql += " AND session_id = ?"
             params.append(session)

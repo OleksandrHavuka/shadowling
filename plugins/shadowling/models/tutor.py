@@ -11,8 +11,9 @@ partial -> box stays, fail -> box 1.
 """
 
 import os
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
+import core
 from appdb import connect
 
 from . import friction, grammar, verbs
@@ -59,12 +60,6 @@ def _today():
     return today()
 
 
-def _now():
-    # full ISO timestamp for the event log (attempts) + mutable mastery stamps;
-    # _today() stays for date-only scheduling math.
-    return datetime.now().isoformat(timespec="seconds")
-
-
 def _due(box, today_str):
     d = date.fromisoformat(today_str) + timedelta(days=INTERVALS[box])
     return d.isoformat()
@@ -108,7 +103,7 @@ class Tutor:
         if verdict not in VERDICTS:
             raise ValueError("unknown verdict: " + verdict)
         t = _today()
-        now = _now()
+        now = core.now()
         con = connect()
         try:
             with con:

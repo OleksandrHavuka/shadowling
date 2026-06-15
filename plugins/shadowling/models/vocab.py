@@ -7,17 +7,12 @@ pure matching helpers (no DB), kept module-level like models/base.norm_key.
 """
 
 import re
-from datetime import datetime
 
+import core
 from appdb import connect, tx
 
 START_REMAINING = 10
 STEM_MIN_LEN = 4
-
-
-def _now():
-    # full ISO timestamp for the vocab audit stamps, matching messages._now().
-    return datetime.now().isoformat(timespec="seconds")
 
 
 def _norm(s):
@@ -54,7 +49,7 @@ class Vocab:
                 "remaining": "-",
                 "status": "-",
             }
-        now = _now()
+        now = core.now()
         con = connect()
         try:
             with tx(con):  # BEGIN IMMEDIATE serializes the existence-read + write
@@ -135,7 +130,7 @@ class Vocab:
         Returns the list of changed words. `text` is the assistant reply being
         scanned for exposures."""
         changed = []
-        now = _now()
+        now = core.now()
         con = connect()
         try:
             rows = con.execute("SELECT * FROM vocab WHERE status = 'active'").fetchall()

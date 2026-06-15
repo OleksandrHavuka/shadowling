@@ -136,6 +136,13 @@ def today():
     return datetime.now().strftime("%Y-%m-%d")
 
 
+def now():
+    """Current local time as an ISO timestamp to the second
+    (YYYY-MM-DDTHH:MM:SS) — the single write-time timestamp source for audit
+    stamps and the attempts event log. `today()` stays for date-only math."""
+    return datetime.now().isoformat(timespec="seconds")
+
+
 def slugify(s):
     """Canonical kebab-case slug key, robust to whatever the LLM emits.
 

@@ -66,5 +66,13 @@ class SlugifyTest(unittest.TestCase):
         self.assertEqual(core.slugify("Wørd Choice!!"), "wørd-choice")
 
 
+class NowTest(unittest.TestCase):
+    def test_now_is_iso_seconds(self):
+        self.assertRegex(core.now(), r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$")
+
+    def test_now_matches_datetime(self):
+        self.assertEqual(core.now(), datetime.now().isoformat(timespec="seconds"))
+
+
 if __name__ == "__main__":
     unittest.main()

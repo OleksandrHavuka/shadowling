@@ -50,11 +50,11 @@ depends_on = ["models.base"]
 
 [[modules]]
 path = "models.vocab"
-depends_on = ["appdb"]
+depends_on = ["appdb", "core"]
 
 [[modules]]
 path = "models.messages"
-depends_on = ["appdb"]
+depends_on = ["appdb", "core"]
 
 [[modules]]
 path = "models.tutor"
