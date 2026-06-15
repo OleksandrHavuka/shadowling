@@ -132,24 +132,33 @@ class Vocab:
     def scan_decrement(text):
         """Decrement every active word that appears in `text`; graduate at 0.
         Returns the list of changed words. `text` is the assistant reply being
-        scanned for exposures."""
-        changed = []
+        scanned for exposures.
+
+        One atomic statement, no read-then-write: the decrement is RELATIVE
+        (`remaining - 1`), so concurrent scans from independent Stop hooks compose
+        correctly instead of both writing an absolute value from a stale read.
+        `word_matches` mirrors the registered-function pattern in
+        `Messages.mark_drills`. Requires SQLite >= 3.35 for RETURNING (see DEV.md)."""
         now = core.now()
         con = connect()
         try:
-            rows = con.execute("SELECT * FROM vocab WHERE status = 'active'").fetchall()
+            con.create_function(
+                "word_matches", 2, lambda w, t: 1 if word_in_text(w, t) else 0
+            )
             with con:
-                for r in rows:
-                    if not word_in_text(r["word"], text):
-                        continue
-                    remaining = max(r["remaining"] - 1, 0)
-                    status = "learned" if remaining == 0 else "active"
-                    con.execute(
-                        "UPDATE vocab SET remaining = ?, status = ?,"
-                        " updated_at = ? WHERE word = ?",
-                        (remaining, status, now, r["word"]),
+                # In SQLite an UPDATE's SET/WHERE expressions read the PRE-update
+                # row value regardless of assignment order, so the CASE sees the
+                # old `remaining` even though `remaining` is assigned above it.
+                return [
+                    r["word"]
+                    for r in con.execute(
+                        "UPDATE vocab SET remaining = MAX(remaining - 1, 0),"
+                        " status = CASE WHEN remaining - 1 <= 0 THEN 'learned'"
+                        " ELSE 'active' END, updated_at = ?"
+                        " WHERE status = 'active' AND word_matches(word, ?)"
+                        " RETURNING word",
+                        (now, text),
                     )
-                    changed.append(r["word"])
-            return changed
+                ]
         finally:
             con.close()

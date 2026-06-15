@@ -2,6 +2,13 @@
 
 Local dev notes for working on the shadowling plugin.
 
+## Requirements
+
+stdlib only — no third-party runtime deps. Floors: **Python ≥ 3.9** (the plugin
+runs on the system `python3`) and **SQLite ≥ 3.35** (for `RETURNING` in
+`models/vocab.scan_decrement`; the `ON CONFLICT … DO UPDATE` upsert in
+`models/tutor` already required ≥ 3.24).
+
 ## Layout
 
 ```
