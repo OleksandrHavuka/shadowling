@@ -7,7 +7,7 @@ import unittest
 from contextlib import closing
 
 import appdb
-from models.messages import Messages
+from models.messages import DRILL_SIMILARITY, Messages
 
 
 def closing_con():
@@ -227,11 +227,40 @@ class MarkDrillsTest(MessagesRepoBase):
         self.assertEqual(out, "marked 0 drill answer(s)")
 
     def test_similarity_characterization(self):
-        similarity = Messages._similarity
+        # Comprehensive pin of _similarity around DRILL_SIMILARITY (0.90) — the
+        # matcher's safety net that replaces the removed runtime `unmatched` metric.
+        sim = Messages._similarity
+        gate = DRILL_SIMILARITY
+        self.assertEqual(gate, 0.90)
+
+        # TRUE POSITIVES: a captured drill answer the matcher MUST recognize
+        self.assertGreaterEqual(sim("I have gone home", "I have gone home"), gate)
+        self.assertGreaterEqual(sim("I have gone home", "I HAVE GONE HOME"), gate)
+        self.assertGreaterEqual(sim("I have gone home", "   I have gone home   "), gate)
+        self.assertGreaterEqual(sim("I have gone home", "I  have   gone home"), gate)
+        self.assertGreaterEqual(sim("I have gone home", "I have gone home!"), gate)
         self.assertGreaterEqual(
-            similarity("I have gone home", "I Have Gone Home!"), 0.9
+            sim("I have gone to the gym today", "  i Have Gone To The Gym Today.  "),
+            gate,
         )
-        self.assertLess(similarity("went, gone", "went home"), 0.9)
+        self.assertGreaterEqual(
+            sim(
+                "Despite the delay we finally finished the report",
+                "Despite the delay we finally finished that report",
+            ),
+            gate,
+        )
+
+        # TRUE NEGATIVES: text the matcher MUST NOT call a drill
+        self.assertLess(
+            sim(
+                "I have gone to the gym today",
+                "The weather forecast looks completely different tomorrow",
+            ),
+            gate,
+        )
+        self.assertLess(sim("went, gone", "went home"), gate)
+        self.assertLess(sim("go to the store", "go to the park instead"), gate)
 
 
 class ReadOnlyQueryTest(MessagesRepoBase):
