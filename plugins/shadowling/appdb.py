@@ -49,41 +49,40 @@ def tx(con):
 def _migration_1(con):
     """Initial consolidated schema. Legacy md/jsonl/csv files are deleted
     UNIMPORTED (pre-consolidation data was explicitly waived by the user)."""
-    con.executescript("""
-        CREATE TABLE IF NOT EXISTS messages(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ts TEXT NOT NULL,
-            text TEXT NOT NULL,
-            langs TEXT CHECK (langs IS NULL OR json_valid(langs)),
-            processed_at TEXT);
-        CREATE TABLE IF NOT EXISTS grammar(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
-            slug TEXT NOT NULL, problem TEXT, original TEXT, fixed TEXT,
-            rule TEXT);
-        CREATE TABLE IF NOT EXISTS rephrasing(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
-            slug TEXT NOT NULL, problem TEXT, yours TEXT, "natural" TEXT,
-            why TEXT);
-        CREATE TABLE IF NOT EXISTS idioms(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
-            idiom TEXT NOT NULL, meaning TEXT, context TEXT, you_wrote TEXT);
-        CREATE TABLE IF NOT EXISTS verbs(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
-            verb TEXT NOT NULL, past TEXT, participle TEXT, example_fix TEXT);
-        CREATE TABLE IF NOT EXISTS decode(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
-            slug TEXT NOT NULL, type TEXT, expression TEXT, meaning TEXT,
-            takeaway TEXT, your_read TEXT, context TEXT);
-        CREATE TABLE IF NOT EXISTS friction(
-            id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,
-            slug TEXT NOT NULL, type TEXT, zone TEXT, you_reached_for TEXT,
-            natural_english TEXT, context TEXT);
-        CREATE TABLE IF NOT EXISTS vocab(
-            word TEXT PRIMARY KEY,
-            translation TEXT NOT NULL,
-            remaining INTEGER NOT NULL,
-            status TEXT NOT NULL);
-    """)
+    statements = [
+        "CREATE TABLE IF NOT EXISTS messages("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " ts TEXT NOT NULL, text TEXT NOT NULL,"
+        " langs TEXT CHECK (langs IS NULL OR json_valid(langs)),"
+        " processed_at TEXT)",
+        "CREATE TABLE IF NOT EXISTS grammar("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,"
+        " slug TEXT NOT NULL, problem TEXT, original TEXT, fixed TEXT,"
+        " rule TEXT)",
+        "CREATE TABLE IF NOT EXISTS rephrasing("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,"
+        ' slug TEXT NOT NULL, problem TEXT, yours TEXT, "natural" TEXT,'
+        " why TEXT)",
+        "CREATE TABLE IF NOT EXISTS idioms("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,"
+        " idiom TEXT NOT NULL, meaning TEXT, context TEXT, you_wrote TEXT)",
+        "CREATE TABLE IF NOT EXISTS verbs("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,"
+        " verb TEXT NOT NULL, past TEXT, participle TEXT, example_fix TEXT)",
+        "CREATE TABLE IF NOT EXISTS decode("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,"
+        " slug TEXT NOT NULL, type TEXT, expression TEXT, meaning TEXT,"
+        " takeaway TEXT, your_read TEXT, context TEXT)",
+        "CREATE TABLE IF NOT EXISTS friction("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL,"
+        " slug TEXT NOT NULL, type TEXT, zone TEXT, you_reached_for TEXT,"
+        " natural_english TEXT, context TEXT)",
+        "CREATE TABLE IF NOT EXISTS vocab("
+        " word TEXT PRIMARY KEY, translation TEXT NOT NULL,"
+        " remaining INTEGER NOT NULL, status TEXT NOT NULL)",
+    ]
+    for stmt in statements:
+        con.execute(stmt)
     legacy = [
         "grammar.md",
         "rephrasings.md",
@@ -118,28 +117,23 @@ def _migration_2(con):
         con.execute("ALTER TABLE messages ADD COLUMN session_id TEXT")
     if "kind" not in cols:
         con.execute("ALTER TABLE messages ADD COLUMN kind TEXT")
-    con.executescript("""
-        DELETE FROM messages;
-        CREATE TABLE IF NOT EXISTS attempts(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            created_at TEXT NOT NULL,
-            session_id TEXT,
-            item_kind TEXT NOT NULL,
-            item_key TEXT NOT NULL,
-            exercise TEXT NOT NULL,
-            answer TEXT NOT NULL,
-            verdict TEXT NOT NULL);
-        CREATE TABLE IF NOT EXISTS mastery(
-            item_kind TEXT NOT NULL,
-            item_key TEXT NOT NULL,
-            box INTEGER NOT NULL,
-            due_date TEXT NOT NULL,
-            last_verdict TEXT NOT NULL,
-            counter_seen INTEGER,
-            created_at TEXT NOT NULL,
-            updated_at TEXT NOT NULL,
-            PRIMARY KEY (item_kind, item_key));
-    """)
+    statements = [
+        "DELETE FROM messages",
+        "CREATE TABLE IF NOT EXISTS attempts("
+        " id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        " created_at TEXT NOT NULL, session_id TEXT,"
+        " item_kind TEXT NOT NULL, item_key TEXT NOT NULL,"
+        " exercise TEXT NOT NULL, answer TEXT NOT NULL,"
+        " verdict TEXT NOT NULL)",
+        "CREATE TABLE IF NOT EXISTS mastery("
+        " item_kind TEXT NOT NULL, item_key TEXT NOT NULL,"
+        " box INTEGER NOT NULL, due_date TEXT NOT NULL,"
+        " last_verdict TEXT NOT NULL, counter_seen INTEGER,"
+        " created_at TEXT NOT NULL, updated_at TEXT NOT NULL,"
+        " PRIMARY KEY (item_kind, item_key))",
+    ]
+    for stmt in statements:
+        con.execute(stmt)
 
 
 def _migration_3(con):
@@ -148,27 +142,29 @@ def _migration_3(con):
     vocab gains audit stamps. The views are dropped first so RENAME COLUMN can't
     trip on a view reference — _ensure_views() rebuilds them from code on the
     same connect. Incident + vocab data is preserved (RENAME/ADD keep rows)."""
-    con.executescript("""
-        DROP VIEW IF EXISTS grammar_ranked;
-        DROP VIEW IF EXISTS rephrasing_ranked;
-        DROP VIEW IF EXISTS idioms_ranked;
-        DROP VIEW IF EXISTS verbs_ranked;
-        DROP VIEW IF EXISTS decode_ranked;
-        DROP VIEW IF EXISTS friction_ranked;
-        ALTER TABLE messages RENAME COLUMN ts TO created_at;
-        ALTER TABLE grammar RENAME COLUMN date TO created_at;
-        ALTER TABLE rephrasing RENAME COLUMN date TO created_at;
-        ALTER TABLE idioms RENAME COLUMN date TO created_at;
-        ALTER TABLE verbs RENAME COLUMN date TO created_at;
-        ALTER TABLE decode RENAME COLUMN date TO created_at;
-        ALTER TABLE friction RENAME COLUMN date TO created_at;
-        ALTER TABLE rephrasing RENAME COLUMN yours TO learner_wrote;
-        ALTER TABLE idioms RENAME COLUMN you_wrote TO learner_wrote;
-        ALTER TABLE decode RENAME COLUMN your_read TO learner_wrote;
-        ALTER TABLE friction RENAME COLUMN you_reached_for TO learner_wrote;
-        ALTER TABLE vocab ADD COLUMN created_at TEXT;
-        ALTER TABLE vocab ADD COLUMN updated_at TEXT;
-    """)
+    statements = [
+        "DROP VIEW IF EXISTS grammar_ranked",
+        "DROP VIEW IF EXISTS rephrasing_ranked",
+        "DROP VIEW IF EXISTS idioms_ranked",
+        "DROP VIEW IF EXISTS verbs_ranked",
+        "DROP VIEW IF EXISTS decode_ranked",
+        "DROP VIEW IF EXISTS friction_ranked",
+        "ALTER TABLE messages RENAME COLUMN ts TO created_at",
+        "ALTER TABLE grammar RENAME COLUMN date TO created_at",
+        "ALTER TABLE rephrasing RENAME COLUMN date TO created_at",
+        "ALTER TABLE idioms RENAME COLUMN date TO created_at",
+        "ALTER TABLE verbs RENAME COLUMN date TO created_at",
+        "ALTER TABLE decode RENAME COLUMN date TO created_at",
+        "ALTER TABLE friction RENAME COLUMN date TO created_at",
+        "ALTER TABLE rephrasing RENAME COLUMN yours TO learner_wrote",
+        "ALTER TABLE idioms RENAME COLUMN you_wrote TO learner_wrote",
+        "ALTER TABLE decode RENAME COLUMN your_read TO learner_wrote",
+        "ALTER TABLE friction RENAME COLUMN you_reached_for TO learner_wrote",
+        "ALTER TABLE vocab ADD COLUMN created_at TEXT",
+        "ALTER TABLE vocab ADD COLUMN updated_at TEXT",
+    ]
+    for stmt in statements:
+        con.execute(stmt)
 
 
 def _migration_4(con):
@@ -177,12 +173,14 @@ def _migration_4(con):
     (hardcodes a language) — both holding the same thing: how a native speaker
     of the target language would say it. Now `native_phrase` in both. Views are
     dropped first so RENAME can't trip on them; _ensure_views() rebuilds."""
-    con.executescript("""
-        DROP VIEW IF EXISTS rephrasing_ranked;
-        DROP VIEW IF EXISTS friction_ranked;
-        ALTER TABLE rephrasing RENAME COLUMN "natural" TO native_phrase;
-        ALTER TABLE friction RENAME COLUMN natural_english TO native_phrase;
-    """)
+    statements = [
+        "DROP VIEW IF EXISTS rephrasing_ranked",
+        "DROP VIEW IF EXISTS friction_ranked",
+        'ALTER TABLE rephrasing RENAME COLUMN "natural" TO native_phrase',
+        "ALTER TABLE friction RENAME COLUMN natural_english TO native_phrase",
+    ]
+    for stmt in statements:
+        con.execute(stmt)
 
 
 def _migration_5(con):
@@ -194,12 +192,14 @@ def _migration_5(con):
     is dropped first so RENAME can't trip on it; _ensure_views() rebuilds. Legacy
     rows keep their old "wrong → right" text under `correction`; used_form/context
     backfill NULL (pre-prod, append-only — no rewrite of recorded text)."""
-    con.executescript("""
-        DROP VIEW IF EXISTS verbs_ranked;
-        ALTER TABLE verbs RENAME COLUMN example_fix TO correction;
-        ALTER TABLE verbs ADD COLUMN used_form TEXT;
-        ALTER TABLE verbs ADD COLUMN context TEXT;
-    """)
+    statements = [
+        "DROP VIEW IF EXISTS verbs_ranked",
+        "ALTER TABLE verbs RENAME COLUMN example_fix TO correction",
+        "ALTER TABLE verbs ADD COLUMN used_form TEXT",
+        "ALTER TABLE verbs ADD COLUMN context TEXT",
+    ]
+    for stmt in statements:
+        con.execute(stmt)
 
 
 MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4, _migration_5]
@@ -293,7 +293,10 @@ def connect():
         if preexisting > 0:
             shutil.copy(path, path + ".bak")  # one cheap insurance per upgrade
         for i in range(version, len(MIGRATIONS)):
-            with con:  # step + version bump are atomic; a failed step retries
+            # tx() takes BEGIN IMMEDIATE with isolation_level=None, so the DDL
+            # body AND the version bump commit/roll back together — unlike
+            # `with con:`, which implicitly COMMITs before each DDL statement.
+            with tx(con):  # step + version bump are atomic; a failed step retries
                 MIGRATIONS[i](con)
                 con.execute(f"PRAGMA user_version = {i + 1}")
     _ensure_views(con)

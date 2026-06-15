@@ -389,5 +389,72 @@ class TxHelperTest(AppDbTestBase):
             con.close()
 
 
+class AtomicMigrationTest(AppDbTestBase):
+    def test_failed_migration_rolls_back_version_and_schema(self):
+        appdb.connect().close()  # reach current version cleanly
+        baseline = len(appdb.MIGRATIONS)
+
+        def bad_migration(con):
+            con.execute("CREATE TABLE temp_marker(x INTEGER)")
+            con.execute("THIS IS NOT VALID SQL")
+
+        original = list(appdb.MIGRATIONS)
+        appdb.MIGRATIONS.append(bad_migration)
+        try:
+            with self.assertRaises(sqlite3.Error):
+                appdb.connect().close()
+            con = sqlite3.connect(appdb.db_path())
+            try:
+                self.assertEqual(
+                    con.execute("PRAGMA user_version").fetchone()[0], baseline
+                )
+                tables = {
+                    r[0]
+                    for r in con.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
+                self.assertNotIn("temp_marker", tables)
+            finally:
+                con.close()
+        finally:
+            appdb.MIGRATIONS[:] = original
+
+    def test_replay_after_fix_succeeds(self):
+        appdb.connect().close()
+        baseline = len(appdb.MIGRATIONS)
+
+        def bad_migration(con):
+            con.execute("CREATE TABLE temp_marker(x INTEGER)")
+            con.execute("THIS IS NOT VALID SQL")
+
+        def good_migration(con):
+            con.execute("CREATE TABLE temp_marker(x INTEGER)")
+
+        original = list(appdb.MIGRATIONS)
+        appdb.MIGRATIONS.append(bad_migration)
+        try:
+            with self.assertRaises(sqlite3.Error):
+                appdb.connect().close()
+            appdb.MIGRATIONS[-1] = good_migration
+            appdb.connect().close()  # must NOT raise (DB left at prior state)
+            con = sqlite3.connect(appdb.db_path())
+            try:
+                self.assertEqual(
+                    con.execute("PRAGMA user_version").fetchone()[0], baseline + 1
+                )
+                tables = {
+                    r[0]
+                    for r in con.execute(
+                        "SELECT name FROM sqlite_master WHERE type='table'"
+                    )
+                }
+                self.assertIn("temp_marker", tables)
+            finally:
+                con.close()
+        finally:
+            appdb.MIGRATIONS[:] = original
+
+
 if __name__ == "__main__":
     unittest.main()
