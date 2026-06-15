@@ -142,9 +142,7 @@ class Vocab:
         now = core.now()
         con = connect()
         try:
-            con.create_function(
-                "word_matches", 2, lambda w, t: 1 if word_in_text(w, t) else 0
-            )
+            con.create_function("word_matches", 2, word_in_text)
             with con:
                 # In SQLite an UPDATE's SET/WHERE expressions read the PRE-update
                 # row value regardless of assignment order, so the CASE sees the
