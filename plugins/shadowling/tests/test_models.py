@@ -4,6 +4,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from models.decode import Decode
+from models.friction import Friction
 from models.grammar import Grammar
 
 
@@ -95,6 +97,48 @@ class InsertNormalizationTest(ModelTestBase):
     def test_insert_all_punctuation_key_raises(self):
         with self.assertRaises(ValueError):
             self._insert("!!! ???")
+
+
+class InsertEnumValidationTest(ModelTestBase):
+    def _decode(self, type_):
+        return Decode.insert(
+            {
+                "slug": "s",
+                "type": type_,
+                "expression": "e",
+                "meaning": "m",
+                "takeaway": "t",
+                "learner_wrote": "lw",
+                "context": "c",
+            }
+        )
+
+    def _friction(self, type_):
+        return Friction.insert(
+            {
+                "slug": "z",
+                "type": type_,
+                "zone": "zn",
+                "learner_wrote": "lw",
+                "native_phrase": "np",
+                "context": "c",
+            }
+        )
+
+    def test_decode_valid_type_passes(self):
+        self.assertEqual(self._decode("fixed"), 1)
+        self.assertEqual(self._decode("method"), 2)
+
+    def test_decode_unknown_type_raises(self):
+        with self.assertRaises(ValueError):
+            self._decode("bogus")
+
+    def test_friction_valid_type_passes(self):
+        self.assertEqual(self._friction("register"), 1)
+
+    def test_friction_unknown_type_raises(self):
+        with self.assertRaises(ValueError):
+            self._friction("nonsense")
 
 
 if __name__ == "__main__":

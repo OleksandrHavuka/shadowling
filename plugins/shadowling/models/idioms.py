@@ -19,7 +19,7 @@ class Idioms(Model):
 def record(idiom, meaning, context, learner_wrote):
     n = Idioms.insert(
         {
-            "idiom": norm_key(idiom),
+            "idiom": idiom,
             "meaning": meaning,
             "context": context,
             "learner_wrote": learner_wrote,

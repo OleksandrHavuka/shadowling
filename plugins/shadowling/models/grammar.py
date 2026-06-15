@@ -1,7 +1,5 @@
 """models/grammar.py - grammar incidents (append-only) + record fan-out."""
 
-from core import slugify
-
 from .base import Model
 
 
@@ -15,7 +13,7 @@ class Grammar(Model):
 def record(slug, problem, original, fixed, rule):
     n = Grammar.insert(
         {
-            "slug": slugify(slug),
+            "slug": slug,
             "problem": problem,
             "original": original,
             "fixed": fixed,

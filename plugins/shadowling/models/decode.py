@@ -4,8 +4,6 @@ User-initiated /aha: a phrase that couldn't be read literally, classified as a
 `fixed` expression (memorize) or a `method`/grammar pattern (learnable). For
 `method` the key is the rule, so one rule aggregates across phrases."""
 
-from core import slugify
-
 from .base import Model
 
 
@@ -22,12 +20,13 @@ class Decode(Model):
         "learner_wrote",
         "context",
     ]
+    enums = {"type": {"fixed", "method"}}
 
 
 def record(slug, kind, expression, meaning, takeaway, learner_wrote, context):
     n = Decode.insert(
         {
-            "slug": slugify(slug),
+            "slug": slug,
             "type": kind,
             "expression": expression,
             "meaning": meaning,

@@ -26,6 +26,9 @@ class Model:
     view: ClassVar[str]  # ranking view name
     key: ClassVar[str]  # grouping/key column (same name in table and view)
     insert_cols: ClassVar[list[str]]  # ordered columns set by insert() (besides date)
+    # {column: allowed_values} for constrained text columns (the decode/friction
+    # `type` taxonomy). Validated at insert() so a bad value can never persist.
+    enums: ClassVar[dict] = {}
 
     # The single key normalizer for cls.key, applied AT insert() so every caller
     # (and any future one) gets it for free. Subclasses override per their key
@@ -49,6 +52,12 @@ class Model:
                 f"(got {values[cls.key]!r}); provide a non-blank value"
             )
         values = {**values, cls.key: key}
+        for col, allowed in cls.enums.items():
+            val = values[col]
+            if val not in allowed:
+                raise ValueError(
+                    f"{cls.__name__}: {col}={val!r} is not one of {sorted(allowed)}"
+                )
         cols = ["created_at"] + list(cls.insert_cols)
         row = [today()] + [values[c] for c in cls.insert_cols]
         sql = "INSERT INTO {}({}) VALUES ({})".format(

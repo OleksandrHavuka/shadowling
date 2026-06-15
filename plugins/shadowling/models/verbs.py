@@ -17,7 +17,7 @@ class Verbs(Model):
 def record(verb, past, participle, used_form, correction, context):
     n = Verbs.insert(
         {
-            "verb": norm_key(verb),
+            "verb": verb,
             "past": past,
             "participle": participle,
             "used_form": used_form,
