@@ -110,5 +110,22 @@ class RowsFactoryTest(unittest.TestCase):
             tagio.rows()
 
 
+class FlatFieldLimitationTest(unittest.TestCase):
+    """Characterization (NOT a fix): fields are located independently from
+    position 0, so a TEXT body containing a *later* field's literal open tag
+    contaminates that field's extraction. Pins the documented limitation so it
+    cannot change silently; see the tagio module/_extract docstring."""
+
+    def test_literal_later_open_tag_in_body_contaminates(self):
+        text = "<a>value with <b> literal open tag inside</a>\n<b>real b body</b>"
+        got = read_fields({"a": TEXT, "b": TEXT}, text)
+        self.assertEqual(got["a"], "value with <b> literal open tag inside")
+        self.assertEqual(got["b"], " literal open tag inside</a>\n<b>real b body")
+
+    def test_literal_self_close_tag_in_body_truncates(self):
+        text = "<a>oops </a> early close then more</a>"
+        self.assertEqual(read_fields({"a": TEXT}, text), {"a": "oops "})
+
+
 if __name__ == "__main__":
     unittest.main()

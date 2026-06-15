@@ -13,6 +13,14 @@ module reads that body. There are exactly two flat field shapes, never nested:
 A schema is an ordered dict `{field_name: TEXT | rows(...)}`. `read_fields` returns
 `{name: str}` for TEXT fields and `{name: list[dict]}` for rows fields.
 
+Flat-field limitation (by design): each field is located independently from the
+start of the text (not from a moving cursor), so a field body that contains the
+LITERAL open tag of a *later* field — or a literal copy of its own close tag —
+can contaminate or truncate extraction. Under the heredoc flat-field contract a
+value holding literal `<field>` tokens is a corner case; a sequential-cursor
+rewrite would forbid legitimate field reordering, so this is accepted and pinned
+by FlatFieldLimitationTest, not rewritten.
+
 The caller of these scripts is an LLM, so every failure raises a ValueError whose
 message names the exact problem AND shows the expected syntax — so the model can
 self-correct and retry the call instead of guessing.
@@ -67,7 +75,12 @@ def _strip_layout_newlines(body):
 
 
 def _extract(name, text, schema):
-    """Inner body of `<name>...</name>` (nearest close), layout newlines stripped."""
+    """Inner body of `<name>...</name>` (nearest close), layout newlines stripped.
+
+    Located from position 0, independent of other fields (so reordering is free).
+    Trade-off: a literal `<name>`/`</name>` token inside another field's body can
+    be matched here — the accepted flat-field limitation (see module docstring).
+    """
     open_tag, close_tag = "<" + name + ">", "</" + name + ">"
     i = text.find(open_tag)
     if i == -1:
