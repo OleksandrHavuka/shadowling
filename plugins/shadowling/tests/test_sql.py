@@ -192,5 +192,20 @@ class PathsTest(SqlTestBase):
         self.assertEqual(out.strip(), "db: " + os.path.join(self.home, "shadowling.db"))
 
 
+class MultiStatementTest(SqlTestBase):
+    def test_read_path_multi_statement_clean_error(self):
+        code, out, err = run_main(["SELECT 1; SELECT 2"])
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertIn("error:", err)
+        self.assertNotIn("Traceback", err)
+
+    def test_write_path_multi_statement_clean_error(self):
+        code, out, err = run_main(["--write", "SELECT 1; SELECT 2"])
+        self.assertEqual(code, 1)
+        self.assertIn("error:", err)
+        self.assertNotIn("Traceback", err)
+
+
 if __name__ == "__main__":
     unittest.main()

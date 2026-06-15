@@ -123,7 +123,10 @@ def main(argv):
         if write:
             return run_write(sql_text, params)
         rows = query(sql_text, params)
-    except sqlite3.Error as e:
+    except (sqlite3.Error, sqlite3.Warning) as e:
+        # sqlite3.Warning (e.g. a multi-statement string: "one statement at a
+        # time") is NOT a subclass of sqlite3.Error, so catch it explicitly —
+        # on both the read path and the --write path (routed through here).
         print("error: " + str(e), file=sys.stderr)
         return 1
     if md:
