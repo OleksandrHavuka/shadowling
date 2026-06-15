@@ -152,5 +152,22 @@ class ScanDecrementTest(VocabRepoBase):
         self.assertEqual(Vocab.scan_decrement("throughput throughput"), [])
 
 
+class AddRaceTest(VocabRepoBase):
+    # True concurrency (two processes first-adding the same word at once) is not
+    # unit-tested here; the guarantee is the BEGIN IMMEDIATE write lock that tx()
+    # takes around the existence SELECT + the INSERT, which serializes the
+    # read-then-write so two callers can't both see None and double-INSERT. This
+    # pins the single-process invariant: add-then-add of the same word is
+    # add -> refresh, never raises, and leaves exactly one row.
+    def test_repeat_add_is_idempotent_single_row(self):
+        a1, _ = Vocab.add("throughput", "переклад")
+        a2, _ = Vocab.add("throughput", "новий переклад")
+        self.assertEqual(a1, "add")
+        self.assertEqual(a2, "refresh")
+        self.assertEqual(
+            appdb.query("SELECT word FROM vocab"), [{"word": "throughput"}]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

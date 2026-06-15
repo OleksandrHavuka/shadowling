@@ -9,7 +9,7 @@ pure matching helpers (no DB), kept module-level like models/base.norm_key.
 import re
 from datetime import datetime
 
-from appdb import connect
+from appdb import connect, tx
 
 START_REMAINING = 10
 STEM_MIN_LEN = 4
@@ -57,8 +57,10 @@ class Vocab:
         now = _now()
         con = connect()
         try:
-            row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
-            with con:
+            with tx(con):  # BEGIN IMMEDIATE serializes the existence-read + write
+                row = con.execute(
+                    "SELECT * FROM vocab WHERE word = ?", (word,)
+                ).fetchone()
                 if row is None:
                     con.execute(
                         "INSERT INTO vocab(word, translation, remaining, status,"

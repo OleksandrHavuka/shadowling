@@ -12,7 +12,6 @@ shadowling-db project skill).
 
 import contextlib
 import os
-import shutil
 import sqlite3
 
 from core import data_dir
@@ -291,7 +290,14 @@ def connect():
     version = con.execute("PRAGMA user_version").fetchone()[0]
     if version < len(MIGRATIONS):
         if preexisting > 0:
-            shutil.copy(path, path + ".bak")  # one cheap insurance per upgrade
+            # online backup, not shutil.copy: con sees the full WAL view, so the
+            # .bak is a consistent snapshot and can't be a torn main-file copy
+            # missing uncheckpointed -wal frames.
+            dest = sqlite3.connect(path + ".bak")
+            try:
+                con.backup(dest)
+            finally:
+                dest.close()
         for i in range(version, len(MIGRATIONS)):
             # tx() takes BEGIN IMMEDIATE with isolation_level=None, so the DDL
             # body AND the version bump commit/roll back together — unlike

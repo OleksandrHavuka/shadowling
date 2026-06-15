@@ -456,5 +456,26 @@ class AtomicMigrationTest(AppDbTestBase):
             appdb.MIGRATIONS[:] = original
 
 
+class WalSafeBackupTest(AppDbTestBase):
+    def test_backup_is_a_consistent_sqlite_db(self):
+        con = sqlite3.connect(appdb.db_path())
+        appdb._migration_1(con)
+        con.execute("PRAGMA user_version = 1")
+        con.execute("INSERT INTO grammar(date, slug) VALUES ('2026-06-01', 'keepme')")
+        con.commit()
+        con.close()
+        appdb.connect().close()  # triggers the pre-upgrade backup
+        bak = appdb.db_path() + ".bak"
+        self.assertTrue(os.path.exists(bak))
+        bak_con = sqlite3.connect(bak)
+        try:
+            self.assertEqual(
+                bak_con.execute("SELECT slug FROM grammar").fetchall(), [("keepme",)]
+            )
+            self.assertEqual(bak_con.execute("PRAGMA user_version").fetchone()[0], 1)
+        finally:
+            bak_con.close()
+
+
 if __name__ == "__main__":
     unittest.main()
