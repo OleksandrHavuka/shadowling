@@ -204,49 +204,77 @@ def _migration_5(con):
 MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4, _migration_5]
 
 # --- views: derived code, never migrated --------------------------------------
-# The MAX(id) bare-column idiom makes non-aggregated columns come from the
-# group's latest row, so "last example" fields are the newest incident's.
+# Each *_ranked view splits true aggregates (MIN/MAX created_at, COUNT) from the
+# display columns: the aggregate subquery yields per-group counts/dates plus the
+# newest incident id (MAX(id) AS last_id), and the outer table is JOINed to that
+# one row, so EVERY bare display column comes deterministically from the group's
+# newest incident — not just the aliased "last example". `id` is a unique PK, so
+# `g.id = agg.last_id` matches exactly one row per group.
 
 VIEWS = {
     "grammar_ranked": (
-        " SELECT slug, problem,"
-        " original || ' → ' || fixed AS \"last example\","
-        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
-        " COUNT(*) AS counter, MAX(id) AS last_id"
-        " FROM grammar GROUP BY slug ORDER BY counter DESC, last_id DESC"
+        " SELECT g.slug, g.problem,"
+        " g.original || ' → ' || g.fixed AS \"last example\","
+        " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
+        " FROM grammar g"
+        " JOIN (SELECT slug, MIN(created_at) AS created_at,"
+        " MAX(created_at) AS updated_at, COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM grammar GROUP BY slug) agg"
+        " ON g.slug = agg.slug AND g.id = agg.last_id"
+        " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "rephrasing_ranked": (
-        ' SELECT slug, problem, learner_wrote AS "you wrote",'
-        ' native_phrase AS "native phrase",'
-        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
-        " COUNT(*) AS counter, MAX(id) AS last_id"
-        " FROM rephrasing GROUP BY slug ORDER BY counter DESC, last_id DESC"
+        ' SELECT g.slug, g.problem, g.learner_wrote AS "you wrote",'
+        ' g.native_phrase AS "native phrase",'
+        " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
+        " FROM rephrasing g"
+        " JOIN (SELECT slug, MIN(created_at) AS created_at,"
+        " MAX(created_at) AS updated_at, COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM rephrasing GROUP BY slug) agg"
+        " ON g.slug = agg.slug AND g.id = agg.last_id"
+        " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "idioms_ranked": (
-        ' SELECT idiom, meaning, learner_wrote AS "you wrote",'
-        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
-        " COUNT(*) AS counter, MAX(id) AS last_id"
-        " FROM idioms GROUP BY idiom ORDER BY counter DESC, last_id DESC"
+        ' SELECT g.idiom, g.meaning, g.learner_wrote AS "you wrote",'
+        " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
+        " FROM idioms g"
+        " JOIN (SELECT idiom, MIN(created_at) AS created_at,"
+        " MAX(created_at) AS updated_at, COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM idioms GROUP BY idiom) agg"
+        " ON g.idiom = agg.idiom AND g.id = agg.last_id"
+        " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "verbs_ranked": (
-        ' SELECT used_form AS "you used", correction, context,'
-        ' verb, past, participle AS "past participle",'
-        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
-        " COUNT(*) AS counter, MAX(id) AS last_id"
-        " FROM verbs GROUP BY verb ORDER BY counter DESC, last_id DESC"
+        ' SELECT g.used_form AS "you used", g.correction, g.context,'
+        ' g.verb, g.past, g.participle AS "past participle",'
+        " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
+        " FROM verbs g"
+        " JOIN (SELECT verb, MIN(created_at) AS created_at,"
+        " MAX(created_at) AS updated_at, COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM verbs GROUP BY verb) agg"
+        " ON g.verb = agg.verb AND g.id = agg.last_id"
+        " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "decode_ranked": (
-        " SELECT slug, type, expression, meaning, takeaway,"
-        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
-        " COUNT(*) AS counter, MAX(id) AS last_id"
-        " FROM decode GROUP BY slug ORDER BY counter DESC, last_id DESC"
+        " SELECT g.slug, g.type, g.expression, g.meaning, g.takeaway,"
+        " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
+        " FROM decode g"
+        " JOIN (SELECT slug, MIN(created_at) AS created_at,"
+        " MAX(created_at) AS updated_at, COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM decode GROUP BY slug) agg"
+        " ON g.slug = agg.slug AND g.id = agg.last_id"
+        " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "friction_ranked": (
-        ' SELECT slug, type, zone, learner_wrote AS "you reached for",'
-        ' native_phrase AS "native phrase",'
-        " MIN(created_at) AS created_at, MAX(created_at) AS updated_at,"
-        " COUNT(*) AS counter, MAX(id) AS last_id"
-        " FROM friction GROUP BY slug ORDER BY counter DESC, last_id DESC"
+        ' SELECT g.slug, g.type, g.zone, g.learner_wrote AS "you reached for",'
+        ' g.native_phrase AS "native phrase",'
+        " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
+        " FROM friction g"
+        " JOIN (SELECT slug, MIN(created_at) AS created_at,"
+        " MAX(created_at) AS updated_at, COUNT(*) AS counter, MAX(id) AS last_id"
+        " FROM friction GROUP BY slug) agg"
+        " ON g.slug = agg.slug AND g.id = agg.last_id"
+        " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
 }
 

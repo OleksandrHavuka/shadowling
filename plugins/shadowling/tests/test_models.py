@@ -141,5 +141,40 @@ class InsertEnumValidationTest(ModelTestBase):
             self._friction("nonsense")
 
 
+class LatestRowColumnsTest(ModelTestBase):
+    def test_all_bare_display_columns_come_from_newest_incident(self):
+        # Two incidents for ONE key whose non-key display fields differ. SQLite
+        # leaves EVERY bare min/max-mixed column undefined when >1 aggregate is
+        # present, so this pins them all to the group's newest incident (MAX id),
+        # not just the aliased "last example".
+        with mock.patch("models.base.today", return_value="2026-06-01"):
+            Grammar.insert(
+                {
+                    "slug": "s1",
+                    "problem": "old problem",
+                    "original": "old-a",
+                    "fixed": "old-b",
+                    "rule": "r",
+                }
+            )
+        with mock.patch("models.base.today", return_value="2026-06-09"):
+            Grammar.insert(
+                {
+                    "slug": "s1",
+                    "problem": "new problem",
+                    "original": "new-a",
+                    "fixed": "new-b",
+                    "rule": "r",
+                }
+            )
+        row = Grammar.select("s1")
+        self.assertEqual(row["counter"], 2)
+        self.assertEqual(row["created_at"], "2026-06-01")  # aggregate: first
+        self.assertEqual(row["updated_at"], "2026-06-09")  # aggregate: latest
+        self.assertEqual(row["last example"], "new-a → new-b")  # newest incident
+        self.assertEqual(row["problem"], "new problem")  # ALSO from newest
+        self.assertNotIn("last_id", row)
+
+
 if __name__ == "__main__":
     unittest.main()
