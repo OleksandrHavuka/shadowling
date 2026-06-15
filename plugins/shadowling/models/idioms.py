@@ -11,6 +11,10 @@ class Idioms(Model):
     key = "idiom"
     insert_cols = ["idiom", "meaning", "context", "learner_wrote"]
 
+    @staticmethod
+    def key_norm(s: str) -> str:
+        return norm_key(s)
+
 
 def record(idiom, meaning, context, learner_wrote):
     n = Idioms.insert(

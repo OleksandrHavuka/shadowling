@@ -9,6 +9,10 @@ class Verbs(Model):
     key = "verb"
     insert_cols = ["verb", "past", "participle", "used_form", "correction", "context"]
 
+    @staticmethod
+    def key_norm(s: str) -> str:
+        return norm_key(s)
+
 
 def record(verb, past, participle, used_form, correction, context):
     n = Verbs.insert(

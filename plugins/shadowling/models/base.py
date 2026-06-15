@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from appdb import connect
-from core import today
+from core import slugify, today
 
 
 def norm_key(s: str) -> str:
@@ -27,10 +27,28 @@ class Model:
     key: ClassVar[str]  # grouping/key column (same name in table and view)
     insert_cols: ClassVar[list[str]]  # ordered columns set by insert() (besides date)
 
+    # The single key normalizer for cls.key, applied AT insert() so every caller
+    # (and any future one) gets it for free. Subclasses override per their key
+    # kind: slugify for slug-keyed models, norm_key for natural idiom/verb keys.
+    @staticmethod
+    def key_norm(s: str) -> str:
+        return slugify(s)
+
     @classmethod
     def insert(cls, values):
         """values: dict over insert_cols. Returns the incident count for the
-        record's key AFTER the insert (1 = first occurrence)."""
+        record's key AFTER the insert (1 = first occurrence).
+
+        The chokepoint: normalizes cls.key via cls.key_norm and rejects a key
+        that normalizes to empty/blank by raising ValueError (the entrypoint
+        prints it to stderr so the LLM self-corrects — same contract as tagio)."""
+        key = cls.key_norm(values[cls.key])
+        if not key:
+            raise ValueError(
+                f"{cls.__name__}: key '{cls.key}' is empty after normalization "
+                f"(got {values[cls.key]!r}); provide a non-blank value"
+            )
+        values = {**values, cls.key: key}
         cols = ["created_at"] + list(cls.insert_cols)
         row = [today()] + [values[c] for c in cls.insert_cols]
         sql = "INSERT INTO {}({}) VALUES ({})".format(
@@ -42,7 +60,7 @@ class Model:
                 con.execute(sql, row)
             return con.execute(
                 f'SELECT COUNT(*) FROM {cls.table} WHERE "{cls.key}" = ?',
-                (values[cls.key],),
+                (key,),
             ).fetchone()[0]
         finally:
             con.close()

@@ -78,5 +78,24 @@ class LifecycleAndOrderingTest(ModelTestBase):
         self.assertEqual([r["slug"] for r in Grammar.select()], ["newer", "older"])
 
 
+class InsertNormalizationTest(ModelTestBase):
+    def test_insert_normalizes_raw_key(self):
+        self.assertEqual(self._insert("Word Choice"), 1)
+        self.assertIsNotNone(Grammar.select("word-choice"))
+        self.assertIsNone(Grammar.select("Word Choice"))
+
+    def test_insert_raw_and_normalized_keys_collide(self):
+        self.assertEqual(self._insert("Word Choice"), 1)
+        self.assertEqual(self._insert("word-choice"), 2)  # same key after norm
+
+    def test_insert_empty_key_after_norm_raises(self):
+        with self.assertRaises(ValueError):
+            self._insert("   _-_  ")  # slugifies to ""
+
+    def test_insert_all_punctuation_key_raises(self):
+        with self.assertRaises(ValueError):
+            self._insert("!!! ???")
+
+
 if __name__ == "__main__":
     unittest.main()
