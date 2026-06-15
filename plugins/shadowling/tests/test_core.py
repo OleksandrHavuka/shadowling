@@ -48,14 +48,12 @@ class SlugifyTest(unittest.TestCase):
         self.assertEqual(core.slugify("Word Choice"), "word-choice")
 
     def test_keeps_cyrillic(self):
+        # Non-Latin letters survive (no transliteration); the slug is an internal
+        # GROUP BY key. Distinct inputs stay distinct and non-empty. The full
+        # any-script contract (incl. CJK, etc.) is fuzzed by the hypothesis
+        # property test in test_properties (st.text() over all Unicode).
         self.assertEqual(core.slugify("Відмінювання"), "відмінювання")
-
-    def test_keeps_cjk_non_empty_and_distinct(self):
-        a = core.slugify("手を貸す")
-        b = core.slugify("猫に小判")
-        self.assertTrue(a)
-        self.assertTrue(b)
-        self.assertNotEqual(a, b)
+        self.assertNotEqual(core.slugify("дієслово"), core.slugify("іменник"))
 
     def test_output_always_matches_kebab_or_empty(self):
         for raw in ["A B", "x__y", "-a-", "Wørd Choice!!", "ok", "Відмінювання"]:
