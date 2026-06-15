@@ -11,6 +11,7 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
+    from cliutil import parse_message_slice_args
     from models.messages import Messages
 
     if not argv:
@@ -18,21 +19,12 @@ def main(argv):
         return 1
     op, args = argv[0], argv[1:]
     if op == "messages":
-        lang, untagged, limit, session = None, False, None, None
-        i = 0
-        while i < len(args):
-            if args[i] == "--untagged":
-                untagged, i = True, i + 1
-            elif args[i] == "--lang" and i + 1 < len(args):
-                lang, i = args[i + 1], i + 2
-            elif args[i] == "--session" and i + 1 < len(args):
-                session, i = args[i + 1], i + 2
-            elif args[i] == "--limit" and i + 1 < len(args) and args[i + 1].isdigit():
-                limit, i = int(args[i + 1]), i + 2
-            else:
-                print("unknown option: " + args[i], file=sys.stderr)
-                return 1
-        print(Messages.list(lang=lang, untagged=untagged, limit=limit, session=session))
+        try:
+            kwargs = parse_message_slice_args(args)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 1
+        print(Messages.list(**kwargs))
         return 0
     if op == "tag":
         if not args:
