@@ -1,6 +1,6 @@
 import unittest
 
-from cliutil import parse_message_slice_args
+from cliutil import format_loot_line, parse_message_slice_args
 
 
 class ParseMessageSliceArgsTest(unittest.TestCase):
@@ -42,6 +42,26 @@ class ParseMessageSliceArgsTest(unittest.TestCase):
         with self.assertRaises(ValueError) as ctx:
             parse_message_slice_args(["--lang"])
         self.assertEqual(str(ctx.exception), "unknown option: --lang")
+
+
+class FormatLootLineTest(unittest.TestCase):
+    def test_exact_line(self):
+        row = {
+            "word": "hello",
+            "translation": "привіт",
+            "remaining": 10,
+            "status": "active",
+        }
+        self.assertEqual(
+            format_loot_line("add", row), "add: hello = привіт (remaining 10, active)"
+        )
+
+    def test_untranslated_placeholders(self):
+        row = {"word": "foo", "translation": "foo", "remaining": "-", "status": "-"}
+        self.assertEqual(
+            format_loot_line("untranslated", row),
+            "untranslated: foo = foo (remaining -, -)",
+        )
 
 
 if __name__ == "__main__":

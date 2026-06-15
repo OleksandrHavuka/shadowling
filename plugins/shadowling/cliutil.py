@@ -30,3 +30,13 @@ def parse_message_slice_args(args):
         else:
             raise ValueError("unknown option: " + args[i])
     return {"lang": lang, "untagged": untagged, "limit": limit, "session": session}
+
+
+def format_loot_line(action, row):
+    """One result line for a /loot (or friction auto-loot) vocab add. `action`
+    is the Vocab.add verb (add/relearn/refresh/untranslated); `row` is the
+    returned vocab dict. Kept here so /loot and the friction loop print one shape.
+    """
+    return "{}: {} = {} (remaining {}, {})".format(
+        action, row["word"], row["translation"], row["remaining"], row["status"]
+    )

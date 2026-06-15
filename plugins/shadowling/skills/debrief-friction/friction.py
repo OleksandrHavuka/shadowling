@@ -13,7 +13,7 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
-    from cliutil import parse_message_slice_args
+    from cliutil import format_loot_line, parse_message_slice_args
     from models import friction, grammar
     from models.messages import Messages
     from models.vocab import Vocab
@@ -80,15 +80,7 @@ def main(argv):
             return 1
         for item in looted:
             action, row = Vocab.add(item["word"], item["translation"])
-            print(
-                "{}: {} = {} (remaining {}, {})".format(
-                    action,
-                    row["word"],
-                    row["translation"],
-                    row["remaining"],
-                    row["status"],
-                )
-            )
+            print(format_loot_line(action, row))
         return 0
     if op == "messages":
         try:
