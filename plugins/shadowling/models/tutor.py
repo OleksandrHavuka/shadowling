@@ -198,15 +198,26 @@ class Tutor:
             cards: list[dict] = []
             per_kind: dict[str, int] = {}
             pool = picked + new
-            kinds_available = {k for k, _ in pool}
             cap = max(size // 2, 1)  # no kind hogs more than half the deck
-            for kind, key in pool:
+            taken = [False] * len(pool)
+            # Pass 1: respect the per-kind cap as a soft diversity preference.
+            for i, (kind, key) in enumerate(pool):
                 if len(cards) >= size:
                     break
-                if per_kind.get(kind, 0) >= cap and len(kinds_available) > 1:
+                if per_kind.get(kind, 0) >= cap:
                     continue
                 per_kind[kind] = per_kind.get(kind, 0) + 1
+                taken[i] = True
                 cards.append(_card(con, kind, key))
+            # Pass 2: if the cap left the deck short, backfill the remaining
+            # pool ignoring the cap until full or exhausted.
+            if len(cards) < size:
+                for i, (kind, key) in enumerate(pool):
+                    if len(cards) >= size:
+                        break
+                    if taken[i]:
+                        continue
+                    cards.append(_card(con, kind, key))
             return cards
         finally:
             con.close()

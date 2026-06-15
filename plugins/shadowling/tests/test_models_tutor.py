@@ -156,6 +156,43 @@ class DeckTest(TutorRepoBase):
         with mock.patch("models.tutor._today", return_value="2026-06-12"):
             self.assertEqual(Tutor.deck(8), [])
 
+    def test_uneven_pool_fills_to_size_with_backfill(self):
+        # 10 grammar + 1 verb + 1 vocab learned/new => 12 candidates. Old
+        # single-pass code stops grammar at cap=4 and, with >1 kind available,
+        # under-fills the rest of the deck. Two-pass must reach size.
+        for i in range(10):
+            self.seed_grammar(f"g{i}")
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "INSERT INTO verbs(created_at, verb, past, participle,"
+                    " used_form, correction, context) VALUES ('2026-06-12',"
+                    " 'go', 'went', 'gone', 'goed', 'went', 'ctx')"
+                )
+        finally:
+            con.close()
+        self.seed_vocab("alpha", status="learned")
+        with mock.patch("models.tutor._today", return_value="2026-06-12"):
+            cards = Tutor.deck(8)
+        self.assertEqual(len(cards), 8)
+        kinds = [c["item_kind"] for c in cards]
+        self.assertEqual(kinds.count("verbs"), 1)
+        self.assertEqual(kinds.count("vocab"), 1)
+        self.assertEqual(kinds.count("grammar"), 6)
+
+    def test_balanced_pool_respects_cap(self):
+        for i in range(6):
+            self.seed_grammar(f"g{i}")
+        for i in range(6):
+            self.seed_vocab(f"v{i}", status="learned")
+        with mock.patch("models.tutor._today", return_value="2026-06-12"):
+            cards = Tutor.deck(8)
+        kinds = [c["item_kind"] for c in cards]
+        self.assertEqual(len(cards), 8)
+        self.assertEqual(kinds.count("grammar"), 4)
+        self.assertEqual(kinds.count("vocab"), 4)
+
 
 class StatsTest(TutorRepoBase):
     def test_stats_counts_due(self):
