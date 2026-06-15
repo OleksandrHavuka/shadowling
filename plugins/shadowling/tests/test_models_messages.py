@@ -88,6 +88,20 @@ class TagTest(MessagesRepoBase):
             self.assertEqual(ok, 0, bad)
             self.assertTrue(errors, bad)
 
+    def test_tag_unicode_digit_id_is_malformed_not_crash(self):
+        # '²'.isdigit() is True but int('²') raises ValueError; the id parse must
+        # reject it as a malformed pair instead of aborting the batch.
+        ok, errors = Messages.tag(["²=es"])
+        self.assertEqual(ok, 0)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("malformed pair", errors[0])
+        self.assertIn("²=es", errors[0])
+
+    def test_tag_valid_id_still_updates_after_unicode_guard(self):
+        ok, errors = Messages.tag(["1=en"])
+        self.assertEqual((ok, errors), (1, []))
+        self.assertEqual(json.loads(self._rows()[0]["langs"]), ["en"])
+
 
 class ListTest(MessagesRepoBase):
     def setUp(self):

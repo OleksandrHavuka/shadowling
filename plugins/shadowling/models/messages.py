@@ -136,15 +136,18 @@ class Messages:
         for p in pairs:
             id_part, eq, langs_part = p.partition("=")
             codes = [c.strip() for c in langs_part.split(",") if c.strip()]
-            if (
-                not eq
-                or not id_part.isdigit()
-                or not codes
-                or not all(LANG_CODE.match(c) for c in codes)
-            ):
+            try:
+                # int() — not str.isdigit() — because Unicode digits like '²' are
+                # isdigit()-true yet raise here; a non-parseable id must be
+                # reported, never an uncaught ValueError that aborts the batch.
+                mid = int(id_part)
+            except ValueError:
                 errors.append("malformed pair: " + p)
                 continue
-            updates.append((json.dumps(codes), int(id_part)))
+            if not eq or not codes or not all(LANG_CODE.match(c) for c in codes):
+                errors.append("malformed pair: " + p)
+                continue
+            updates.append((json.dumps(codes), mid))
         ok = 0
         with closing(connect()) as con, con:
             for langs_json, mid in updates:
