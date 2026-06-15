@@ -149,6 +149,36 @@ class SessionsAndMarkTest(MessagesRepoBase):
         self.assertEqual([(r["id"], r["p"]) for r in rows], [(1, 1), (2, 0), (3, 1)])
         self.assertIn("processed 2", out)
 
+    def test_mark_processed_empty_targets_null_session_group_only(self):
+        # add a row whose session_id IS NULL (sessions() can emit {"session": null})
+        with closing_con() as con, con:
+            con.execute(
+                "INSERT INTO messages(created_at, text, session_id, langs)"
+                " VALUES ('t', 'A standalone null-session sentence here',"
+                " NULL, '[\"en\"]')"
+            )
+        Messages.tag(["1=en", "2=en", "3=en"])  # tag the seeded session rows
+
+        out = Messages.mark_processed("")  # falsy -> NULL group, NOT global
+        rows = appdb.query(
+            "SELECT id, processed_at IS NOT NULL AS p FROM messages ORDER BY id"
+        )
+        self.assertEqual(
+            [(r["id"], r["p"]) for r in rows],
+            [(1, 0), (2, 0), (3, 0), (4, 1)],
+        )
+        self.assertIn("processed 1", out)
+
+        out2 = Messages.mark_processed(None)  # same: only the NULL group
+        rows2 = appdb.query(
+            "SELECT id, processed_at IS NOT NULL AS p FROM messages ORDER BY id"
+        )
+        self.assertEqual(
+            [(r["id"], r["p"]) for r in rows2],
+            [(1, 0), (2, 0), (3, 0), (4, 1)],
+        )
+        self.assertIn("processed 0", out2)
+
 
 class MarkDrillsTest(MessagesRepoBase):
     def _attempt(self, answer, session="sess-A"):

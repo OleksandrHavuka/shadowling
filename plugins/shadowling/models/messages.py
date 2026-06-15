@@ -160,7 +160,9 @@ class Messages:
     @staticmethod
     def mark_processed(session=None):
         """Stamp tagged+unprocessed rows (and drill rows — excluded from analysis
-        but must not stay pending forever); untagged natural rows stay."""
+        but must not stay pending forever); untagged natural rows stay. A
+        non-empty `session` scopes to that session; a falsy `session` scopes to
+        the bounded NULL-session group (`session_id IS NULL`) — never global."""
         sql = (
             "UPDATE messages SET processed_at=? WHERE processed_at IS NULL "
             "AND (langs IS NOT NULL OR kind = 'drill')"
@@ -169,6 +171,8 @@ class Messages:
         if session:
             sql += " AND session_id = ?"
             params.append(session)
+        else:
+            sql += " AND session_id IS NULL"
         with closing(connect()) as con, con:
             cur = con.execute(sql, params)
             kept = con.execute(
