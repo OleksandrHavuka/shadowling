@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """skills/debrief-rephrasing/rephrasing.py - entrypoint: record / select / messages."""
 
-import json
 import os
 import sys
 
@@ -29,27 +28,26 @@ def main(argv):
                     "why": TEXT,
                 }
             )
-            print(
-                rephrasing.record(
-                    f["slug"],
-                    f["problem"],
-                    f["learner_wrote"],
-                    f["native_phrase"],
-                    f["why"],
-                )
+            n = rephrasing.record(
+                f["slug"],
+                f["problem"],
+                f["learner_wrote"],
+                f["native_phrase"],
+                f["why"],
             )
         except ValueError as e:
             print("error: " + str(e), file=sys.stderr)
             return 1
+        status = "inserted" if n == 1 else "incremented"
+        print(f"<result>{render([{'status': status}])}</result>")
         return 0
     if op == "select":
         if args:
             row = rephrasing.Rephrasing.select(args[0])
-            if row is not None:
-                print(json.dumps(row, ensure_ascii=False))
+            selected = [row] if row is not None else []
         else:
-            for row in rephrasing.Rephrasing.select():
-                print(json.dumps(row, ensure_ascii=False))
+            selected = rephrasing.Rephrasing.select()
+        print(f"<rephrasing>{render(selected)}</rephrasing>")
         return 0
     if op == "messages":
         try:

@@ -16,7 +16,7 @@ class Friction(Model):
 
 
 def record(slug, kind, zone, learner_wrote, native_phrase, context):
-    n = Friction.insert(
+    return Friction.insert(
         {
             "slug": slug,
             "type": kind,
@@ -26,4 +26,3 @@ def record(slug, kind, zone, learner_wrote, native_phrase, context):
             "context": context,
         }
     )
-    return "inserted" if n == 1 else "incremented"

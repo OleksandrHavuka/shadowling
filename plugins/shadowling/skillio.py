@@ -137,7 +137,7 @@ def read_fields(schema, text=None):
     return result
 
 
-# --- inbound: argv slice parsers (moved from cliutil / the entrypoints) --------
+# --- inbound: argv slice parsers (moved out of the entrypoints) ----------------
 
 
 def parse_message_slice_args(args):

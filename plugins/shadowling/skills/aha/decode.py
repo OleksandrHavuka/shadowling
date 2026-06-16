@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """skills/aha/decode.py - thin entrypoint for /aha: record one decode incident.
-Parses stdin tags, calls the decode repository, prints inserted/incremented. No
+Parses stdin tags, calls the decode repository, renders the insert result. No
 SQL. The plugin imports (models/skillio) are inside main() after a sys.path
 bootstrap to the plugin root: the script's own dir is on sys.path[0] when run, so
 `models` is not importable until the bootstrap runs (keeps them at function scope
@@ -15,7 +15,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models import decode
-    from skillio import TEXT, read_fields
+    from skillio import TEXT, read_fields, render
 
     if not argv or argv[0] != "record":
         print("usage: decode.py record  (tags on stdin)", file=sys.stderr)
@@ -32,20 +32,20 @@ def main(argv):
                 "context": TEXT,
             }
         )
-        print(
-            decode.record(
-                f["slug"],
-                f["type"],
-                f["expression"],
-                f["meaning"],
-                f["takeaway"],
-                f["learner_wrote"],
-                f["context"],
-            )
+        n = decode.record(
+            f["slug"],
+            f["type"],
+            f["expression"],
+            f["meaning"],
+            f["takeaway"],
+            f["learner_wrote"],
+            f["context"],
         )
     except ValueError as e:
         print("error: " + str(e), file=sys.stderr)
         return 1
+    status = "inserted" if n == 1 else "incremented"
+    print(f"<result>{render([{'status': status}])}</result>")
     return 0
 
 

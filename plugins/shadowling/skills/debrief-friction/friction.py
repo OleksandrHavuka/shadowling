@@ -4,7 +4,6 @@ record / select / grammar-select / loot / messages. Friction is cross-domain:
 it reads grammar (correlation) and writes vocab (auto-loot) via their
 repositories. No SQL here."""
 
-import json
 import os
 import sys
 
@@ -13,7 +12,6 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
-    from cliutil import format_loot_line
     from models import friction, grammar
     from models.messages import Messages
     from models.vocab import Vocab
@@ -38,32 +36,30 @@ def main(argv):
                     "context": TEXT,
                 }
             )
-            print(
-                friction.record(
-                    f["slug"],
-                    f["type"],
-                    f["zone"],
-                    f["learner_wrote"],
-                    f["native_phrase"],
-                    f["context"],
-                )
+            n = friction.record(
+                f["slug"],
+                f["type"],
+                f["zone"],
+                f["learner_wrote"],
+                f["native_phrase"],
+                f["context"],
             )
         except ValueError as e:
             print("error: " + str(e), file=sys.stderr)
             return 1
+        status = "inserted" if n == 1 else "incremented"
+        print(f"<result>{render([{'status': status}])}</result>")
         return 0
     if op == "select":
         if args:
             row = friction.Friction.select(args[0])
-            if row is not None:
-                print(json.dumps(row, ensure_ascii=False))
+            selected = [row] if row is not None else []
         else:
-            for row in friction.Friction.select():
-                print(json.dumps(row, ensure_ascii=False))
+            selected = friction.Friction.select()
+        print(f"<friction>{render(selected)}</friction>")
         return 0
     if op == "grammar-select":
-        for row in grammar.Grammar.select():
-            print(json.dumps(row, ensure_ascii=False))
+        print(f"<grammar>{render(grammar.Grammar.select())}</grammar>")
         return 0
     if op == "loot":
         try:
@@ -78,9 +74,28 @@ def main(argv):
                 file=sys.stderr,
             )
             return 1
+        out = []
         for item in looted:
             action, row = Vocab.add(item["word"], item["translation"])
-            print(format_loot_line(action, row))
+            if row is None:  # untranslated — no persisted row
+                out.append(
+                    {
+                        "action": action,
+                        "word": item["word"],
+                        "translation": item["translation"],
+                    }
+                )
+            else:
+                out.append(
+                    {
+                        "action": action,
+                        "word": row["word"],
+                        "translation": row["translation"],
+                        "remaining": row["remaining"],
+                        "status": row["status"],
+                    }
+                )
+        print(f"<loot>{render(out)}</loot>")
         return 0
     if op == "messages":
         try:

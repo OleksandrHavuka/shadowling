@@ -50,13 +50,15 @@ class AddTest(VocabRepoBase):
         self.assertEqual(row["remaining"], 7)
 
     def test_add_identity_translation_is_untranslated_and_not_saved(self):
-        action, _ = Vocab.add("Awesome", "awesome")
+        action, row = Vocab.add("Awesome", "awesome")
         self.assertEqual(action, "untranslated")
+        self.assertIsNone(row)  # no fabricated "-" placeholder row
         self.assertNotIn("awesome", self.rows_by_word())
 
     def test_add_empty_translation_is_untranslated_and_not_saved(self):
-        action, _ = Vocab.add("throughput", "   ")
+        action, row = Vocab.add("throughput", "   ")
         self.assertEqual(action, "untranslated")
+        self.assertIsNone(row)
         self.assertNotIn("throughput", self.rows_by_word())
 
     def test_add_stamps_created_and_updated(self):

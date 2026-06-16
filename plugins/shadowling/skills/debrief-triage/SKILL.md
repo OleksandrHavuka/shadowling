@@ -30,8 +30,19 @@ Loop until done:
    tech identifiers do NOT count as prose — judge only the language of the human
    prose around them. A message mixing two languages gets both codes (e.g. `en,uk`).
    If there is no judgeable prose, use `und`.
-3. ONE batch call tagging everything you just read:
-   `python3 "${CLAUDE_SKILL_DIR}/triage.py" tag "<id>=<code[,code]>" "<id>=<code[,code]>" ...`
+3. ONE batch call tagging everything you just read — pass the pairs on stdin as a
+   TSV heredoc (one record per line: the message `<id>`, a TAB, then the code(s);
+   the body and the closing `SL_IN` MUST start at column 0):
+
+   ```bash
+   python3 "${CLAUDE_SKILL_DIR}/triage.py" tag <<'SL_IN'
+   <items>
+   1	en
+   2	en,uk
+   </items>
+   SL_IN
+   ```
+   It prints `<result><row><tagged>N</tagged></row></result>`.
 4. Go back to step 1.
 
 If any command exits non-zero, print exactly one line

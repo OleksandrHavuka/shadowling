@@ -208,13 +208,12 @@ MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4, _migration
 # display columns: the aggregate subquery yields per-group counts/dates plus the
 # newest incident id (MAX(id) AS last_id), and the outer table is JOINed to that
 # one row, so EVERY bare display column comes deterministically from the group's
-# newest incident — not just the aliased "last example". `id` is a unique PK, so
+# newest incident — not just one display column. `id` is a unique PK, so
 # `g.id = agg.last_id` matches exactly one row per group.
 
 VIEWS = {
     "grammar_ranked": (
-        " SELECT g.slug, g.problem,"
-        " g.original || ' → ' || g.fixed AS \"last example\","
+        " SELECT g.slug, g.problem, g.original, g.fixed,"
         " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
         " FROM grammar g"
         " JOIN (SELECT slug, MIN(created_at) AS created_at,"
@@ -224,8 +223,7 @@ VIEWS = {
         " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "rephrasing_ranked": (
-        ' SELECT g.slug, g.problem, g.learner_wrote AS "you wrote",'
-        ' g.native_phrase AS "native phrase",'
+        " SELECT g.slug, g.problem, g.learner_wrote, g.native_phrase,"
         " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
         " FROM rephrasing g"
         " JOIN (SELECT slug, MIN(created_at) AS created_at,"
@@ -235,7 +233,7 @@ VIEWS = {
         " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "idioms_ranked": (
-        ' SELECT g.idiom, g.meaning, g.learner_wrote AS "you wrote",'
+        " SELECT g.idiom, g.meaning, g.learner_wrote,"
         " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
         " FROM idioms g"
         " JOIN (SELECT idiom, MIN(created_at) AS created_at,"
@@ -245,8 +243,8 @@ VIEWS = {
         " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "verbs_ranked": (
-        ' SELECT g.used_form AS "you used", g.correction, g.context,'
-        ' g.verb, g.past, g.participle AS "past participle",'
+        " SELECT g.used_form, g.correction, g.context,"
+        " g.verb, g.past, g.participle,"
         " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
         " FROM verbs g"
         " JOIN (SELECT verb, MIN(created_at) AS created_at,"
@@ -266,8 +264,7 @@ VIEWS = {
         " ORDER BY agg.counter DESC, agg.last_id DESC"
     ),
     "friction_ranked": (
-        ' SELECT g.slug, g.type, g.zone, g.learner_wrote AS "you reached for",'
-        ' g.native_phrase AS "native phrase",'
+        " SELECT g.slug, g.type, g.zone, g.learner_wrote, g.native_phrase,"
         " agg.created_at, agg.updated_at, agg.counter, agg.last_id"
         " FROM friction g"
         " JOIN (SELECT slug, MIN(created_at) AS created_at,"

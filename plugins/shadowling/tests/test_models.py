@@ -40,7 +40,8 @@ class InsertSelectTest(ModelTestBase):
         self._insert("s1", "x", "y")
         row = Grammar.select("s1")
         self.assertEqual(row["counter"], 1)
-        self.assertEqual(row["last example"], "x → y")
+        self.assertEqual(row["original"], "x")
+        self.assertEqual(row["fixed"], "y")
         self.assertNotIn("last_id", row)
 
     def test_select_all_ranked_by_counter(self):
@@ -55,7 +56,7 @@ class InsertSelectTest(ModelTestBase):
 
     def test_drop_empties_the_table(self):
         self._insert("s1")
-        self.assertEqual(Grammar.drop(), "dropped")
+        self.assertEqual(Grammar.drop(), 1)  # rowcount of the DELETE
         self.assertEqual(Grammar.select(), [])
 
 
@@ -72,7 +73,8 @@ class LifecycleAndOrderingTest(ModelTestBase):
         self.assertEqual(row["counter"], 2)
         self.assertEqual(row["created_at"], "2026-06-01")  # fixed at first
         self.assertEqual(row["updated_at"], "2026-06-09")  # advances to latest
-        self.assertEqual(row["last example"], "c → d")  # latest incident wins
+        self.assertEqual(row["original"], "c")  # latest incident wins
+        self.assertEqual(row["fixed"], "d")
 
     def test_equal_counters_break_ties_by_most_recent_incident(self):
         self._insert("older")
@@ -146,7 +148,7 @@ class LatestRowColumnsTest(ModelTestBase):
         # Two incidents for ONE key whose non-key display fields differ. SQLite
         # leaves EVERY bare min/max-mixed column undefined when >1 aggregate is
         # present, so this pins them all to the group's newest incident (MAX id),
-        # not just the aliased "last example".
+        # not just one display column.
         with mock.patch("models.base.today", return_value="2026-06-01"):
             Grammar.insert(
                 {
@@ -171,7 +173,8 @@ class LatestRowColumnsTest(ModelTestBase):
         self.assertEqual(row["counter"], 2)
         self.assertEqual(row["created_at"], "2026-06-01")  # aggregate: first
         self.assertEqual(row["updated_at"], "2026-06-09")  # aggregate: latest
-        self.assertEqual(row["last example"], "new-a → new-b")  # newest incident
+        self.assertEqual(row["original"], "new-a")  # newest incident
+        self.assertEqual(row["fixed"], "new-b")
         self.assertEqual(row["problem"], "new problem")  # ALSO from newest
         self.assertNotIn("last_id", row)
 

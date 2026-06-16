@@ -87,11 +87,13 @@ def _card(con, kind, key):
     row = con.execute(PROMPT_SQL[kind], (key,)).fetchone()
     if row is None:  # hollow: the source incident/vocab row is gone (e.g. dropped)
         return None
+    # Flat card: the prompt columns merge in alongside the scheduling fields.
+    # PROMPT_SQL columns never collide with item_kind/item_key/exercise.
     return {
         "item_kind": kind,
         "item_key": key,
         "exercise": EXERCISES[kind],
-        "prompt_data": dict(row),
+        **dict(row),
     }
 
 
@@ -151,7 +153,7 @@ class Tutor:
                 )
             if kind == "vocab" and verdict == "fail":
                 Vocab.relearn(key)  # back into the glossing loop
-            return f"recorded {kind}/{key}: {verdict} -> box {box}"
+            return box
         finally:
             con.close()
 

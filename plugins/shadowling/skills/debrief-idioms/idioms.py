@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """skills/debrief-idioms/idioms.py - thin entrypoint: record / select / messages."""
 
-import json
 import os
 import sys
 
@@ -28,23 +27,22 @@ def main(argv):
                     "learner_wrote": TEXT,
                 }
             )
-            print(
-                idioms.record(
-                    f["idiom"], f["meaning"], f["context"], f["learner_wrote"]
-                )
+            n = idioms.record(
+                f["idiom"], f["meaning"], f["context"], f["learner_wrote"]
             )
         except ValueError as e:
             print("error: " + str(e), file=sys.stderr)
             return 1
+        status = "inserted" if n == 1 else "incremented"
+        print(f"<result>{render([{'status': status}])}</result>")
         return 0
     if op == "select":
         if args:
             row = idioms.Idioms.select(args[0])
-            if row is not None:
-                print(json.dumps(row, ensure_ascii=False))
+            selected = [row] if row is not None else []
         else:
-            for row in idioms.Idioms.select():
-                print(json.dumps(row, ensure_ascii=False))
+            selected = idioms.Idioms.select()
+        print(f"<idioms>{render(selected)}</idioms>")
         return 0
     if op == "messages":
         try:

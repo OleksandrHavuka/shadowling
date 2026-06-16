@@ -60,15 +60,17 @@ so steady-state connects write nothing and parallel readers cannot race.
   only stored `updated_at` columns are on `vocab` and `mastery` — sanctioned mutable
   state (scheduling / glossing progress).
 - Guarded by: `test_appdb.py::test_changed_view_definition_is_refreshed`, and the
-  record tests that read computed headers (`counter`, `last example`) from the views.
+  record tests that read computed columns (`counter`, `original`/`fixed`) from the views.
 
 ### 3. Every field name traces end-to-end (no name drift)
 
-A column has **one name** from schema → repository → SQL consumer → skill. Views may
-alias a column to a human-readable display header (`learner_wrote AS "you wrote"`) —
-that is a documented presentation layer, not drift. Each incident skill's entrypoint reads
-each field from a `<tag>` on stdin (a `<<'SL_IN'` heredoc — zero shell escaping), so a
-skill's tag at position *i* must name the column the value lands in.
+A column has **one name** from schema → repository → SQL consumer → skill. The ranked
+views expose **machine column names** (`learner_wrote`, `native_phrase`, `used_form`,
+`participle`, `original`/`fixed`) — no display-header aliases and no `→` concat; any
+label the LLM sees is composed at the boundary, not baked into a view. Each incident
+skill's entrypoint reads each field from a `<tag>` on stdin (a `<<'SL_IN'` heredoc —
+zero shell escaping), so a skill's tag at position *i* must name the column the value
+lands in.
 
 This is machine-checkable in both directions (see
 [Verify it yourself](#verify-it-yourself)):
@@ -119,6 +121,17 @@ the learner's answer verbatim (it doubles as the drill-filter registry).
 
 What the script **guarantees** vs what the model does **best-effort**:
 
+**One I/O module.** `skillio.py` is the single skill↔script boundary: it parses the
+invocation (the `read_fields` heredoc + the argv slice/size/session parsers) and owns
+the one output serializer, `render(rows, fields=None)`. `render` follows the
+identifier-vs-value discipline — tag names are trusted column identifiers from code
+(never escaped); only values pass through `_xml`. Repositories return plain data
+(rows / counts / dicts), and each entrypoint frames `render`'s body with its dataset
+tag (`f"<messages>{render(rows)}</messages>"`) and composes any status label from the
+returned counts. The format is a simplified, LLM-oriented tag dialect (not strict XML;
+never read by an XML parser) — chosen because records carry multiline free text and
+Claude reads tag-delimited fields natively.
+
 | Deterministic (Python) | Instruction-based (a model follows it) |
 |---|---|
 | storage, migrations, exposure counting, graduation, scheduling | the inline glossing of words in replies |
@@ -138,7 +151,7 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 272 tests, ~1s
+python3 -m unittest                       # 283 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
@@ -149,6 +162,8 @@ python3 -m unittest                       # 272 tests, ~1s
 grep -rnwE 'yours|you_wrote|your_read|you_reached_for|natural_english|example_fix' --include='*.py' --include='*.md' .
 # no hardcoded learning language: expect none
 grep -rn -- '--lang en' skills/
+# the old boundary names are fully retired: expect NO hits
+grep -rn 'tagio\|cliutil\|format_loot_line' --include='*.py' .
 ```
 
 ---

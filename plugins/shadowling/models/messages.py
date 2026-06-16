@@ -8,7 +8,6 @@ verb over this one table — all message SQL lives here.
 """
 
 import json
-import re
 from contextlib import closing
 from difflib import SequenceMatcher
 
@@ -20,8 +19,6 @@ MIN_LETTERS = 8  # below this it's not analyzable prose / not worth logging
 # Claude Code wraps slash-command / local-command turns in these tags. Such turns
 # are not the user's own writing, so they must never be captured for analysis.
 COMMAND_WRAPPERS = ("<command-", "<local-command-")
-
-LANG_CODE = re.compile(r"^[a-z]{2,3}$")  # ISO-style; "und" fits too
 
 DRILL_SIMILARITY = 0.90  # gate threshold; width characterized in MarkDrillsTest
 
@@ -104,35 +101,24 @@ class Messages:
             return [dict(r) for r in con.execute(sql, params).fetchall()]
 
     @staticmethod
-    def tag(pairs):
-        """pairs: 'id=code[,code]' strings. Returns (ok_count, errors)."""
-        updates, errors = [], []
-        for p in pairs:
-            id_part, eq, langs_part = p.partition("=")
-            codes = [c.strip() for c in langs_part.split(",") if c.strip()]
-            try:
-                # int() — not str.isdigit() — because Unicode digits like '²' are
-                # isdigit()-true yet raise here; a non-parseable id must be
-                # reported, never an uncaught ValueError that aborts the batch.
-                mid = int(id_part)
-            except ValueError:
-                errors.append("malformed pair: " + p)
-                continue
-            if not eq or not codes or not all(LANG_CODE.match(c) for c in codes):
-                errors.append("malformed pair: " + p)
-                continue
-            updates.append((json.dumps(codes), mid))
+    def tag(rows):
+        """Persist language codes for the given message rows. `rows` is the
+        heredoc payload parsed by skillio: a list of {"id": str, "langs":
+        "code[,code]"}. The codes are trusted (the triage LLM authored them) —
+        this is persistence only: it stamps each id's `langs` and returns the
+        count of rows actually updated. A nonexistent or non-numeric id matches
+        nothing (sqlite applies INTEGER affinity to the bound id), so a bad id
+        simply doesn't count — it never crashes the batch."""
         ok = 0
         with closing(connect()) as con, con:
-            for langs_json, mid in updates:
+            for r in rows:
+                codes = [c.strip() for c in r["langs"].split(",") if c.strip()]
                 cur = con.execute(
-                    "UPDATE messages SET langs=? WHERE id=?", (langs_json, mid)
+                    "UPDATE messages SET langs=? WHERE id=?",
+                    (json.dumps(codes), r["id"]),
                 )
-                if cur.rowcount == 0:
-                    errors.append(f"unknown id: {mid}")
-                else:
-                    ok += 1
-        return ok, errors
+                ok += cur.rowcount
+        return ok
 
     @staticmethod
     def mark_processed(session=None):
@@ -156,7 +142,7 @@ class Messages:
                 "SELECT COUNT(*) FROM messages"
                 " WHERE processed_at IS NULL AND kind IS NULL"
             ).fetchone()[0]
-        return f"processed {cur.rowcount}, kept {kept} untagged"
+        return {"processed": cur.rowcount, "kept": kept}
 
     @staticmethod
     def _similarity(a, b):
@@ -189,4 +175,4 @@ class Messages:
                     (DRILL_SIMILARITY,),
                 )
                 marked = cur.rowcount
-        return f"marked {marked} drill answer(s)"
+        return marked

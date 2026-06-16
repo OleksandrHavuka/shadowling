@@ -12,7 +12,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.messages import Messages
-    from skillio import parse_message_slice_args, render
+    from skillio import parse_message_slice_args, read_fields, render, rows
 
     if not argv:
         print("usage: triage.py {messages|tag} ...", file=sys.stderr)
@@ -28,14 +28,21 @@ def main(argv):
         print(f"<messages>{block}</messages>")
         return 0
     if op == "tag":
-        if not args:
-            print('usage: triage.py tag "<id>=<code[,code]>" ...', file=sys.stderr)
+        try:
+            tags = read_fields({"items": rows("id", "langs")})["items"]
+        except ValueError as e:
+            print("error: " + str(e), file=sys.stderr)
             return 1
-        ok, errors = Messages.tag(args)
-        print(f"tagged {ok}")
-        for e in errors:
-            print(e, file=sys.stderr)
-        return 1 if errors else 0
+        if not tags:
+            print(
+                "usage: triage.py tag (id<TAB>code[,code] lines in an "
+                "<items>...</items> tag on stdin)",
+                file=sys.stderr,
+            )
+            return 1
+        n = Messages.tag(tags)
+        print(f"<result>{render([{'tagged': n}])}</result>")
+        return 0
     print("unknown op: " + op, file=sys.stderr)
     return 1
 

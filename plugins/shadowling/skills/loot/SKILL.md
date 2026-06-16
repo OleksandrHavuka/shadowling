@@ -19,7 +19,7 @@ Terms (comma-separated): `$ARGUMENTS`
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`. You translate the
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`). You translate the
    terms into `first_language`.
 2. Split `$ARGUMENTS` on commas, trim each, drop empties. Keep multi-word phrases
    whole (`machine learning` is one term).
@@ -42,9 +42,11 @@ another term	its translation
 </items>
 SL_IN
 ```
-5. Report the per-word results (the script prints `add`/`refresh`/`relearn`; it
-   prints `untranslated` and skips a row if a translation was missing/identical —
-   if so, say it couldn't be translated and suggest re-running).
+5. Report the per-word results (the script prints
+   `<loot><row><action>add|refresh|relearn</action><word>…</word>…</row>…</loot>`;
+   an untranslated row carries only `<action>untranslated</action>` + the word
+   if a translation was missing/identical — if so, say it couldn't be translated
+   and suggest re-running).
 6. For any term that looks like an OBVIOUS misspelling of a common word (be
    conservative — don't flag intentional phrases, technical/proper nouns, or real
    but uncommon words), append a hint AFTER the results, e.g.:

@@ -15,11 +15,13 @@ nothing before it and no chaining).
 Steps:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/debrief.py" mark-drills` — ONCE,
-   before anything else (it fences off tutor answers). Keep its one-line
-   output for the final summary.
-2. Run `python3 "${CLAUDE_SKILL_DIR}/debrief.py" sessions`. If it prints
-   nothing, tell the user there's nothing to review and STOP.
-3. FOR EACH session from step 2, SEQUENTIALLY (finish one session before
+   before anything else (it fences off tutor answers). It prints
+   `<result><row><marked>N</marked></row></result>`; keep N for the final summary.
+2. Run `python3 "${CLAUDE_SKILL_DIR}/debrief.py" sessions`. It prints
+   `<sessions><row><session>ID</session><pending>N</pending></row>…</sessions>`;
+   if it prints `<sessions></sessions>` (no rows), tell the user there's nothing
+   to review and STOP.
+3. FOR EACH `<row>`'s `<session>` id from step 2, SEQUENTIALLY (finish one session before
    starting the next):
    a. Invoke `debrief-triage` with the session id as the argument and WAIT
       for its status line. On `ERROR ` (or no line): report it, SKIP this
@@ -30,7 +32,9 @@ Steps:
       `debrief-verbs`, `debrief-friction`. Each returns exactly one
       `OK <cat>: …` or `ERROR <cat>: <reason>` line.
    c. ONLY if all six lines for this session were `OK `: run
-      `python3 "${CLAUDE_SKILL_DIR}/debrief.py" mark-processed --session <id>`.
+      `python3 "${CLAUDE_SKILL_DIR}/debrief.py" mark-processed --session <id>`
+      (it prints `<result><row><processed>N</processed><kept>M</kept></row></result>` —
+      informational; the gate is still "all six OK").
       Otherwise leave the session pending — it will be retried by the next
       /debrief — and continue with the next session.
 4. Print a compact final summary: the mark-drills line, then one line per

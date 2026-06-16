@@ -45,14 +45,10 @@ class Vocab:
         word = word.strip().lower()
         translation = translation.strip()
         # Guard against a failed/identity translation (the LLM echoing the term
-        # back untranslated). Never persist such a row — signal the caller.
+        # back untranslated). Never persist such a row — signal the caller with a
+        # None row (no fabricated "-" presentation placeholders).
         if not translation or _norm(translation) == _norm(word):
-            return "untranslated", {
-                "word": word,
-                "translation": translation,
-                "remaining": "-",
-                "status": "-",
-            }
+            return "untranslated", None
         now = core.now()
         con = connect()
         try:

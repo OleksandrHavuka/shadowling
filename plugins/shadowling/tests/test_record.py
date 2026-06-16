@@ -32,12 +32,13 @@ class GrammarRecordTest(RecordTestBase):
                 "I went to the store",
                 "use the before specific nouns",
             ),
-            "inserted",
+            1,
         )
         row = Grammar.select("article-omission-before-countable")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["problem"], "drops 'the' before nouns")
-        self.assertEqual(row["last example"], "I went to store → I went to the store")
+        self.assertEqual(row["original"], "I went to store")
+        self.assertEqual(row["fixed"], "I went to the store")
         self.assertTrue(row["created_at"])
         self.assertEqual(row["created_at"], row["updated_at"])
         incidents = self._incidents("grammar")
@@ -51,12 +52,11 @@ class GrammarRecordTest(RecordTestBase):
         from models.grammar import Grammar
 
         models.RECORDERS["grammar"]("s1", "p", "a", "b", "r")
-        self.assertEqual(
-            models.RECORDERS["grammar"]("s1", "p", "c", "d", "r"), "incremented"
-        )
+        self.assertEqual(models.RECORDERS["grammar"]("s1", "p", "c", "d", "r"), 2)
         row = Grammar.select("s1")
         self.assertEqual(row["counter"], 2)
-        self.assertEqual(row["last example"], "c → d")  # latest incident wins
+        self.assertEqual(row["original"], "c")  # latest incident wins
+        self.assertEqual(row["fixed"], "d")
         self.assertEqual(len(self._incidents("grammar")), 2)
 
     def test_slug_normalized_dedups_across_formatting(self):
@@ -64,15 +64,15 @@ class GrammarRecordTest(RecordTestBase):
 
         self.assertEqual(
             models.RECORDERS["grammar"]("Word Choice Plural", "p", "a", "b", "r"),
-            "inserted",
+            1,
         )
         self.assertEqual(
             models.RECORDERS["grammar"]("word-choice-plural", "p", "c", "d", "r"),
-            "incremented",
+            2,
         )
         self.assertEqual(
             models.RECORDERS["grammar"]("  word_choice  plural ", "p", "e", "f", "r"),
-            "incremented",
+            3,
         )
         self.assertEqual(Grammar.select("word-choice-plural")["counter"], 3)
         self.assertTrue(
@@ -92,12 +92,12 @@ class RephrasingRecordTest(RecordTestBase):
                 "take a photo",
                 "English uses 'take' with photo",
             ),
-            "inserted",
+            1,
         )
         row = Rephrasing.select("collocation-make-vs-take-photo")
         self.assertEqual(row["counter"], 1)
-        self.assertEqual(row["you wrote"], "make a photo")
-        self.assertEqual(row["native phrase"], "take a photo")
+        self.assertEqual(row["learner_wrote"], "make a photo")
+        self.assertEqual(row["native_phrase"], "take a photo")
         incidents = self._incidents("rephrasing")
         self.assertEqual(incidents[0]["learner_wrote"], "make a photo")
         self.assertEqual(incidents[0]["native_phrase"], "take a photo")
@@ -115,18 +115,18 @@ class IdiomsRecordTest(RecordTestBase):
                 "at a party",
                 "I wanted to broke the ice",
             ),
-            "inserted",
+            1,
         )
         row = Idioms.select("break the ice")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["meaning"], "почати розмову")
-        self.assertEqual(row["you wrote"], "I wanted to broke the ice")
+        self.assertEqual(row["learner_wrote"], "I wanted to broke the ice")
         self.assertEqual(self._incidents("idioms")[0]["context"], "at a party")
 
     def test_same_idiom_case_and_spacing_increment(self):
         models.RECORDERS["idioms"]("break the ice", "m", "c", "y1")
         self.assertEqual(
-            models.RECORDERS["idioms"]("Break  the Ice", "m", "c", "y2"), "incremented"
+            models.RECORDERS["idioms"]("Break  the Ice", "m", "c", "y2"), 2
         )  # natural key normalized: casefold + space collapse
         from models.idioms import Idioms
 
@@ -146,13 +146,13 @@ class VerbsRecordTest(RecordTestBase):
                 "I have gone",
                 "I have went to the store yesterday",
             ),
-            "inserted",
+            1,
         )
         row = Verbs.select("go")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["past"], "went")
-        self.assertEqual(row["past participle"], "gone")
-        self.assertEqual(row["you used"], "I have went")
+        self.assertEqual(row["participle"], "gone")
+        self.assertEqual(row["used_form"], "I have went")
         self.assertEqual(row["correction"], "I have gone")
         self.assertEqual(row["context"], "I have went to the store yesterday")
         incident = self._incidents("verbs")[0]
@@ -166,7 +166,7 @@ class VerbsRecordTest(RecordTestBase):
         models.RECORDERS["verbs"]("Go", "went", "gone", "u1", "c1", "ctx1")
         self.assertEqual(
             models.RECORDERS["verbs"](" go ", "went", "gone", "u2", "c2", "ctx2"),
-            "incremented",
+            2,
         )
         self.assertEqual(Verbs.select("go")["counter"], 2)
 
@@ -185,7 +185,7 @@ class DecodeRecordTest(RecordTestBase):
                 "maybe physically break ice?",
                 "at a party someone said it",
             ),
-            "inserted",
+            1,
         )
         row = Decode.select("break-the-ice")
         self.assertEqual(row["counter"], 1)
@@ -209,7 +209,7 @@ class DecodeRecordTest(RecordTestBase):
                 "thought it was 'has did'",
                 "ctx1",
             ),
-            "inserted",
+            1,
         )
         self.assertEqual(
             models.RECORDERS["decode"](
@@ -221,7 +221,7 @@ class DecodeRecordTest(RecordTestBase):
                 "thought 'has submit'",
                 "ctx2",
             ),
-            "incremented",
+            2,
         )
         row = Decode.select("present-perfect-passive")
         self.assertEqual(row["counter"], 2)
@@ -241,14 +241,14 @@ class FrictionRecordTest(RecordTestBase):
                 "I see it differently — here's my concern",
                 "review thread, switched mid-discussion",
             ),
-            "inserted",
+            1,
         )
         row = Friction.select("polite-pushback")
         self.assertEqual(row["counter"], 1)
         self.assertEqual(row["type"], "register")
-        self.assertEqual(row["you reached for"], "та ну, це ж очевидно неправильно")
+        self.assertEqual(row["learner_wrote"], "та ну, це ж очевидно неправильно")
         self.assertEqual(
-            row["native phrase"], "I see it differently — here's my concern"
+            row["native_phrase"], "I see it differently — here's my concern"
         )
         self.assertEqual(
             self._incidents("friction")[0]["context"],
@@ -275,11 +275,11 @@ class FrictionRecordTest(RecordTestBase):
                 "with respect, I disagree",
                 "ctx2",
             ),
-            "incremented",
+            2,
         )
         row = Friction.select("polite-pushback")
         self.assertEqual(row["counter"], 2)
-        self.assertEqual(row["you reached for"], "та ви шо")
+        self.assertEqual(row["learner_wrote"], "та ви шо")
 
 
 if __name__ == "__main__":

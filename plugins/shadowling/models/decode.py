@@ -24,7 +24,7 @@ class Decode(Model):
 
 
 def record(slug, kind, expression, meaning, takeaway, learner_wrote, context):
-    n = Decode.insert(
+    return Decode.insert(
         {
             "slug": slug,
             "type": kind,
@@ -35,4 +35,3 @@ def record(slug, kind, expression, meaning, takeaway, learner_wrote, context):
             "context": context,
         }
     )
-    return "inserted" if n == 1 else "incremented"

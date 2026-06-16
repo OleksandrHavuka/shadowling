@@ -62,7 +62,7 @@ depends_on = ["appdb", "core", "models.friction", "models.grammar", "models.verb
 
 [[modules]]
 path = "config"
-depends_on = ["core"]
+depends_on = ["core", "skillio"]
 
 [[modules]]
 path = "gloss"

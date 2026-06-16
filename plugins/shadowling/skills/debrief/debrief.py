@@ -3,7 +3,6 @@
 sessions / pending-count / mark-processed / mark-drills over the Messages
 repository. No SQL."""
 
-import json
 import os
 import sys
 
@@ -13,7 +12,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.messages import Messages
-    from skillio import parse_session_arg
+    from skillio import parse_session_arg, render
 
     if not argv:
         print(
@@ -24,17 +23,17 @@ def main(argv):
         return 1
     cmd, args = argv[0], argv[1:]
     if cmd == "sessions":
-        for row in Messages.sessions():
-            print(json.dumps(row, ensure_ascii=False))
+        print(f"<sessions>{render(Messages.sessions())}</sessions>")
         return 0
     if cmd == "pending-count":
         print(Messages.pending_count())
         return 0
     if cmd == "mark-drills":
-        print(Messages.mark_drills())
+        print(f"<result>{render([{'marked': Messages.mark_drills()}])}</result>")
         return 0
     if cmd == "mark-processed":
-        print(Messages.mark_processed(session=parse_session_arg(args)))
+        result = Messages.mark_processed(session=parse_session_arg(args))
+        print(f"<result>{render([result])}</result>")
         return 0
     print("unknown command: " + cmd, file=sys.stderr)
     return 1

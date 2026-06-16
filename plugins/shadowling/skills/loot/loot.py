@@ -12,9 +12,8 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
-    from cliutil import format_loot_line
     from models.vocab import Vocab
-    from skillio import read_fields, rows
+    from skillio import read_fields, render, rows
 
     if not argv or argv[0] != "add":
         print(
@@ -35,9 +34,28 @@ def main(argv):
             file=sys.stderr,
         )
         return 1
+    out = []
     for item in looted:
         action, row = Vocab.add(item["word"], item["translation"])
-        print(format_loot_line(action, row))
+        if row is None:  # untranslated — no persisted row
+            out.append(
+                {
+                    "action": action,
+                    "word": item["word"],
+                    "translation": item["translation"],
+                }
+            )
+        else:
+            out.append(
+                {
+                    "action": action,
+                    "word": row["word"],
+                    "translation": row["translation"],
+                    "remaining": row["remaining"],
+                    "status": row["status"],
+                }
+            )
+    print(f"<loot>{render(out)}</loot>")
     return 0
 
 

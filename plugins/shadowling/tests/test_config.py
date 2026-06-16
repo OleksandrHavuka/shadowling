@@ -64,13 +64,14 @@ class GetTest(ConfigCliTestBase):
         self.assertIn("not fully configured", err.getvalue())
         self.assertIn("learning_language", err.getvalue())  # names the gap
 
-    def test_show_emits_all_keys_as_json_when_ready(self):
+    def test_show_emits_all_keys_as_tags_when_ready(self):
         self._configure()
         code, out = run_main(["show"])
         self.assertEqual(code, 0)
-        data = json.loads(out)
-        self.assertEqual(set(data), set(core.CONFIG_KEYS))
-        self.assertEqual(data["learning_language"], "English")
+        self.assertIn("<config>", out)
+        self.assertIn("<first_language>Ukrainian</first_language>", out)
+        self.assertIn("<learning_language>English</learning_language>", out)
+        self.assertIn("<explanation_language>English</explanation_language>", out)
 
     def test_show_fails_with_notice_when_unconfigured(self):
         self._write_config({"first_language": "Ukrainian"})
@@ -83,9 +84,13 @@ class GetTest(ConfigCliTestBase):
 
     def test_get_prints_each_configured_key(self):
         self._configure()
-        self.assertEqual(run_main(["get", "first_language"])[1].strip(), "Ukrainian")
-        self.assertEqual(
-            run_main(["get", "explanation_language"])[1].strip(), "English"
+        self.assertIn(
+            "<first_language>Ukrainian</first_language>",
+            run_main(["get", "first_language"])[1],
+        )
+        self.assertIn(
+            "<explanation_language>English</explanation_language>",
+            run_main(["get", "explanation_language"])[1],
         )
 
     def test_get_unknown_key_is_error(self):
@@ -98,9 +103,18 @@ class SetTest(ConfigCliTestBase):
         self.assertEqual(run_main(["set", "first_language", "Spanish"])[0], 0)
         self.assertEqual(run_main(["set", "explanation_language", "German"])[0], 0)
         self.assertEqual(run_main(["set", "learning_language", "French"])[0], 0)
-        self.assertEqual(run_main(["get", "first_language"])[1].strip(), "Spanish")
-        self.assertEqual(run_main(["get", "explanation_language"])[1].strip(), "German")
-        self.assertEqual(run_main(["get", "learning_language"])[1].strip(), "French")
+        self.assertIn(
+            "<first_language>Spanish</first_language>",
+            run_main(["get", "first_language"])[1],
+        )
+        self.assertIn(
+            "<explanation_language>German</explanation_language>",
+            run_main(["get", "explanation_language"])[1],
+        )
+        self.assertIn(
+            "<learning_language>French</learning_language>",
+            run_main(["get", "learning_language"])[1],
+        )
 
     def test_set_preserves_unknown_keys_in_file(self):
         self._write_config(

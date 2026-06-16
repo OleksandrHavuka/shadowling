@@ -21,7 +21,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`).
    Write `problem` and `why` in the explanation language only — no other-language glosses.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/rephrasing.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language
@@ -29,8 +29,9 @@ Steps:
    `<messages></messages>` (empty), print `OK rephrasing: nothing found` and STOP.
    If a listed message turns out not to be learning-language prose (a mis-tag),
    skip it — never analyze text in another language.
-3. Run `python3 "${CLAUDE_SKILL_DIR}/rephrasing.py" select`. Collect the
-   existing `slug` values — your dedup context.
+3. Run `python3 "${CLAUDE_SKILL_DIR}/rephrasing.py" select`. It prints
+   `<rephrasing><row><slug>…</slug>…</row>…</rephrasing>`; collect the existing
+   `<slug>` values — your dedup context.
 4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find phrasing that is grammatical but UNNATURAL
    (awkward collocations, calques, wrong register, wordiness). For each, derive a
    slug:
@@ -59,6 +60,8 @@ python3 "${CLAUDE_SKILL_DIR}/rephrasing.py" record <<'SL_IN'
 <why>a short reason written in the explanation language</why>
 SL_IN
 ```
+   The call prints `<result><row><status>inserted|incremented</status></row></result>`;
+   count the `inserted`/`incremented` statuses for the OK line.
    Don't invent issues.
 5. Print exactly one line and nothing else:
    `OK rephrasing: <N> incremented, <M> inserted` (or `OK rephrasing: nothing found`).

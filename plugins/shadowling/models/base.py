@@ -99,7 +99,7 @@ class Model:
         con = connect()
         try:
             with con:
-                con.execute(f"DELETE FROM {cls.table}")
-            return "dropped"
+                cur = con.execute(f"DELETE FROM {cls.table}")
+            return cur.rowcount
         finally:
             con.close()

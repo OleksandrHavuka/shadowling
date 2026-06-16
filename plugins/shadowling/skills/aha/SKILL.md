@@ -21,7 +21,7 @@ out each phrase and the user's hunch yourself.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`. The expression is in
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`). The expression is in
    `learning_language`; write `meaning` and `takeaway` in `explanation_language`.
 2. For EACH expression the user brought:
    a. If it is literal / there is nothing to explain → say so to the user and DO NOT

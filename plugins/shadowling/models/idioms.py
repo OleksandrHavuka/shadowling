@@ -17,7 +17,7 @@ class Idioms(Model):
 
 
 def record(idiom, meaning, context, learner_wrote):
-    n = Idioms.insert(
+    return Idioms.insert(
         {
             "idiom": idiom,
             "meaning": meaning,
@@ -25,4 +25,3 @@ def record(idiom, meaning, context, learner_wrote):
             "learner_wrote": learner_wrote,
         }
     )
-    return "inserted" if n == 1 else "incremented"

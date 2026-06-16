@@ -20,7 +20,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`).
    The `meaning` is written in the explanation language.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/idioms.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language
@@ -28,8 +28,9 @@ Steps:
    `<messages></messages>` (empty), print `OK idioms: nothing found` and STOP.
    If a listed message turns out not to be learning-language prose (a mis-tag),
    skip it — never analyze text in another language.
-3. Run `python3 "${CLAUDE_SKILL_DIR}/idioms.py" select`. Collect the
-   existing `idiom` values — your dedup context.
+3. Run `python3 "${CLAUDE_SKILL_DIR}/idioms.py" select`. It prints
+   `<idioms><row><idiom>…</idiom>…</row>…</idioms>`; collect the existing `<idiom>`
+   values — your dedup context.
 4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find idioms / fixed expressions worth learning —
    either ones the user attempted (possibly wrong) or a genuinely apt idiom for
    what they meant. The key is the idiom itself in its canonical dictionary form
@@ -47,6 +48,8 @@ python3 "${CLAUDE_SKILL_DIR}/idioms.py" record <<'SL_IN'
 <learner_wrote>the user's actual wording</learner_wrote>
 SL_IN
 ```
+   The call prints `<result><row><status>inserted|incremented</status></row></result>`;
+   count the `inserted`/`incremented` statuses for the OK line.
    Don't invent idioms.
 5. Print exactly one line and nothing else:
    `OK idioms: <N> incremented, <M> inserted` (or `OK idioms: nothing found`).

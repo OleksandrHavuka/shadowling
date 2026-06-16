@@ -71,36 +71,24 @@ class TagTest(MessagesRepoBase):
         Messages.capture("друге повідомлення суто українською мовою", "s")
 
     def test_tag_single_and_multi_code(self):
-        ok, errors = Messages.tag(["1=en", "2=en,uk"])
-        self.assertEqual((ok, errors), (2, []))
+        n = Messages.tag([{"id": "1", "langs": "en"}, {"id": "2", "langs": "en,uk"}])
+        self.assertEqual(n, 2)
         rows = self._rows()
         self.assertEqual(json.loads(rows[0]["langs"]), ["en"])
         self.assertEqual(json.loads(rows[1]["langs"]), ["en", "uk"])
 
-    def test_tag_unknown_id_reported(self):
-        ok, errors = Messages.tag(["999=en"])
-        self.assertEqual(ok, 0)
-        self.assertTrue(any("999" in e for e in errors))
+    def test_tag_unknown_id_not_counted(self):
+        self.assertEqual(Messages.tag([{"id": "999", "langs": "en"}]), 0)
 
-    def test_tag_malformed_rejected(self):
-        for bad in ["1", "1=", "1=ENGLISH", "1=e", "x=en"]:
-            ok, errors = Messages.tag([bad])
-            self.assertEqual(ok, 0, bad)
-            self.assertTrue(errors, bad)
+    def test_tag_non_numeric_id_matches_nothing(self):
+        # a non-numeric id can't match the INTEGER pk; persistence-only -> no
+        # crash, just no update (the old in-model validation is gone).
+        self.assertEqual(Messages.tag([{"id": "²", "langs": "es"}]), 0)
 
-    def test_tag_unicode_digit_id_is_malformed_not_crash(self):
-        # '²'.isdigit() is True but int('²') raises ValueError; the id parse must
-        # reject it as a malformed pair instead of aborting the batch.
-        ok, errors = Messages.tag(["²=es"])
-        self.assertEqual(ok, 0)
-        self.assertEqual(len(errors), 1)
-        self.assertIn("malformed pair", errors[0])
-        self.assertIn("²=es", errors[0])
-
-    def test_tag_valid_id_still_updates_after_unicode_guard(self):
-        ok, errors = Messages.tag(["1=en"])
-        self.assertEqual((ok, errors), (1, []))
-        self.assertEqual(json.loads(self._rows()[0]["langs"]), ["en"])
+    def test_tag_strips_blank_codes(self):
+        n = Messages.tag([{"id": "1", "langs": "en, ,uk"}])
+        self.assertEqual(n, 1)
+        self.assertEqual(json.loads(self._rows()[0]["langs"]), ["en", "uk"])
 
 
 class ListTest(MessagesRepoBase):
@@ -153,13 +141,15 @@ class SessionsAndMarkTest(MessagesRepoBase):
         self.assertEqual(Messages.pending_count(), 3)
 
     def test_mark_processed_session_scoped(self):
-        Messages.tag(["1=en", "3=en"])  # id 2 untagged
+        Messages.tag(
+            [{"id": "1", "langs": "en"}, {"id": "3", "langs": "en"}]
+        )  # id 2 untagged
         out = Messages.mark_processed(session="sess-A")
         rows = appdb.query(
             "SELECT id, processed_at IS NOT NULL AS p FROM messages ORDER BY id"
         )
         self.assertEqual([(r["id"], r["p"]) for r in rows], [(1, 1), (2, 0), (3, 1)])
-        self.assertIn("processed 2", out)
+        self.assertEqual(out, {"processed": 2, "kept": 1})
 
     def test_mark_processed_empty_targets_null_session_group_only(self):
         # add a row whose session_id IS NULL (sessions() can emit {"session": null})
@@ -169,7 +159,13 @@ class SessionsAndMarkTest(MessagesRepoBase):
                 " VALUES ('t', 'A standalone null-session sentence here',"
                 " NULL, '[\"en\"]')"
             )
-        Messages.tag(["1=en", "2=en", "3=en"])  # tag the seeded session rows
+        Messages.tag(
+            [
+                {"id": "1", "langs": "en"},
+                {"id": "2", "langs": "en"},
+                {"id": "3", "langs": "en"},
+            ]
+        )  # tag the seeded session rows
 
         out = Messages.mark_processed("")  # falsy -> NULL group, NOT global
         rows = appdb.query(
@@ -179,7 +175,7 @@ class SessionsAndMarkTest(MessagesRepoBase):
             [(r["id"], r["p"]) for r in rows],
             [(1, 0), (2, 0), (3, 0), (4, 1)],
         )
-        self.assertIn("processed 1", out)
+        self.assertEqual(out["processed"], 1)
 
         out2 = Messages.mark_processed(None)  # same: only the NULL group
         rows2 = appdb.query(
@@ -189,7 +185,7 @@ class SessionsAndMarkTest(MessagesRepoBase):
             [(r["id"], r["p"]) for r in rows2],
             [(1, 0), (2, 0), (3, 0), (4, 1)],
         )
-        self.assertIn("processed 0", out2)
+        self.assertEqual(out2["processed"], 0)
 
 
 class MarkDrillsTest(MessagesRepoBase):
@@ -211,15 +207,14 @@ class MarkDrillsTest(MessagesRepoBase):
         out = Messages.mark_drills()
         rows = appdb.query("SELECT kind FROM messages ORDER BY id")
         self.assertEqual([r["kind"] for r in rows], ["drill", "drill"])
-        self.assertIn("marked 2", out)
+        self.assertEqual(out, 2)
 
     def test_return_has_no_unmatched_tail(self):
         Messages.capture("I have gone to the gym today okay", "sess-A")
         self._attempt("I have gone to the gym today okay")
         self._attempt("a recorded answer that was never captured at all")
         out = Messages.mark_drills()
-        self.assertEqual(out, "marked 1 drill answer(s)")
-        self.assertNotIn("unmatched", out)
+        self.assertEqual(out, 1)
 
     def test_empty_recorded_answer_does_not_mark_drill(self):
         with closing_con() as con, con:
@@ -236,7 +231,7 @@ class MarkDrillsTest(MessagesRepoBase):
         out = Messages.mark_drills()
         rows = appdb.query("SELECT kind FROM messages ORDER BY id")
         self.assertEqual([r["kind"] for r in rows], [None, None])
-        self.assertEqual(out, "marked 0 drill answer(s)")
+        self.assertEqual(out, 0)
 
     def test_similarity_characterization(self):
         # Comprehensive pin of _similarity around DRILL_SIMILARITY (0.90) — the

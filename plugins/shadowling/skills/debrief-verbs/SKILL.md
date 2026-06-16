@@ -20,7 +20,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`).
    The verb forms, `used_form`, `correction`, and `context` stay in the learning language regardless.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/verbs.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language
@@ -28,8 +28,9 @@ Steps:
    `<messages></messages>` (empty), print `OK verbs: nothing found` and STOP.
    If a listed message turns out not to be learning-language prose (a mis-tag),
    skip it — never analyze text in another language.
-3. Run `python3 "${CLAUDE_SKILL_DIR}/verbs.py" select`. Collect the
-   existing `verb` values — your dedup context.
+3. Run `python3 "${CLAUDE_SKILL_DIR}/verbs.py" select`. It prints
+   `<verbs><row><verb>…</verb>…</row>…</verbs>`; collect the existing `<verb>`
+   values — your dedup context.
 4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find misused or otherwise noteworthy IRREGULAR
    verbs (e.g. a wrong form like English `I have went`, `I buyed`). The key is the
    verb base form (lowercase, e.g. `go`); reuse an existing key for the same verb.
@@ -47,6 +48,8 @@ python3 "${CLAUDE_SKILL_DIR}/verbs.py" record <<'SL_IN'
 <context>a short excerpt of where it appeared (useful for drills)</context>
 SL_IN
 ```
+   The call prints `<result><row><status>inserted|incremented</status></row></result>`;
+   count the `inserted`/`incremented` statuses for the OK line.
    Only record genuine irregular-verb issues.
 5. Print exactly one line and nothing else:
    `OK verbs: <N> incremented, <M> inserted` (or `OK verbs: nothing found`).

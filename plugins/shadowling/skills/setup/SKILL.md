@@ -23,6 +23,6 @@ Steps:
    (meanings, rules, takeaways) be written in?" Offer the answer from step 3
    (learning language) and the answer from step 1 (native language) as options.
 6. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" set explanation_language "<answer>"`.
-7. Confirm all three saved values to the user.
+7. Each `set` prints `<config><row><key>value</key></row></config>`; confirm all three saved values to the user.
 
 Do NOT gloss anything in your reply.

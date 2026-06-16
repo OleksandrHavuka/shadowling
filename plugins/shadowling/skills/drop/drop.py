@@ -11,6 +11,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.vocab import Vocab
+    from skillio import render
 
     if not argv or argv[0] != "remove":
         print('usage: drop.py remove "<word>" ["<word>" ...]', file=sys.stderr)
@@ -19,8 +20,11 @@ def main(argv):
     if not words:
         print('usage: drop.py remove "<word>" ["<word>" ...]', file=sys.stderr)
         return 1
-    for word in words:
-        print("{}: {}".format(word, "removed" if Vocab.remove(word) else "not found"))
+    out = [
+        {"word": word, "outcome": "removed" if Vocab.remove(word) else "not found"}
+        for word in words
+    ]
+    print(f"<result>{render(out)}</result>")
     return 0
 
 

@@ -21,7 +21,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`).
    Write `problem` and `rule` in the explanation language only — no other-language glosses.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/grammar.py" messages --session "<session-id>" --lang <code>`,
    where `<code>` is the lowercase ISO 639-1 code of the learning language
@@ -29,8 +29,9 @@ Steps:
    `<messages></messages>` (empty), print `OK grammar: nothing found` and STOP.
    If a listed message turns out not to be learning-language prose (a mis-tag),
    skip it — never analyze text in another language.
-3. Run `python3 "${CLAUDE_SKILL_DIR}/grammar.py" select`. Collect the
-   existing `slug` values — this is your dedup context.
+3. Run `python3 "${CLAUDE_SKILL_DIR}/grammar.py" select`. It prints
+   `<grammar><row><slug>…</slug>…</row>…</grammar>`; collect the existing `<slug>`
+   values — this is your dedup context.
 4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find GRAMMAR errors only (articles, prepositions,
    agreement, tense, word order, etc. — not naturalness / idioms / verb forms
    unless they are a grammar error). For each real error, derive a slug:
@@ -61,6 +62,8 @@ python3 "${CLAUDE_SKILL_DIR}/grammar.py" record <<'SL_IN'
 <rule>the short rule</rule>
 SL_IN
 ```
+   The call prints `<result><row><status>inserted|incremented</status></row></result>`;
+   count the `inserted`/`incremented` statuses for the OK line.
    Don't invent errors — only record genuine ones.
 5. Print exactly one line and nothing else:
    `OK grammar: <N> incremented, <M> inserted` — counting the `incremented` /

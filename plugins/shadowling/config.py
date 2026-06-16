@@ -3,7 +3,7 @@
 
 Verbs:
 
-  config.py show                 all keys as one-line JSON (exit 1 + notice when
+  config.py show                 all keys as one <config> block (exit 1 + notice when
                                  unconfigured) — a skill reads every field it needs
                                  in ONE call instead of one `get` per field
   config.py get <key>            single value on stdout, or exit 1 when unconfigured
@@ -13,10 +13,10 @@ Verbs:
 failure, tells the user to run /shadowling:setup and stops.
 """
 
-import json
 import sys
 
 from core import CONFIG_KEYS, load_config, save_config
+from skillio import render
 
 USAGE = (
     "usage: config.py show | get <key> | set <key> <value>  (key: "
@@ -31,7 +31,7 @@ def main(argv):
         if cfg["missing"]:  # same whole-plugin gate as `get`
             print(cfg["notice"], file=sys.stderr)
             return 1
-        print(json.dumps({k: cfg[k] for k in CONFIG_KEYS}, ensure_ascii=False))
+        print(f"<config>{render([{k: cfg[k] for k in CONFIG_KEYS}])}</config>")
         return 0
     if len(argv) < 2 or argv[0] not in ("get", "set") or argv[1] not in CONFIG_KEYS:
         print(USAGE, file=sys.stderr)
@@ -42,13 +42,13 @@ def main(argv):
         if cfg["missing"]:  # whole-plugin gate; the notice names the unset key(s)
             print(cfg["notice"], file=sys.stderr)
             return 1
-        print(cfg[key])
+        print(f"<config>{render([{key: cfg[key]}])}</config>")
         return 0
     if len(argv) != 3 or not argv[2].strip():
         print(USAGE, file=sys.stderr)
         return 1
     cfg = save_config({key: argv[2]})
-    print(f"{key} = {cfg[key]}")
+    print(f"<config>{render([{key: cfg[key]}])}</config>")
     return 0
 
 

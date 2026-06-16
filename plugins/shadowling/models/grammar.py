@@ -11,7 +11,7 @@ class Grammar(Model):
 
 
 def record(slug, problem, original, fixed, rule):
-    n = Grammar.insert(
+    return Grammar.insert(
         {
             "slug": slug,
             "problem": problem,
@@ -20,4 +20,3 @@ def record(slug, problem, original, fixed, rule):
             "rule": rule,
         }
     )
-    return "inserted" if n == 1 else "incremented"

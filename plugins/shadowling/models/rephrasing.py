@@ -11,7 +11,7 @@ class Rephrasing(Model):
 
 
 def record(slug, problem, learner_wrote, native_phrase, why):
-    n = Rephrasing.insert(
+    return Rephrasing.insert(
         {
             "slug": slug,
             "problem": problem,
@@ -20,4 +20,3 @@ def record(slug, problem, learner_wrote, native_phrase, why):
             "why": why,
         }
     )
-    return "inserted" if n == 1 else "incremented"

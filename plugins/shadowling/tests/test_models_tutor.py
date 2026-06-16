@@ -59,7 +59,7 @@ class RecordTest(TutorRepoBase):
             out = Tutor.record(
                 "grammar", "article-omission", "fix", "pass", "I went to the store"
             )
-        self.assertIn("box 2", out)
+        self.assertEqual(out, 2)  # the new box
         a = appdb.query("SELECT * FROM attempts")[0]
         self.assertEqual(a["answer"], "I went to the store")
         self.assertEqual(a["session_id"], "sess-T")
@@ -131,7 +131,8 @@ class DeckTest(TutorRepoBase):
         keys = [c["item_key"] for c in cards if c["item_kind"] == "grammar"]
         self.assertEqual(keys, ["frequent", "rare"])
         self.assertEqual(cards[0]["exercise"], "fix")
-        self.assertEqual(cards[0]["prompt_data"]["original"], "I went to store")
+        self.assertEqual(cards[0]["original"], "I went to store")
+        self.assertNotIn("prompt_data", cards[0])
 
     def test_hot_zone_boost_jumps_queue(self):
         self.seed_grammar("calm", n=1)
@@ -160,7 +161,7 @@ class DeckTest(TutorRepoBase):
         with mock.patch("models.tutor._today", return_value="2026-06-12"):
             cards = [c for c in Tutor.deck(8) if c["item_kind"] == "vocab"]
         self.assertEqual(cards[0]["exercise"], "reverse")
-        self.assertEqual(cards[0]["prompt_data"]["translation"], "переклад")
+        self.assertEqual(cards[0]["translation"], "переклад")
 
     def test_active_vocab_not_drilled(self):
         self.seed_vocab("active-word", status="active")

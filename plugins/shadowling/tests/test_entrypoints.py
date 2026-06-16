@@ -77,7 +77,8 @@ class DecodeTest(EntrypointBase):
                 context="c",
             ),
         )
-        self.assertEqual((code, out.strip()), (0, "inserted"))
+        self.assertEqual(code, 0)
+        self.assertIn("<status>inserted</status>", out)
 
     def test_type_lands_in_type_column_not_kind(self):
         run_main(
@@ -111,15 +112,15 @@ class GrammarTest(EntrypointBase):
             ["record"],
             tags(slug="s1", problem="p", original="a", fixed="b", rule="r"),
         )
-        self.assertEqual((code, out.strip()), (0, "inserted"))
+        self.assertEqual(code, 0)
+        self.assertIn("<status>inserted</status>", out)
         code, out, _ = run_main(GRAMMAR, ["select", "s1"])
         self.assertEqual(code, 0)
-        self.assertIn('"counter": 1', out)
-        self.assertIn(
-            '"last example": "a → b"', out
-        )  # ensure_ascii=False: literal arrow
+        self.assertIn("<counter>1</counter>", out)
+        self.assertIn("<original>a</original>", out)
+        self.assertIn("<fixed>b</fixed>", out)
 
-    def test_select_all_one_json_per_row(self):
+    def test_select_all_renders_one_row_per_slug(self):
         run_main(
             GRAMMAR,
             ["record"],
@@ -131,7 +132,9 @@ class GrammarTest(EntrypointBase):
             tags(slug="s2", problem="p", original="c", fixed="d", rule="r"),
         )
         code, out, _ = run_main(GRAMMAR, ["select"])
-        self.assertEqual(len(out.strip().splitlines()), 2)
+        self.assertEqual(code, 0)
+        self.assertEqual(out.count("<row>"), 2)
+        self.assertIn("<grammar>", out)
 
     def test_messages_empty_when_none(self):
         code, out, _ = run_main(GRAMMAR, ["messages", "--session", "x", "--lang", "en"])
@@ -151,7 +154,8 @@ class RephrasingTest(EntrypointBase):
                 why="w",
             ),
         )
-        self.assertEqual((code, out.strip()), (0, "inserted"))
+        self.assertEqual(code, 0)
+        self.assertIn("<status>inserted</status>", out)
         self.assertTrue(run_main(REPHRASING, ["select", "word-choice"])[1].strip())
 
 
@@ -162,7 +166,8 @@ class IdiomsTest(EntrypointBase):
             ["record"],
             tags(idiom="break the ice", meaning="m", context="c", learner_wrote="lw"),
         )
-        self.assertEqual((code, out.strip()), (0, "inserted"))
+        self.assertEqual(code, 0)
+        self.assertIn("<status>inserted</status>", out)
         self.assertTrue(run_main(IDIOMS, ["select", "break the ice"])[1].strip())
 
 
@@ -180,7 +185,8 @@ class VerbsTest(EntrypointBase):
                 context="c",
             ),
         )
-        self.assertEqual((code, out.strip()), (0, "inserted"))
+        self.assertEqual(code, 0)
+        self.assertIn("<status>inserted</status>", out)
         self.assertTrue(run_main(VERBS, ["select", "go"])[1].strip())
 
 
@@ -198,7 +204,8 @@ class FrictionTest(EntrypointBase):
                 context="c",
             ),
         )
-        self.assertEqual((code, out.strip()), (0, "inserted"))
+        self.assertEqual(code, 0)
+        self.assertIn("<status>inserted</status>", out)
         self.assertTrue(run_main(FRICTION, ["select", "small-talk"])[1].strip())
 
     def test_grammar_select_reads_grammar(self):
@@ -209,12 +216,15 @@ class FrictionTest(EntrypointBase):
         )
         code, out, _ = run_main(FRICTION, ["grammar-select"])
         self.assertEqual(code, 0)
-        self.assertIn('"slug": "art"', out)
+        self.assertIn("<slug>art</slug>", out)
+        self.assertIn("<grammar>", out)
 
     def test_loot_adds_vocab(self):
         code, out, _ = run_main(FRICTION, ["loot"], items(("hello", "привіт")))
         self.assertEqual(code, 0)
-        self.assertIn("add: hello", out)
+        self.assertIn("<action>add</action>", out)
+        self.assertIn("<word>hello</word>", out)
+        self.assertIn("<loot>", out)
         import appdb
 
         self.assertEqual(
@@ -246,7 +256,9 @@ class LootTest(EntrypointBase):
         rows = {r["word"]: r for r in appdb.query("SELECT * FROM vocab")}
         self.assertEqual(rows["hello"]["translation"], "привіт")
         self.assertEqual(rows["machine learning"]["translation"], "машинне навчання")
-        self.assertEqual(out.count("\n"), 2)
+        self.assertEqual(out.count("<action>add</action>"), 2)
+        self.assertIn("<word>hello</word>", out)
+        self.assertIn("<word>machine learning</word>", out)
 
     def test_add_comma_in_translation_survives(self):
         code, _, _ = run_main(LOOT, ["add"], items(("however", "однак, проте")))
@@ -269,14 +281,17 @@ class DropTest(EntrypointBase):
         run_main(LOOT, ["add"], items(("alpha", "а"), ("beta", "б")))
         code, out, _ = run_main(DROP, ["remove", "alpha", "beta"])
         self.assertEqual(code, 0)
-        self.assertIn("alpha: removed", out)
-        self.assertIn("beta: removed", out)
+        self.assertIn("<word>alpha</word>", out)
+        self.assertIn("<word>beta</word>", out)
+        self.assertEqual(out.count("<outcome>removed</outcome>"), 2)
 
     def test_remove_reports_unknown(self):
         run_main(LOOT, ["add"], items(("alpha", "а")))
         code, out, _ = run_main(DROP, ["remove", "alpha", "ghost"])
-        self.assertIn("alpha: removed", out)
-        self.assertIn("ghost: not found", out)
+        self.assertIn("<word>alpha</word>", out)
+        self.assertIn("<outcome>removed</outcome>", out)
+        self.assertIn("<word>ghost</word>", out)
+        self.assertIn("<outcome>not found</outcome>", out)
 
 
 TUTOR = load("tutor/tutor.py", "ep_tutor")
@@ -312,7 +327,7 @@ class TutorEntrypointTest(EntrypointBase):
             "<answer>\nI fixed it\n</answer>",
         )
         self.assertEqual(code, 0)
-        self.assertIn("box 2", out)
+        self.assertIn("<box>2</box>", out)
         import appdb
 
         self.assertEqual(
@@ -327,16 +342,15 @@ class TutorEntrypointTest(EntrypointBase):
         self.assertEqual(code, 1)
         self.assertIn("<answer>", err)
 
-    def test_deck_empty_prints_nothing(self):
+    def test_deck_empty_renders_empty_block(self):
         code, out, _ = run_main(TUTOR, ["deck"])
-        self.assertEqual((code, out.strip()), (0, ""))
+        self.assertEqual((code, out.strip()), (0, "<deck></deck>"))
 
-    def test_stats_json(self):
+    def test_stats_renders_tags(self):
         code, out, _ = run_main(TUTOR, ["stats"])
         self.assertEqual(code, 0)
-        import json
-
-        self.assertEqual(json.loads(out)["tracked"], 0)
+        self.assertIn("<stats>", out)
+        self.assertIn("<tracked>0</tracked>", out)
 
 
 TRIAGE = load("debrief-triage/triage.py", "ep_triage")
@@ -367,18 +381,19 @@ class TriageEntrypointTest(EntrypointBase):
 
     def test_tag_writes_langs(self):
         self._capture("First normal english sentence here please")
-        code, out, _ = run_main(TRIAGE, ["tag", "1=en"])
+        code, out, _ = run_main(TRIAGE, ["tag"], "<items>\n1\ten\n</items>")
         self.assertEqual(code, 0)
-        self.assertIn("tagged 1", out)
+        self.assertIn("<tagged>1</tagged>", out)
         import appdb
 
         self.assertEqual(
             appdb.query("SELECT langs FROM messages")[0]["langs"], '["en"]'
         )
 
-    def test_tag_unknown_id_exit_1(self):
-        code, _, _ = run_main(TRIAGE, ["tag", "999=en"])
-        self.assertEqual(code, 1)
+    def test_tag_unknown_id_reports_zero(self):
+        code, out, _ = run_main(TRIAGE, ["tag"], "<items>\n999\ten\n</items>")
+        self.assertEqual(code, 0)
+        self.assertIn("<tagged>0</tagged>", out)
 
 
 class DebriefEntrypointTest(EntrypointBase):
@@ -400,12 +415,13 @@ class DebriefEntrypointTest(EntrypointBase):
         self._capture("First normal english sentence here please", "sess-A")
         code, out, _ = run_main(DEBRIEF, ["sessions"])
         self.assertEqual(code, 0)
-        self.assertIn('"session": "sess-A"', out)
+        self.assertIn("<session>sess-A</session>", out)
+        self.assertIn("<sessions>", out)
 
     def test_mark_drills_runs(self):
         code, out, _ = run_main(DEBRIEF, ["mark-drills"])
         self.assertEqual(code, 0)
-        self.assertIn("marked 0", out)
+        self.assertIn("<marked>0</marked>", out)
 
     def test_pending_count(self):
         self._capture("First normal english sentence here please", "sess-A")
@@ -414,10 +430,10 @@ class DebriefEntrypointTest(EntrypointBase):
 
     def test_mark_processed_session(self):
         self._capture("First normal english sentence here please", "sess-A")
-        run_main(TRIAGE, ["tag", "1=en"])
+        run_main(TRIAGE, ["tag"], "<items>\n1\ten\n</items>")
         code, out, _ = run_main(DEBRIEF, ["mark-processed", "--session", "sess-A"])
         self.assertEqual(code, 0)
-        self.assertIn("processed 1", out)
+        self.assertIn("<processed>1</processed>", out)
 
 
 if __name__ == "__main__":

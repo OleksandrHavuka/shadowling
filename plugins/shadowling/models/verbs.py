@@ -15,7 +15,7 @@ class Verbs(Model):
 
 
 def record(verb, past, participle, used_form, correction, context):
-    n = Verbs.insert(
+    return Verbs.insert(
         {
             "verb": verb,
             "past": past,
@@ -25,4 +25,3 @@ def record(verb, past, participle, used_form, correction, context):
             "context": context,
         }
     )
-    return "inserted" if n == 1 else "incremented"

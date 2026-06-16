@@ -4,7 +4,6 @@ Parses stdin tags, calls the grammar + messages repositories, formats output.
 No SQL. Imports are inside main() after a sys.path bootstrap to the plugin root
 (keeps them at function scope -> no E402)."""
 
-import json
 import os
 import sys
 
@@ -32,23 +31,22 @@ def main(argv):
                     "rule": TEXT,
                 }
             )
-            print(
-                grammar.record(
-                    f["slug"], f["problem"], f["original"], f["fixed"], f["rule"]
-                )
+            n = grammar.record(
+                f["slug"], f["problem"], f["original"], f["fixed"], f["rule"]
             )
         except ValueError as e:
             print("error: " + str(e), file=sys.stderr)
             return 1
+        status = "inserted" if n == 1 else "incremented"
+        print(f"<result>{render([{'status': status}])}</result>")
         return 0
     if op == "select":
         if args:
             row = grammar.Grammar.select(args[0])
-            if row is not None:
-                print(json.dumps(row, ensure_ascii=False))
+            selected = [row] if row is not None else []
         else:
-            for row in grammar.Grammar.select():
-                print(json.dumps(row, ensure_ascii=False))
+            selected = grammar.Grammar.select()
+        print(f"<grammar>{render(selected)}</grammar>")
         return 0
     if op == "messages":
         try:

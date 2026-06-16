@@ -23,7 +23,7 @@ session.
 
 Steps:
 
-1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
+1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show` (it prints `<config><row><first_language>…</first_language><learning_language>…</learning_language><explanation_language>…</explanation_language></row></config>`).
    Refer to the learning language by its ISO 639-1 code (English → `en`,
    German → `de`, …) when reading the `<langs>` element below.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/friction.py" messages --session "<session-id>"` — the full
@@ -31,9 +31,10 @@ Steps:
    (`<langs>` is the JSON array of language codes, with the quotes escaped as
    `[&quot;en&quot;,&quot;uk&quot;]`; empty when not yet triaged). If it
    prints `<messages></messages>`, print `OK friction: nothing found` and STOP.
-3. Run `python3 "${CLAUDE_SKILL_DIR}/friction.py" select` (existing
-   zones — your dedup context) and `python3 "${CLAUDE_SKILL_DIR}/friction.py" grammar-select`
-   (for cross-correlation).
+3. `python3 "${CLAUDE_SKILL_DIR}/friction.py" select` prints
+   `<friction><row><slug>…</slug>…</row>…</friction>` (existing zones — your dedup
+   context); `python3 "${CLAUDE_SKILL_DIR}/friction.py" grammar-select` prints
+   `<grammar><row><slug>…</slug>…</row>…</grammar>` (for cross-correlation).
 4. Find friction incidents (let `<L>` be the learning-language code):
    - a MIXED message (langs has `<L>` + another code): the native fragments are
      the signal;
@@ -65,6 +66,7 @@ python3 "${CLAUDE_SKILL_DIR}/friction.py" record <<'SL_IN'
 <context>what was going on</context>
 SL_IN
 ```
+   The call prints `<result><row><status>inserted|incremented</status></row></result>`.
    The same zone must hit the same `slug`.
 7. Vocabulary auto-loot: for native fragments from MIXED messages that are
    1–3 words with a CLEAN learning-language equivalent (skip idiomatic or diffuse
@@ -80,8 +82,9 @@ another learning-language term	its native-language word
 </items>
 SL_IN
 ```
-   The script prints `add`/`refresh`/`relearn` per word; `relearn` means the
-   user had "learned" that word but doesn't produce it — report those.
+   The script prints `<loot><row><action>add|refresh|relearn</action><word>…</word>…</row>…</loot>`
+   (untranslated rows carry only `<action>untranslated</action>` + the word);
+   `relearn` means the user had "learned" that word but doesn't produce it — report those.
 8. If any command exits non-zero, print exactly one line
    `ERROR friction: <short reason>` and STOP. Otherwise print exactly one line:
    `OK friction: <N> recorded (<by-type counts>; <recurring zone slugs, if any

@@ -1,9 +1,8 @@
 #!/usr/bin/env python3
 """skills/tutor/tutor.py - thin entrypoint for /tutor: deck / record / stats.
-deck and stats print JSON per row/object; record reads the learner's answer from
+deck/stats/record render tag blocks; record reads the learner's answer from
 an <answer> tag on stdin (verbatim) and calls the Tutor repository. No SQL here."""
 
-import json
 import os
 import sys
 
@@ -13,7 +12,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.tutor import SIZE_DEFAULT, Tutor
-    from skillio import TEXT, parse_size_arg, read_fields
+    from skillio import TEXT, parse_size_arg, read_fields, render
 
     if not argv:
         print(
@@ -33,18 +32,18 @@ def main(argv):
             return 1
         try:
             answer = read_fields({"answer": TEXT})["answer"]
-            print(Tutor.record(argv[1], argv[2], argv[3], argv[4], answer))
+            box = Tutor.record(argv[1], argv[2], argv[3], argv[4], answer)
         except ValueError as e:
             print("error: " + str(e), file=sys.stderr)
             return 1
+        print(f"<result>{render([{'box': box}])}</result>")
         return 0
     if cmd == "deck":
         size = parse_size_arg(argv[1:], SIZE_DEFAULT)
-        for card in Tutor.deck(size):
-            print(json.dumps(card, ensure_ascii=False))
+        print(f"<deck>{render(Tutor.deck(size))}</deck>")
         return 0
     if cmd == "stats":
-        print(json.dumps(Tutor.stats(), ensure_ascii=False))
+        print(f"<stats>{render([Tutor.stats()])}</stats>")
         return 0
     print("unknown command: " + cmd, file=sys.stderr)
     return 1
