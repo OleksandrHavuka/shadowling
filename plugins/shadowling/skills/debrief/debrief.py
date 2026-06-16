@@ -13,6 +13,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.messages import Messages
+    from skillio import parse_session_arg
 
     if not argv:
         print(
@@ -33,10 +34,7 @@ def main(argv):
         print(Messages.mark_drills())
         return 0
     if cmd == "mark-processed":
-        session = None
-        if len(args) >= 2 and args[0] == "--session":
-            session = args[1]
-        print(Messages.mark_processed(session=session))
+        print(Messages.mark_processed(session=parse_session_arg(args)))
         return 0
     print("unknown command: " + cmd, file=sys.stderr)
     return 1

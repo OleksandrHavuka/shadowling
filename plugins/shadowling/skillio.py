@@ -135,3 +135,47 @@ def read_fields(schema, text=None):
         else:
             result[name] = body
     return result
+
+
+# --- inbound: argv slice parsers (moved from cliutil / the entrypoints) --------
+
+
+def parse_message_slice_args(args):
+    """Parse the shared `messages`-op argv into kwargs for `Messages.list`.
+
+    Accepts --untagged (flag), --lang <v>, --session <v>, --limit <n> (digits).
+    Returns {"lang", "untagged", "limit", "session"}. Raises ValueError (whose
+    message the caller prints to stderr before returning 1) on a bad --limit or
+    any unrecognized token.
+    """
+    lang, untagged, limit, session = None, False, None, None
+    i = 0
+    while i < len(args):
+        if args[i] == "--untagged":
+            untagged, i = True, i + 1
+        elif args[i] == "--lang" and i + 1 < len(args):
+            lang, i = args[i + 1], i + 2
+        elif args[i] == "--session" and i + 1 < len(args):
+            session, i = args[i + 1], i + 2
+        elif args[i] == "--limit" and i + 1 < len(args) and args[i + 1].isdigit():
+            limit, i = int(args[i + 1]), i + 2
+        else:
+            raise ValueError("unknown option: " + args[i])
+    return {"lang": lang, "untagged": untagged, "limit": limit, "session": session}
+
+
+def parse_size_arg(args, default):
+    """The tutor `deck [--size N]` flag. `args` is argv after the `deck` verb.
+    Returns int(N) for an exact `--size <digits>`; otherwise `default` (lenient,
+    matching the prior inline behavior)."""
+    if len(args) == 2 and args[0] == "--size" and args[1].isdigit():
+        return int(args[1])
+    return default
+
+
+def parse_session_arg(args):
+    """The debrief `mark-processed [--session <id>]` flag. `args` is argv after
+    the verb. Returns the id string for `--session <id>`, else None."""
+    if len(args) >= 2 and args[0] == "--session":
+        return args[1]
+    return None

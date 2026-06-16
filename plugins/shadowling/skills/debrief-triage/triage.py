@@ -11,8 +11,8 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
-    from cliutil import parse_message_slice_args
     from models.messages import Messages
+    from skillio import parse_message_slice_args
 
     if not argv:
         print("usage: triage.py {messages|tag} ...", file=sys.stderr)

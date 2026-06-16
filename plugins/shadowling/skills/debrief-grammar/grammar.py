@@ -13,10 +13,9 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
-    from cliutil import parse_message_slice_args
     from models import grammar
     from models.messages import Messages
-    from skillio import TEXT, read_fields
+    from skillio import TEXT, parse_message_slice_args, read_fields
 
     if not argv:
         print("usage: grammar.py {record|select|messages} ...", file=sys.stderr)

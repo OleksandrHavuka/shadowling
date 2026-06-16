@@ -13,11 +13,11 @@ def main(argv):
     sys.path.insert(
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
-    from cliutil import format_loot_line, parse_message_slice_args
+    from cliutil import format_loot_line
     from models import friction, grammar
     from models.messages import Messages
     from models.vocab import Vocab
-    from skillio import TEXT, read_fields, rows
+    from skillio import TEXT, parse_message_slice_args, read_fields, rows
 
     if not argv:
         print(

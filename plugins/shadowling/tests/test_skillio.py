@@ -127,5 +127,71 @@ class FlatFieldLimitationTest(unittest.TestCase):
         self.assertEqual(read_fields({"a": TEXT}, text), {"a": "oops "})
 
 
+class ParseMessageSliceArgsTest(unittest.TestCase):
+    def test_defaults_when_no_args(self):
+        self.assertEqual(
+            skillio.parse_message_slice_args([]),
+            {"lang": None, "untagged": False, "limit": None, "session": None},
+        )
+
+    def test_all_valid_flags(self):
+        self.assertEqual(
+            skillio.parse_message_slice_args(
+                ["--untagged", "--lang", "en", "--session", "s1", "--limit", "5"]
+            ),
+            {"lang": "en", "untagged": True, "limit": 5, "session": "s1"},
+        )
+
+    def test_limit_is_coerced_to_int(self):
+        out = skillio.parse_message_slice_args(["--limit", "12"])
+        self.assertEqual(out["limit"], 12)
+        self.assertIsInstance(out["limit"], int)
+
+    def test_non_digit_limit_raises_value_error(self):
+        with self.assertRaises(ValueError) as ctx:
+            skillio.parse_message_slice_args(["--limit", "lots"])
+        self.assertIn("--limit", str(ctx.exception))
+
+    def test_limit_without_value_raises_value_error(self):
+        with self.assertRaises(ValueError) as ctx:
+            skillio.parse_message_slice_args(["--limit"])
+        self.assertIn("--limit", str(ctx.exception))
+
+    def test_unknown_option_raises_with_offending_token(self):
+        with self.assertRaises(ValueError) as ctx:
+            skillio.parse_message_slice_args(["--bogus"])
+        self.assertEqual(str(ctx.exception), "unknown option: --bogus")
+
+    def test_lang_without_value_is_unknown_option(self):
+        with self.assertRaises(ValueError) as ctx:
+            skillio.parse_message_slice_args(["--lang"])
+        self.assertEqual(str(ctx.exception), "unknown option: --lang")
+
+
+class ParseSizeArgTest(unittest.TestCase):
+    def test_default_when_no_args(self):
+        self.assertEqual(skillio.parse_size_arg([], 8), 8)
+
+    def test_parses_size(self):
+        self.assertEqual(skillio.parse_size_arg(["--size", "5"], 8), 5)
+
+    def test_non_digit_falls_back_to_default(self):
+        self.assertEqual(skillio.parse_size_arg(["--size", "lots"], 8), 8)
+
+    def test_wrong_flag_falls_back_to_default(self):
+        self.assertEqual(skillio.parse_size_arg(["--bogus", "5"], 8), 8)
+
+
+class ParseSessionArgTest(unittest.TestCase):
+    def test_none_when_no_args(self):
+        self.assertIsNone(skillio.parse_session_arg([]))
+
+    def test_parses_session(self):
+        self.assertEqual(skillio.parse_session_arg(["--session", "s1"]), "s1")
+
+    def test_none_when_flag_only(self):
+        self.assertIsNone(skillio.parse_session_arg(["--session"]))
+
+
 if __name__ == "__main__":
     unittest.main()

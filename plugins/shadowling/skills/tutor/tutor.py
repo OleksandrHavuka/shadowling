@@ -13,7 +13,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.tutor import SIZE_DEFAULT, Tutor
-    from skillio import TEXT, read_fields
+    from skillio import TEXT, parse_size_arg, read_fields
 
     if not argv:
         print(
@@ -39,9 +39,7 @@ def main(argv):
             return 1
         return 0
     if cmd == "deck":
-        size = SIZE_DEFAULT
-        if len(argv) == 3 and argv[1] == "--size" and argv[2].isdigit():
-            size = int(argv[2])
+        size = parse_size_arg(argv[1:], SIZE_DEFAULT)
         for card in Tutor.deck(size):
             print(json.dumps(card, ensure_ascii=False))
         return 0
