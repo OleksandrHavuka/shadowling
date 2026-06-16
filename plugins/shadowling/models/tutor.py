@@ -151,8 +151,8 @@ class Tutor:
                         now,
                     ),
                 )
-            if kind == "vocab" and verdict == "fail":
-                Vocab.relearn(key)  # back into the glossing loop
+                if kind == "vocab" and verdict == "fail":
+                    Vocab.relearn(key, con)  # same txn -> atomic with mastery
             return box
         finally:
             con.close()

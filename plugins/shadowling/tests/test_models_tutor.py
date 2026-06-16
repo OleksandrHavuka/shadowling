@@ -91,6 +91,21 @@ class RecordTest(TutorRepoBase):
         self.assertEqual(row["remaining"], 10)
         self.assertIsNone(self.mastery("vocab", "throughput")["counter_seen"])
 
+    def test_vocab_fail_relearn_is_atomic_with_attempt_and_mastery(self):
+        # The vocab reset runs inside record()'s transaction now: if it fails, the
+        # attempt + mastery writes roll back too (all-or-nothing). On the old code
+        # relearn ran on a separate connection after the commit, so the attempt
+        # survived — this test would catch that regression.
+        self.seed_vocab("throughput", status="learned")
+        with mock.patch("models.tutor.Vocab.relearn", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                Tutor.record("vocab", "throughput", "reverse", "fail", "wrong")
+        self.assertEqual(appdb.query("SELECT COUNT(*) AS c FROM attempts")[0]["c"], 0)
+        self.assertIsNone(self.mastery("vocab", "throughput"))
+        row = appdb.query("SELECT * FROM vocab")[0]
+        self.assertEqual(row["status"], "learned")  # reset rolled back
+        self.assertEqual(row["remaining"], 0)
+
     def test_bad_verdict_or_kind_raises(self):
         with self.assertRaises(ValueError):
             Tutor.record("grammar", "k", "fix", "maybe", "x")

@@ -111,16 +111,21 @@ class Vocab:
             con.close()
 
     @staticmethod
-    def relearn(word):
+    def relearn(word, con=None):
         """Reset a graduated word back into the active glossing loop
-        (remaining -> START_REMAINING, status 'active')."""
+        (remaining -> START_REMAINING, status 'active'). Pass an open `con` to run
+        the reset inside the caller's transaction (Tutor.record committing a vocab
+        `fail`) so it commits atomically with their writes; with no `con` it opens
+        and commits its own."""
+        sql = "UPDATE vocab SET remaining = ?, status = 'active' WHERE word = ?"
+        params = (START_REMAINING, word)
+        if con is not None:
+            con.execute(sql, params)  # the caller's `with con:` commits it
+            return
         con = connect()
         try:
             with con:
-                con.execute(
-                    "UPDATE vocab SET remaining = ?, status = 'active' WHERE word = ?",
-                    (START_REMAINING, word),
-                )
+                con.execute(sql, params)
         finally:
             con.close()
 
