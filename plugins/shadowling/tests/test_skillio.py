@@ -193,5 +193,52 @@ class ParseSessionArgTest(unittest.TestCase):
         self.assertIsNone(skillio.parse_session_arg(["--session"]))
 
 
+class RenderTest(unittest.TestCase):
+    def test_single_record_list(self):
+        self.assertEqual(
+            skillio.render([{"id": 1, "text": "hi"}]),
+            "<row>\n  <id>1</id>\n  <text>hi</text>\n</row>",
+        )
+
+    def test_multi_record_list(self):
+        self.assertEqual(
+            skillio.render([{"a": "1"}, {"a": "2"}]),
+            "<row>\n  <a>1</a>\n</row>\n<row>\n  <a>2</a>\n</row>",
+        )
+
+    def test_multiline_body_kept_verbatim(self):
+        self.assertEqual(
+            skillio.render([{"text": "line1\nline2"}]),
+            "<row>\n  <text>line1\nline2</text>\n</row>",
+        )
+
+    def test_escapes_xml_special_chars(self):
+        out = skillio.render([{"t": 'a < b & c > d "q"'}])
+        self.assertIn("a &lt; b &amp; c &gt; d &quot;q&quot;", out)
+
+    def test_none_value_renders_empty_element(self):
+        self.assertEqual(
+            skillio.render([{"langs": None}]),
+            "<row>\n  <langs></langs>\n</row>",
+        )
+
+    def test_empty_list_is_empty_string(self):
+        self.assertEqual(skillio.render([]), "")
+
+    def test_fields_projects_subset_and_order(self):
+        self.assertEqual(
+            skillio.render(
+                [{"id": 1, "created_at": "t", "text": "hi"}], fields=["text", "id"]
+            ),
+            "<row>\n  <text>hi</text>\n  <id>1</id>\n</row>",
+        )
+
+    def test_fields_absent_key_skipped(self):
+        self.assertEqual(
+            skillio.render([{"id": 1}], fields=["id", "text"]),
+            "<row>\n  <id>1</id>\n</row>",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

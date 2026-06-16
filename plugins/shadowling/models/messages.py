@@ -30,15 +30,6 @@ def _enough_letters(text):
     return sum(1 for c in text if c.isalpha()) >= MIN_LETTERS
 
 
-def _xml(s):
-    return (
-        s.replace("&", "&amp;")
-        .replace("<", "&lt;")
-        .replace(">", "&gt;")
-        .replace('"', "&quot;")
-    )
-
-
 class Messages:
     @staticmethod
     def capture(text, session_id=None):
@@ -86,8 +77,9 @@ class Messages:
 
     @staticmethod
     def list(lang=None, untagged=False, limit=None, session=None):
-        """Unprocessed rows as a <messages> XML block; optionally sliced. The
-        representation lives here so every reader shares one format."""
+        """Unprocessed rows (plain dicts: id, created_at, text, langs), optionally
+        sliced. Presentation (the <messages> tag block) is composed at the
+        boundary via skillio.render — the repository returns data only."""
         sql = (
             "SELECT id, created_at, text, langs FROM messages "
             "WHERE processed_at IS NULL AND kind IS NULL"
@@ -109,21 +101,7 @@ class Messages:
             sql += " LIMIT ?"
             params.append(limit)
         with closing(connect()) as con:
-            rows = con.execute(sql, params).fetchall()
-        if not rows:
-            return "<messages></messages>"
-        out = ["<messages>"]
-        for r in rows:
-            out.append(
-                '  <m id="{}" created_at="{}" langs="{}">{}</m>'.format(
-                    r["id"],
-                    _xml(r["created_at"]),
-                    _xml(r["langs"] or ""),
-                    _xml(r["text"]),
-                )
-            )
-        out.append("</messages>")
-        return "\n".join(out)
+            return [dict(r) for r in con.execute(sql, params).fetchall()]
 
     @staticmethod
     def tag(pairs):

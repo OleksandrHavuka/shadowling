@@ -24,7 +24,8 @@ Loop until done:
 
 1. Run `python3 "${CLAUDE_SKILL_DIR}/triage.py" messages --session "<session-id>" --untagged --limit 200`.
    If it prints `<messages></messages>`, the loop is DONE.
-2. For EACH `<m>` decide the language code(s) of its PROSE as lowercase ISO-ish
+2. The slice comes back as `<messages><row><id>N</id><text>…</text></row>…</messages>`.
+   For EACH `<row>` decide the language code(s) of its `<text>` PROSE as lowercase ISO-ish
    codes (`en`, `uk`, `de`, ...). Code snippets, file paths, CLI commands, and
    tech identifiers do NOT count as prose — judge only the language of the human
    prose around them. A message mixing two languages gets both codes (e.g. `en,uk`).

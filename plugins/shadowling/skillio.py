@@ -179,3 +179,38 @@ def parse_session_arg(args):
     if len(args) >= 2 and args[0] == "--session":
         return args[1]
     return None
+
+
+# --- outbound: the single output format ---------------------------------------
+
+
+def _xml(s):
+    """Escape the four chars that would confuse the tag cues. Tag NAMES are
+    trusted column identifiers from code and are not escaped; only VALUES pass
+    through here."""
+    return (
+        s.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+    )
+
+
+def render(rows, fields=None):
+    """The one serializer. `rows` is ALWAYS a list[dict] (pass a single record as
+    [record]). Emits the BODY only — each record as `<row><k>v</k>…</row>` — never
+    the outer dataset wrapper; the entrypoint frames it with the named tag
+    (`f"<messages>{render(rows)}</messages>"`).
+
+    `fields` (optional ordered list) projects/orders which keys reach the LLM;
+    default None renders all keys in dict order. A listed key absent from a record
+    is skipped. Keys are trusted; values are escaped via `_xml`. Empty list -> "".
+    """
+    out = []
+    for r in rows:
+        out.append("<row>")
+        for k in fields if fields is not None else r:  # iterating a dict yields keys
+            if k in r:
+                out.append(f"  <{k}>{_xml('' if r[k] is None else str(r[k]))}</{k}>")
+        out.append("</row>")
+    return "\n".join(out)

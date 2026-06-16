@@ -12,7 +12,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.messages import Messages
-    from skillio import parse_message_slice_args
+    from skillio import parse_message_slice_args, render
 
     if not argv:
         print("usage: triage.py {messages|tag} ...", file=sys.stderr)
@@ -24,7 +24,8 @@ def main(argv):
         except ValueError as e:
             print(str(e), file=sys.stderr)
             return 1
-        print(Messages.list(**kwargs))
+        block = render(Messages.list(**kwargs), fields=["id", "text"])
+        print(f"<messages>{block}</messages>")
         return 0
     if op == "tag":
         if not args:

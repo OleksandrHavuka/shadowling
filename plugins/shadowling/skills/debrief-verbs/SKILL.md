@@ -30,7 +30,7 @@ Steps:
    skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/verbs.py" select`. Collect the
    existing `verb` values — your dedup context.
-4. Read every `<m>` message and find misused or otherwise noteworthy IRREGULAR
+4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find misused or otherwise noteworthy IRREGULAR
    verbs (e.g. a wrong form like English `I have went`, `I buyed`). The key is the
    verb base form (lowercase, e.g. `go`); reuse an existing key for the same verb.
    Record each with ONE call. Put each value between its tags VERBATIM (values may

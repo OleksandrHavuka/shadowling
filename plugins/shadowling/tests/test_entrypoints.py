@@ -362,7 +362,8 @@ class TriageEntrypointTest(EntrypointBase):
         self._capture("First normal english sentence here please")
         code, out, _ = run_main(TRIAGE, ["messages", "--untagged", "--limit", "200"])
         self.assertEqual(code, 0)
-        self.assertIn('<m id="1"', out)
+        self.assertIn("<id>1</id>", out)
+        self.assertIn("<text>First normal english sentence here please</text>", out)
 
     def test_tag_writes_langs(self):
         self._capture("First normal english sentence here please")

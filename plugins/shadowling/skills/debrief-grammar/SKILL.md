@@ -31,7 +31,7 @@ Steps:
    skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/grammar.py" select`. Collect the
    existing `slug` values — this is your dedup context.
-4. Read every `<m>` message and find GRAMMAR errors only (articles, prepositions,
+4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find GRAMMAR errors only (articles, prepositions,
    agreement, tense, word order, etc. — not naturalness / idioms / verb forms
    unless they are a grammar error). For each real error, derive a slug:
    - Slug format (HARD): the slug is ONE kebab-case token matching

@@ -109,33 +109,31 @@ class ListTest(MessagesRepoBase):
         Messages.capture("First normal english sentence here please", "s")
         Messages.capture("друге повідомлення суто українською мовою", "s")
         Messages.capture("third message чи mixed повідомлення разом", "s")
-        Messages.tag(["1=en", "2=uk"])  # row 3 untagged
+        with closing_con() as con, con:  # row 3 left untagged
+            con.execute("UPDATE messages SET langs = ? WHERE id = 1", ('["en"]',))
+            con.execute("UPDATE messages SET langs = ? WHERE id = 2", ('["uk"]',))
 
-    def test_lists_all_unprocessed_with_attrs(self):
-        block = Messages.list()
-        self.assertIn('<m id="1"', block)
-        self.assertIn('<m id="3"', block)
-        self.assertIn("&quot;en&quot;", block)
-        self.assertIn('langs=""', block)
+    def test_lists_all_unprocessed_as_rows(self):
+        rows = Messages.list()
+        self.assertEqual([r["id"] for r in rows], [1, 2, 3])
+        self.assertEqual(rows[0]["langs"], '["en"]')
+        self.assertIsNone(rows[2]["langs"])  # row 3 untagged
+        self.assertIn("id", rows[0])
+        self.assertIn("created_at", rows[0])
+        self.assertIn("text", rows[0])
 
     def test_untagged_slice(self):
-        block = Messages.list(untagged=True)
-        self.assertIn('<m id="3"', block)
-        self.assertNotIn('<m id="1"', block)
+        rows = Messages.list(untagged=True)
+        self.assertEqual([r["id"] for r in rows], [3])
 
     def test_lang_slice_includes_mixed(self):
-        Messages.tag(["3=en,uk"])
-        block = Messages.list(lang="en")
-        self.assertIn('<m id="1"', block)
-        self.assertIn('<m id="3"', block)
-        self.assertNotIn('<m id="2"', block)
+        with closing_con() as con, con:
+            con.execute("UPDATE messages SET langs = ? WHERE id = 3", ('["en","uk"]',))
+        rows = Messages.list(lang="en")
+        self.assertEqual([r["id"] for r in rows], [1, 3])
 
     def test_limit_zero_empty(self):
-        self.assertEqual(Messages.list(untagged=True, limit=0), "<messages></messages>")
-
-    def test_xml_escapes_text(self):
-        Messages.capture("a < b & c > d here in this sentence", "s")
-        self.assertIn("a &lt; b &amp; c &gt; d", Messages.list())
+        self.assertEqual(Messages.list(untagged=True, limit=0), [])
 
 
 class SessionsAndMarkTest(MessagesRepoBase):

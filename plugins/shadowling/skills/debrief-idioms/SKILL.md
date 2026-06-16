@@ -30,7 +30,7 @@ Steps:
    skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/idioms.py" select`. Collect the
    existing `idiom` values — your dedup context.
-4. Read every `<m>` message and find idioms / fixed expressions worth learning —
+4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find idioms / fixed expressions worth learning —
    either ones the user attempted (possibly wrong) or a genuinely apt idiom for
    what they meant. The key is the idiom itself in its canonical dictionary form
    (lowercase, no surrounding punctuation, e.g. `break the ice`); reuse an existing

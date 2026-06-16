@@ -31,7 +31,7 @@ Steps:
    skip it — never analyze text in another language.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/rephrasing.py" select`. Collect the
    existing `slug` values — your dedup context.
-4. Read every `<m>` message and find phrasing that is grammatical but UNNATURAL
+4. Read every `<row>` (each is `<row><id>N</id><text>…</text></row>`) and find phrasing that is grammatical but UNNATURAL
    (awkward collocations, calques, wrong register, wordiness). For each, derive a
    slug:
    - Slug format (HARD): the slug is ONE kebab-case token matching

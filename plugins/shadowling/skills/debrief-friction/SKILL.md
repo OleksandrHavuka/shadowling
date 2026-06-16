@@ -25,10 +25,12 @@ Steps:
 
 1. Run `python3 "${CLAUDE_PLUGIN_ROOT}/config.py" show`.
    Refer to the learning language by its ISO 639-1 code (English → `en`,
-   German → `de`, …) when reading the `langs` attributes below.
+   German → `de`, …) when reading the `<langs>` element below.
 2. Run `python3 "${CLAUDE_SKILL_DIR}/friction.py" messages --session "<session-id>"` — the full
-   batch with `langs` attributes. If empty, print `OK friction: nothing found`
-   and STOP.
+   batch as `<messages><row><id>N</id><text>…</text><langs>…</langs></row>…</messages>`
+   (`<langs>` is the JSON array of language codes, with the quotes escaped as
+   `[&quot;en&quot;,&quot;uk&quot;]`; empty when not yet triaged). If it
+   prints `<messages></messages>`, print `OK friction: nothing found` and STOP.
 3. Run `python3 "${CLAUDE_SKILL_DIR}/friction.py" select` (existing
    zones — your dedup context) and `python3 "${CLAUDE_SKILL_DIR}/friction.py" grammar-select`
    (for cross-correlation).
@@ -39,7 +41,7 @@ Steps:
      messages: the user bailed on that thought;
    - a non-learning-language message inside a steadily non-learning-language
      stretch is PREFERENCE, not friction — ignore it;
-   - ignore `und` rows and rows with an empty `langs` attribute (not yet
+   - ignore `und` rows and rows with an empty `<langs>` element (not yet
      triaged — next batch's business).
 5. Classify each incident's `type`:
    `lexical` (one missing word) / `phrasal` (missing idiom or collocation) /

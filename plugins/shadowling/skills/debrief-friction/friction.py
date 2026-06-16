@@ -17,7 +17,7 @@ def main(argv):
     from models import friction, grammar
     from models.messages import Messages
     from models.vocab import Vocab
-    from skillio import TEXT, parse_message_slice_args, read_fields, rows
+    from skillio import TEXT, parse_message_slice_args, read_fields, render, rows
 
     if not argv:
         print(
@@ -88,7 +88,8 @@ def main(argv):
         except ValueError as e:
             print(str(e), file=sys.stderr)
             return 1
-        print(Messages.list(**kwargs))
+        block = render(Messages.list(**kwargs), fields=["id", "text", "langs"])
+        print(f"<messages>{block}</messages>")
         return 0
     print("unknown op: " + op, file=sys.stderr)
     return 1

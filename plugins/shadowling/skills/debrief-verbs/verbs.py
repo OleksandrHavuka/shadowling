@@ -12,7 +12,7 @@ def main(argv):
     )
     from models import verbs
     from models.messages import Messages
-    from skillio import TEXT, parse_message_slice_args, read_fields
+    from skillio import TEXT, parse_message_slice_args, read_fields, render
 
     if not argv:
         print("usage: verbs.py {record|select|messages} ...", file=sys.stderr)
@@ -59,7 +59,8 @@ def main(argv):
         except ValueError as e:
             print(str(e), file=sys.stderr)
             return 1
-        print(Messages.list(**kwargs))
+        block = render(Messages.list(**kwargs), fields=["id", "text"])
+        print(f"<messages>{block}</messages>")
         return 0
     print("unknown op: " + op, file=sys.stderr)
     return 1
