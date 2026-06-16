@@ -19,7 +19,7 @@ models/      ── the repository layer: each module owns its table and ALL its
 gloss.py     ── glossing hooks (inject / scan) over models/vocab
 capture.py   ── Stop-hook message capture over models/messages
 sql.py       ── dev console: arbitrary SQL, read-only by default, snapshot-before-write, paths
-skills/      ── LLM workflows, each with a thin entrypoint .py (tagio parse → repository → output)
+skills/      ── LLM workflows, each with a thin entrypoint .py (skillio parse → repository → output)
 ```
 
 The dividing line that matters: **`appdb.py` + `models/` + the entrypoints are deterministic

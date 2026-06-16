@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""tagio.py - one parser for free text passed skill -> script (stdlib, py3.9+).
+"""skillio.py - the single skill<->script I/O boundary (stdlib, py3.9+).
+
+One responsibility: parse the invocation (heredoc free text + argv flags) and
+render the one output format. Pure stdlib; no project imports; imported only by
+entrypoints.
 
 Skills feed model-authored values through a heredoc with a quoted delimiter
 (`<<'SL_IN'`), so the shell does zero expansion and nothing needs escaping. This

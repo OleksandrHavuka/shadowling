@@ -7,7 +7,7 @@ so the stdlib `python -m unittest` baseline still passes with hypothesis absent
     uvx --with hypothesis python -m unittest discover -s tests -t .
 
 What each class pins is a property that must hold for ALL inputs in range, not a
-hand-picked example: the tagio parser round-trips, the Leitner math stays in
+hand-picked example: the skillio parser round-trips, the Leitner math stays in
 bounds, vocab matching respects word boundaries, and the slug/key normalizers are
 idempotent + shape-stable.
 """
@@ -17,7 +17,7 @@ import unittest
 from datetime import date, timedelta
 
 import core
-import tagio
+import skillio
 from models.base import norm_key
 from models.tutor import INTERVALS, VERDICTS, _due, _next_box
 from models.vocab import build_pattern, word_in_text
@@ -61,14 +61,16 @@ class TagioRoundTrip(unittest.TestCase):
         # a scalar that contains no tag char and no edge newline must come back
         # verbatim (the parser strips only ONE layout newline at each end).
         assume(not value.startswith("\n") and not value.endswith("\n"))
-        parsed = tagio.read_fields({"f": tagio.TEXT}, f"<f>{value}</f>")
+        parsed = skillio.read_fields({"f": skillio.TEXT}, f"<f>{value}</f>")
         self.assertEqual(parsed["f"], value)
 
     @settings(deadline=None)
     @given(st.lists(st.tuples(TOKEN, TOKEN), max_size=6))
     def test_rows_field_roundtrips(self, records):
         body = "\n".join(f"{a}\t{b}" for a, b in records)
-        parsed = tagio.read_fields({"r": tagio.rows("a", "b")}, f"<r>\n{body}\n</r>")
+        parsed = skillio.read_fields(
+            {"r": skillio.rows("a", "b")}, f"<r>\n{body}\n</r>"
+        )
         self.assertEqual(parsed["r"], [{"a": a, "b": b} for a, b in records])
 
     @settings(deadline=None)
@@ -76,7 +78,7 @@ class TagioRoundTrip(unittest.TestCase):
     def test_missing_required_tag_raises(self, name):
         assume(name != "present")
         with self.assertRaises(ValueError):
-            tagio.read_fields({name: tagio.TEXT}, "<present>x</present>")
+            skillio.read_fields({name: skillio.TEXT}, "<present>x</present>")
 
 
 @unittest.skipUnless(HAS_HYPOTHESIS, "hypothesis not installed (dev-only tool)")

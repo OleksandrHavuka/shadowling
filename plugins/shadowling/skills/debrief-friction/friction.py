@@ -17,7 +17,7 @@ def main(argv):
     from models import friction, grammar
     from models.messages import Messages
     from models.vocab import Vocab
-    from tagio import TEXT, read_fields, rows
+    from skillio import TEXT, read_fields, rows
 
     if not argv:
         print(

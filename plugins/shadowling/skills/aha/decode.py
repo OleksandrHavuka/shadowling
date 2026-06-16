@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """skills/aha/decode.py - thin entrypoint for /aha: record one decode incident.
 Parses stdin tags, calls the decode repository, prints inserted/incremented. No
-SQL. The plugin imports (models/tagio) are inside main() after a sys.path
+SQL. The plugin imports (models/skillio) are inside main() after a sys.path
 bootstrap to the plugin root: the script's own dir is on sys.path[0] when run, so
 `models` is not importable until the bootstrap runs (keeps them at function scope
 -> no E402). The <type> tag maps to the recorder's `kind` param locally here."""
@@ -15,7 +15,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models import decode
-    from tagio import TEXT, read_fields
+    from skillio import TEXT, read_fields
 
     if not argv or argv[0] != "record":
         print("usage: decode.py record  (tags on stdin)", file=sys.stderr)

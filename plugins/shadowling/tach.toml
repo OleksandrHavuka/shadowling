@@ -6,7 +6,7 @@ path = "core"
 depends_on = []
 
 [[modules]]
-path = "tagio"
+path = "skillio"
 depends_on = []
 
 [[modules]]

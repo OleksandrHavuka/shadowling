@@ -13,7 +13,7 @@ def main(argv):
     from cliutil import parse_message_slice_args
     from models import idioms
     from models.messages import Messages
-    from tagio import TEXT, read_fields
+    from skillio import TEXT, read_fields
 
     if not argv:
         print("usage: idioms.py {record|select|messages} ...", file=sys.stderr)

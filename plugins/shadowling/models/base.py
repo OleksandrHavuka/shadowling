@@ -44,7 +44,7 @@ class Model:
 
         The chokepoint: normalizes cls.key via cls.key_norm and rejects a key
         that normalizes to empty/blank by raising ValueError (the entrypoint
-        prints it to stderr so the LLM self-corrects — same contract as tagio)."""
+        prints it to stderr so the LLM self-corrects — same contract as skillio)."""
         key = cls.key_norm(values[cls.key])
         if not key:
             raise ValueError(

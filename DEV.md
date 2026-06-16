@@ -21,7 +21,7 @@ plugins/shadowling/
   models/            # the repository layer — owns ALL SQL:
                      #   base.py + 6 incident repos (grammar, rephrasing, idioms, verbs, decode, friction)
                      #   vocab.py (Vocab), messages.py (Messages), tutor.py (Tutor)
-  skills/            # skill bodies, each with its own thin entrypoint .py (tagio parse + repo call + output):
+  skills/            # skill bodies, each with its own thin entrypoint .py (skillio parse + repo call + output):
                      #   aha/decode.py                              — main: explain expressions; record decode
                      #   loot/loot.py, drop/drop.py                 — fork: add / remove vocab
                      #   setup/                                     — main: ask + set the three plugin languages
@@ -96,12 +96,12 @@ uvx mypy --check-untyped-defs ./*.py models/    # type contract on the library m
 ```
 
 - **tach** — enforces `tach.toml`: the declared dependency tree (high → low, siblings
-  independent), so no branch pulls a sibling and the leaves (`core`, `tagio`) pull
+  independent), so no branch pulls a sibling and the leaves (`core`, `skillio`) pull
   nothing. A forbidden import fails with `file:line` + the offending symbol. The flat,
   bare-import layout rules out import-linter (grimp needs packages); Tach maps by path.
 - **mypy** — `--check-untyped-defs` type-checks every function body without forcing full
   annotations; the contract surfaces (`models/base.py`, `core.py`) carry real types.
-- **hypothesis** — property tests for the pure cores (tagio round-trip, Leitner math,
+- **hypothesis** — property tests for the pure cores (skillio round-trip, Leitner math,
   vocab matching, slug/key normalizers). The import is guarded so a bare `unittest` run
   skips them, but `check.sh` provides hypothesis via `uvx` (and fails if it can't), so the
   gate always runs them. See the Tests section.

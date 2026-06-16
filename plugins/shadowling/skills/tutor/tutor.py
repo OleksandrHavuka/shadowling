@@ -13,7 +13,7 @@ def main(argv):
         0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..")
     )
     from models.tutor import SIZE_DEFAULT, Tutor
-    from tagio import TEXT, read_fields
+    from skillio import TEXT, read_fields
 
     if not argv:
         print(

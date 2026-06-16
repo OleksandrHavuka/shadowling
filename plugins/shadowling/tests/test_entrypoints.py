@@ -31,7 +31,7 @@ FRICTION = load("debrief-friction/friction.py", "ep_friction")
 
 def run_main(mod, argv, stdin_text=""):
     """Call mod.main(argv) with stdin_text on the GLOBAL sys.stdin (which
-    tagio.read_fields reads). Returns (code, stdout, stderr)."""
+    skillio.read_fields reads). Returns (code, stdout, stderr)."""
     out, err = io.StringIO(), io.StringIO()
     old = sys.stdin
     sys.stdin = io.StringIO(stdin_text)

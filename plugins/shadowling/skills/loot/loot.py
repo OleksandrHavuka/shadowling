@@ -14,7 +14,7 @@ def main(argv):
     )
     from cliutil import format_loot_line
     from models.vocab import Vocab
-    from tagio import read_fields, rows
+    from skillio import read_fields, rows
 
     if not argv or argv[0] != "add":
         print(

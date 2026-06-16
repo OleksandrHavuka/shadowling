@@ -1,7 +1,7 @@
 import unittest
 
-import tagio
-from tagio import TEXT, read_fields, rows
+import skillio
+from skillio import TEXT, read_fields, rows
 
 
 class ScalarTest(unittest.TestCase):
@@ -107,14 +107,14 @@ class SelfCorrectingErrorTest(unittest.TestCase):
 class RowsFactoryTest(unittest.TestCase):
     def test_rows_needs_a_column(self):
         with self.assertRaises(ValueError):
-            tagio.rows()
+            skillio.rows()
 
 
 class FlatFieldLimitationTest(unittest.TestCase):
     """Characterization (NOT a fix): fields are located independently from
     position 0, so a TEXT body containing a *later* field's literal open tag
     contaminates that field's extraction. Pins the documented limitation so it
-    cannot change silently; see the tagio module/_extract docstring."""
+    cannot change silently; see the skillio module/_extract docstring."""
 
     def test_literal_later_open_tag_in_body_contaminates(self):
         text = "<a>value with <b> literal open tag inside</a>\n<b>real b body</b>"
