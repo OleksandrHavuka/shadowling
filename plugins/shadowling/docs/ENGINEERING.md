@@ -151,7 +151,7 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 285 tests, ~1s
+python3 -m unittest                       # 286 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 

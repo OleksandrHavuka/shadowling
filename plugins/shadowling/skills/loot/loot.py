@@ -34,27 +34,7 @@ def main(argv):
             file=sys.stderr,
         )
         return 1
-    out = []
-    for item in looted:
-        action, row = Vocab.add(item["word"], item["translation"])
-        if row is None:  # untranslated — no persisted row
-            out.append(
-                {
-                    "action": action,
-                    "word": item["word"],
-                    "translation": item["translation"],
-                }
-            )
-        else:
-            out.append(
-                {
-                    "action": action,
-                    "word": row["word"],
-                    "translation": row["translation"],
-                    "remaining": row["remaining"],
-                    "status": row["status"],
-                }
-            )
+    out = [Vocab.add(item["word"], item["translation"]) for item in looted]
     print(f"<loot>{render(out)}</loot>")
     return 0
 

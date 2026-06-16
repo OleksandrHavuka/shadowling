@@ -34,31 +34,29 @@ class VocabRepoBase(unittest.TestCase):
 
 class AddTest(VocabRepoBase):
     def test_add_new_word_starts_at_10_active(self):
-        action, row = Vocab.add("Throughput", "пропускна здатність")
-        self.assertEqual(action, "add")
-        self.assertEqual(row["word"], "throughput")
-        self.assertEqual(row["translation"], "пропускна здатність")
-        self.assertEqual(row["remaining"], 10)
-        self.assertEqual(row["status"], "active")
+        r = Vocab.add("Throughput", "пропускна здатність")
+        self.assertEqual(r["action"], "add")
+        self.assertEqual(r["word"], "throughput")
+        self.assertEqual(r["translation"], "пропускна здатність")
+        self.assertEqual(r["remaining"], 10)
+        self.assertEqual(r["status"], "active")
 
     def test_add_existing_active_refreshes_translation_keeps_remaining(self):
         Vocab.add("throughput", "old")
         self._set("throughput", remaining=7)
-        action, row = Vocab.add("throughput", "new translation")
-        self.assertEqual(action, "refresh")
-        self.assertEqual(row["translation"], "new translation")
-        self.assertEqual(row["remaining"], 7)
+        r = Vocab.add("throughput", "new translation")
+        self.assertEqual(r["action"], "refresh")
+        self.assertEqual(r["translation"], "new translation")
+        self.assertEqual(r["remaining"], 7)
 
     def test_add_identity_translation_is_untranslated_and_not_saved(self):
-        action, row = Vocab.add("Awesome", "awesome")
-        self.assertEqual(action, "untranslated")
-        self.assertIsNone(row)  # no fabricated "-" placeholder row
+        r = Vocab.add("Awesome", "awesome")
+        self.assertEqual(r, {"action": "untranslated", "word": "awesome"})
         self.assertNotIn("awesome", self.rows_by_word())
 
     def test_add_empty_translation_is_untranslated_and_not_saved(self):
-        action, row = Vocab.add("throughput", "   ")
-        self.assertEqual(action, "untranslated")
-        self.assertIsNone(row)
+        r = Vocab.add("throughput", "   ")
+        self.assertEqual(r, {"action": "untranslated", "word": "throughput"})
         self.assertNotIn("throughput", self.rows_by_word())
 
     def test_add_stamps_created_and_updated(self):
@@ -76,10 +74,10 @@ class AddTest(VocabRepoBase):
     def test_add_existing_learned_resets_to_10_active(self):
         Vocab.add("throughput", "t")
         self._set("throughput", remaining=0, status="learned")
-        action, row = Vocab.add("throughput", "t2")
-        self.assertEqual(action, "relearn")
-        self.assertEqual(row["remaining"], 10)
-        self.assertEqual(row["status"], "active")
+        r = Vocab.add("throughput", "t2")
+        self.assertEqual(r["action"], "relearn")
+        self.assertEqual(r["remaining"], 10)
+        self.assertEqual(r["status"], "active")
 
 
 class RemoveTest(VocabRepoBase):
@@ -210,10 +208,10 @@ class AddRaceTest(VocabRepoBase):
     # pins the single-process invariant: add-then-add of the same word is
     # add -> refresh, never raises, and leaves exactly one row.
     def test_repeat_add_is_idempotent_single_row(self):
-        a1, _ = Vocab.add("throughput", "переклад")
-        a2, _ = Vocab.add("throughput", "новий переклад")
-        self.assertEqual(a1, "add")
-        self.assertEqual(a2, "refresh")
+        a1 = Vocab.add("throughput", "переклад")
+        a2 = Vocab.add("throughput", "новий переклад")
+        self.assertEqual(a1["action"], "add")
+        self.assertEqual(a2["action"], "refresh")
         self.assertEqual(
             appdb.query("SELECT word FROM vocab"), [{"word": "throughput"}]
         )

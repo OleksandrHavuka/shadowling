@@ -42,13 +42,16 @@ def word_in_text(word, text):
 class Vocab:
     @staticmethod
     def add(word, translation):
+        """Add or refresh a vocab pair. Returns ONE render-ready result dict:
+        {action, word, translation, remaining, status} for a persisted row, or
+        {action: 'untranslated', word} when the translation is missing/identical
+        (nothing persisted). action is add | refresh | relearn | untranslated."""
         word = word.strip().lower()
         translation = translation.strip()
-        # Guard against a failed/identity translation (the LLM echoing the term
-        # back untranslated). Never persist such a row — signal the caller with a
-        # None row (no fabricated "-" presentation placeholders).
+        # Identity/empty translation = the LLM echoed the term back untranslated.
+        # Never persist such a row; the untranslated result carries just the word.
         if not translation or _norm(translation) == _norm(word):
-            return "untranslated", None
+            return {"action": "untranslated", "word": word}
         now = core.now()
         con = connect()
         try:
@@ -78,7 +81,13 @@ class Vocab:
                     )
                     action = "refresh"
             new = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
-            return action, dict(new)
+            return {
+                "action": action,
+                "word": new["word"],
+                "translation": new["translation"],
+                "remaining": new["remaining"],
+                "status": new["status"],
+            }
         finally:
             con.close()
 
