@@ -395,6 +395,25 @@ class TriageEntrypointTest(EntrypointBase):
         self.assertEqual(code, 0)
         self.assertIn("<tagged>0</tagged>", out)
 
+    def test_tag_empty_code_rejected_row_stays_untagged(self):
+        self._capture("First normal english sentence here please")
+        code, _, err = run_main(TRIAGE, ["tag"], "<items>\n1\t\n</items>")
+        self.assertEqual(code, 1)
+        self.assertIn("bad tag", err)
+        import appdb
+
+        # nothing persisted: the row is still untagged so the next /debrief retries
+        self.assertIsNone(appdb.query("SELECT langs FROM messages")[0]["langs"])
+
+    def test_tag_invalid_code_rejected_nothing_persisted(self):
+        self._capture("First normal english sentence here please")
+        code, _, err = run_main(TRIAGE, ["tag"], "<items>\n1\tEnglish\n</items>")
+        self.assertEqual(code, 1)
+        self.assertIn("bad tag", err)
+        import appdb
+
+        self.assertIsNone(appdb.query("SELECT langs FROM messages")[0]["langs"])
+
 
 class DebriefEntrypointTest(EntrypointBase):
     def _capture(self, text, session="s"):
