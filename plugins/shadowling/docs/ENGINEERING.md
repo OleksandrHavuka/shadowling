@@ -18,6 +18,7 @@ models/      ── the repository layer: each module owns its table and ALL its
                (6 incident repos + vocab / messages / tutor)
 gloss.py     ── glossing hooks (inject / scan) over models/vocab
 capture.py   ── Stop-hook message capture over models/messages
+debrief.py   ── the deterministic /debrief driver: triage + 5 parallel specialists via headless claude -p, atomic per-session persist
 sql.py       ── dev console: arbitrary SQL, read-only by default, snapshot-before-write, paths
 skills/      ── LLM workflows, each with a thin entrypoint .py (skillio parse → repository → output)
 ```
@@ -138,6 +139,7 @@ Claude reads tag-delimited fields natively.
 | frequency ranking, dedup by normalized key | the debrief specialists' linguistic analysis |
 | message capture, drill filtering (fixed similarity threshold) | deriving a learning language's ISO code from its name |
 | the read/write contract, file permissions | slug discipline / cross-category ownership calls |
+| the debrief per-session loop, all-OK gate, atomic persist, JSON-schema + lang-code validation (debrief.py) | (the analysis it drives — see the right column rows above) |
 
 The README mirrors this split ("Deterministic (in the script)" vs "Instruction-based").
 Nothing that *can* be exact is left to the model.
@@ -151,7 +153,7 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 286 tests, ~1s
+python3 -m unittest                       # 313 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
@@ -172,17 +174,15 @@ grep -rn 'tagio\|cliutil\|format_loot_line' --include='*.py' .
 
 Tracked honestly:
 
-- **Retry idempotency** — a debrief specialist records findings one at a time (each
-  entrypoint `record` is its own committed transaction), so a mid-batch failure leaves the
-  earlier findings committed; the retry re-records them and inflates the counter. The
-  clean fix rides on the headless-driver refactor (debrief 3.0): have the specialists
-  *return* validated JSON findings instead of writing, and let the driver persist a
-  session's findings **and** its processed-mark in one short, **per-session**
-  transaction — a failure rolls back with no partial write, so the retry starts clean.
-  The transaction must stay short (open it *after* the slow LLM analysis, not across
-  it) and per-session (not per-run), or it blocks every other writer and rolls back
-  already-good sessions. A content-key idempotent recorder is the fallback if the
-  skills keep writing directly.
+- **Retry idempotency (RESOLVED in debrief 3.0)** — the `/debrief` driver
+  (`debrief.py`) persists a whole session's findings + its processed-mark in one
+  short, per-session `tx()` opened only after all LLM analysis, via the model
+  layer's `insert_with_con` / `add_with_con` / `mark_processed_with_con` siblings.
+  A failure anywhere (a specialist, a finding's key/enum check, or a SQLite error)
+  rolls the whole session back — no partial write — so a re-run re-lists and
+  re-runs only the failed sessions cleanly. The transaction stays short (after the
+  slow analysis, not across it) and per-session, so it never blocks other writers
+  across the analysis or rolls back already-good sessions.
 - **Centralized error logging** — scripts currently swallow or stderr-print errors; a
   single `errors.log` would make silent corpus-write failures visible.
 - **Cross-platform** — hooks/commands hardcode `python3`; Windows needs detection.

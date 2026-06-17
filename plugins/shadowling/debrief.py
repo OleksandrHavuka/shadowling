@@ -37,7 +37,7 @@ HAIKU = "claude-haiku-4-5"
 SONNET = "claude-sonnet-4-6"
 CLAUDE_TIMEOUT = 180  # seconds per headless call
 
-# ISO-style language code (moved here from skills/debrief-triage/triage.py); "und"
+# ISO-style language code (the regex the old triage skill used); "und"
 # fits too. Used both for triage validation and the language-code resolution.
 LANG_CODE = re.compile(r"^[a-z]{2,3}$")
 

@@ -15,6 +15,8 @@ plugins/shadowling/
   config.py          # plugin-wide language config CLI (show / get / set)
   gloss.py           # glossing hooks (inject / scan) over models/vocab
   capture.py         # Stop-hook message capture over models/messages
+  debrief.py         # deterministic /debrief driver: triage + 5 parallel specialists via headless claude -p, atomic persist
+  prompts/           # static system prompts for debrief.py's no-tools JSON specialists (triage, grammar, rephrasing, idioms, verbs, friction)
   appdb.py           # single sqlite home: connect(), MIGRATIONS (user_version), ranked views, ro query
   sql.py             # dev console: arbitrary SQL — ro by default, --write + auto-snapshot, backup, paths
   check.sh           # one-command dev gate: ruff + tach + mypy + tests (see Guardrails)
@@ -26,9 +28,7 @@ plugins/shadowling/
                      #   loot/loot.py, drop/drop.py                 — fork: add / remove vocab
                      #   setup/                                     — main: ask + set the three plugin languages
                      #   tutor/tutor.py                             — main: deck / record / stats
-                     #   debrief/debrief.py                         — main: sessions / mark-processed / mark-drills
-                     #   debrief-triage/triage.py                   — fork: messages / tag
-                     #   debrief-{grammar,rephrasing,idioms,verbs,friction}/<cat>.py — fork: record / select / messages
+                     #   debrief/                                   — main: one Bash call to ../../debrief.py (the driver)
                      #   vipe/                                      — dev: wipe incident tables via sql.py --write
   hooks/hooks.json   # UserPromptSubmit (gloss inject) + Stop (gloss scan, capture)
   tests/             # the unittest suite (test_appdb … test_entrypoints, test_gloss,
@@ -149,30 +149,20 @@ python3 plugins/shadowling/skills/drop/drop.py remove hello ghost
 python3 plugins/shadowling/sql.py "SELECT word, translation, remaining FROM vocab"
 ```
 
-Message store + debrief plumbing (capture.py is the Stop hook; reads/admin via entrypoints + sql.py):
+Message store + debrief driver (capture.py is the Stop hook; the driver shells out to `claude -p`):
 
 ```
 python3 plugins/shadowling/sql.py paths                     # show the sqlite db path
-python3 plugins/shadowling/skills/debrief/debrief.py sessions
-python3 plugins/shadowling/skills/debrief-triage/triage.py messages --untagged --limit 200
-python3 plugins/shadowling/skills/debrief-triage/triage.py tag "1=en" "2=en,uk"
-python3 plugins/shadowling/skills/debrief/debrief.py mark-processed --session <id>
+python3 plugins/shadowling/debrief.py                       # run the full driver (needs `claude` on PATH + config set)
 python3 plugins/shadowling/sql.py "SELECT id, langs, processed_at FROM messages ORDER BY id DESC LIMIT 5"
 ```
 
-`/aha` and `/debrief` incidents go through each skill's entrypoint
-(`record`/`select`); any view is queryable read-only via `sql.py`:
+`/aha` incidents go through its entrypoint (`record`/`select`); `/debrief`
+incidents are written by the driver. Any view is queryable read-only via `sql.py`:
 
 ```
-python3 plugins/shadowling/skills/debrief-grammar/grammar.py record <<'SL_IN'
-<slug>article-omission</slug>
-<problem>drops 'the'</problem>
-<original>I went to store</original>
-<fixed>I went to the store</fixed>
-<rule>use the</rule>
-SL_IN
-python3 plugins/shadowling/skills/debrief-grammar/grammar.py select        # ranked view, JSON per row
-python3 plugins/shadowling/sql.py --md "SELECT * FROM grammar_ranked"      # same, markdown table
+python3 plugins/shadowling/sql.py "SELECT slug, counter FROM grammar_ranked"
+python3 plugins/shadowling/sql.py --md "SELECT * FROM grammar_ranked"      # markdown table
 ```
 
 Ad-hoc SQL (dev console; ro unless `--write`, which snapshots first):
@@ -194,7 +184,6 @@ I went to the store
 </answer>
 SL_IN
 python3 plugins/shadowling/skills/tutor/tutor.py stats
-python3 plugins/shadowling/skills/debrief/debrief.py mark-drills
 ```
 
 ## Data & env overrides
@@ -238,5 +227,7 @@ timestamps come from `core.today()` (date) / `core.now()` (ISO seconds). See
 - `/loot` runs as a forked subagent (`context: fork`): translation happens off
   the main context; deterministic work lives in `models/vocab.py` (called by `loot.py`).
 - `/aha` runs in the **main** agent (it needs the live conversation for context);
-  `/debrief` runs in main but forks triage + the five specialists into their own windows.
+  `/debrief` is now a deterministic Python driver (`debrief.py`) that shells out to
+  headless `claude -p` for analysis only — no forked skills. It is cron-safe (no
+  interactive input) and respects `SHADOWLING_HOME`.
 - Hooks must never crash the session — `scan` (in `gloss.py`) and `capture` swallow exceptions.
