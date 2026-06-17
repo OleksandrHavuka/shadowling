@@ -19,11 +19,13 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import typing
 
 import core
 import langcodes
 from appdb import connect, tx
 from config import config_block
+from models.base import Model
 from models.friction import Friction
 from models.grammar import Grammar
 from models.idioms import Idioms
@@ -192,17 +194,35 @@ _PAIRS_SCHEMA = {
     },
 }
 
-# Every schema is derived from the model that persists it: the finding keys ARE
-# the model's insert_cols, and friction's `type` enum IS Friction.enums["type"].
-GRAMMAR_SCHEMA = _findings_schema(*Grammar.insert_cols)
-REPHRASING_SCHEMA = _findings_schema(*Rephrasing.insert_cols)
-IDIOMS_SCHEMA = _findings_schema(*Idioms.insert_cols)
-VERBS_SCHEMA = _findings_schema(*Verbs.insert_cols)
-FRICTION_SCHEMA = _findings_schema(
-    *Friction.insert_cols, enums=Friction.enums, extra={"loot": _PAIRS_SCHEMA}
-)
 
-CATEGORIES = ("grammar", "rephrasing", "idioms", "verbs", "friction")
+class _Spec(typing.NamedTuple):
+    """One specialist category's single owner: the repository it persists into and
+    the StructuredOutput schema it returns. The schema is GENERATED from the model's
+    insert_cols (and friction's enum), so the two can't drift. Iterating SPECS is
+    the only place the category set is enumerated — persistence, dedup reads, the
+    fan-out schemas, and CATEGORIES all derive from it, so adding a category is a
+    one-line edit that can't leave a category half-wired."""
+
+    model: type[Model]
+    schema: dict
+
+
+# friction's schema adds its `type` enum (= Friction.enums) + a top-level `loot`
+# array; the other four are a plain findings array over their insert_cols.
+SPECS = {
+    "grammar": _Spec(Grammar, _findings_schema(*Grammar.insert_cols)),
+    "rephrasing": _Spec(Rephrasing, _findings_schema(*Rephrasing.insert_cols)),
+    "idioms": _Spec(Idioms, _findings_schema(*Idioms.insert_cols)),
+    "verbs": _Spec(Verbs, _findings_schema(*Verbs.insert_cols)),
+    "friction": _Spec(
+        Friction,
+        _findings_schema(
+            *Friction.insert_cols, enums=Friction.enums, extra={"loot": _PAIRS_SCHEMA}
+        ),
+    ),
+}
+
+CATEGORIES = tuple(SPECS)
 
 
 def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
@@ -215,21 +235,18 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
     cfg_block = _config_block(cfg)
     lang_msgs = _messages_block(lang_slice, ["id", "text"])
 
-    def lang_job(name, schema, dedup_tag):
+    def lang_job(name):
         data = "\n".join(
             [
                 cfg_block,
                 lang_msgs,
-                f"<{dedup_tag}>" + render(dedup[dedup_tag]) + f"</{dedup_tag}>",
+                f"<{name}>" + render(dedup[name]) + f"</{name}>",
             ]
         )
-        return (_prompt(name), data, schema, SONNET)
+        return (_prompt(name), data, SPECS[name].schema, SONNET)
 
     jobs = {
-        "grammar": lang_job("grammar", GRAMMAR_SCHEMA, "grammar"),
-        "rephrasing": lang_job("rephrasing", REPHRASING_SCHEMA, "rephrasing"),
-        "idioms": lang_job("idioms", IDIOMS_SCHEMA, "idioms"),
-        "verbs": lang_job("verbs", VERBS_SCHEMA, "verbs"),
+        name: lang_job(name) for name in ("grammar", "rephrasing", "idioms", "verbs")
     }
     friction_msgs = _messages_block(full_slice, ["id", "text", "langs"])
     jobs["friction"] = (
@@ -243,7 +260,7 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
                 "<grammar>" + render(dedup["grammar"]) + "</grammar>",
             ]
         ),
-        FRICTION_SCHEMA,
+        SPECS["friction"].schema,
         SONNET,
     )
     return jobs
@@ -294,18 +311,13 @@ def _persist(session, findings, loot):
     con = connect()  # fresh connection (cheap re-check; not the read-phase one)
     try:
         with tx(con):
-            for item in findings["grammar"]:
-                Grammar.insert(item, con=con, session=session)
-            for item in findings["rephrasing"]:
-                Rephrasing.insert(item, con=con, session=session)
-            for item in findings["idioms"]:
-                Idioms.insert(item, con=con, session=session)
-            for item in findings["verbs"]:
-                Verbs.insert(item, con=con, session=session)
-            for item in findings["friction"]:
-                Friction.insert(item, con=con, session=session)
+            for cat, spec in SPECS.items():
+                for item in findings[cat]:
+                    spec.model.insert(item, con=con, session=session)
             for pair in loot:
-                Vocab.add(pair["word"], pair["translation"], con=con)
+                Vocab.add(
+                    pair["word"], pair["translation"], con=con
+                )  # vocab: no session
             Messages.mark_processed(session, con=con)
     finally:
         con.close()
@@ -337,13 +349,7 @@ def _run_session(session, cfg, lang, *, runner=None):
 
     # All DB reads here, on the MAIN thread, before the fan-out.
     full_slice = Messages.list(session=session)
-    dedup = {
-        "grammar": Grammar.select(),
-        "rephrasing": Rephrasing.select(),
-        "idioms": Idioms.select(),
-        "verbs": Verbs.select(),
-        "friction": Friction.select(),
-    }
+    dedup = {cat: spec.model.select() for cat, spec in SPECS.items()}
     jobs = _build_jobs(cfg, lang, lang_slice, full_slice, dedup)
     findings, failed = _fan_out(jobs, runner=runner)
     if failed:

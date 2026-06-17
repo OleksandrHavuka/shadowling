@@ -239,10 +239,10 @@ class SchemaContractTest(DebriefTestBase):
         from models.verbs import Verbs
 
         cases = [
-            (debrief.GRAMMAR_SCHEMA, Grammar),
-            (debrief.REPHRASING_SCHEMA, Rephrasing),
-            (debrief.IDIOMS_SCHEMA, Idioms),
-            (debrief.VERBS_SCHEMA, Verbs),
+            (debrief.SPECS["grammar"].schema, Grammar),
+            (debrief.SPECS["rephrasing"].schema, Rephrasing),
+            (debrief.SPECS["idioms"].schema, Idioms),
+            (debrief.SPECS["verbs"].schema, Verbs),
         ]
         for schema, model in cases:
             item = schema["properties"]["findings"]["items"]
@@ -252,13 +252,14 @@ class SchemaContractTest(DebriefTestBase):
     def test_friction_keys_enum_and_loot(self):
         from models.friction import Friction
 
-        item = debrief.FRICTION_SCHEMA["properties"]["findings"]["items"]
+        friction_schema = debrief.SPECS["friction"].schema
+        item = friction_schema["properties"]["findings"]["items"]
         self.assertEqual(item["required"], list(Friction.insert_cols))
         self.assertEqual(
             set(item["properties"]["type"]["enum"]), Friction.enums["type"]
         )
-        self.assertIn("loot", debrief.FRICTION_SCHEMA["properties"])
-        self.assertIn("loot", debrief.FRICTION_SCHEMA["required"])
+        self.assertIn("loot", friction_schema["properties"])
+        self.assertIn("loot", friction_schema["required"])
 
 
 class RunTriageTest(DebriefTestBase):
@@ -327,11 +328,8 @@ class BuildJobsTest(DebriefTestBase):
 class FanOutTest(DebriefTestBase):
     def _jobs(self):
         return {
-            "grammar": ("sp", "d", debrief.GRAMMAR_SCHEMA, debrief.SONNET),
-            "rephrasing": ("sp", "d", debrief.REPHRASING_SCHEMA, debrief.SONNET),
-            "idioms": ("sp", "d", debrief.IDIOMS_SCHEMA, debrief.SONNET),
-            "verbs": ("sp", "d", debrief.VERBS_SCHEMA, debrief.SONNET),
-            "friction": ("sp", "d", debrief.FRICTION_SCHEMA, debrief.SONNET),
+            name: ("sp", "d", spec.schema, debrief.SONNET)
+            for name, spec in debrief.SPECS.items()
         }
 
     def test_all_succeed(self):
@@ -411,6 +409,13 @@ class PersistTest(DebriefTestBase):
         )
         self.assertEqual(len(appdb.query("SELECT * FROM grammar")), 1)
         self.assertEqual(len(appdb.query("SELECT * FROM friction")), 1)
+        # every persisted finding carries the run's session as provenance
+        self.assertEqual(
+            appdb.query("SELECT session_id FROM grammar")[0]["session_id"], "sess-A"
+        )
+        self.assertEqual(
+            appdb.query("SELECT session_id FROM friction")[0]["session_id"], "sess-A"
+        )
         self.assertEqual(
             appdb.query("SELECT translation FROM vocab WHERE word='hello'")[0][
                 "translation"
