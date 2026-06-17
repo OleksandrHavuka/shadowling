@@ -17,6 +17,10 @@ import re
 import shutil
 import subprocess
 
+import core
+from models.messages import Messages
+from skillio import render
+
 # The spec-verified model ids (claude 2.1.178, 2026-06-16/17): haiku for triage +
 # the once-per-run language-code resolution, sonnet for the analytical specialists.
 HAIKU = "claude-haiku-4-5"
@@ -74,6 +78,91 @@ def _resolve_learning_code(cfg, *, runner=None, attempts=2):
         except DebriefError as e:
             last = e
     raise last
+
+
+TRIAGE_BATCH = 200
+TRIAGE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["tags"],
+    "properties": {
+        "tags": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["id", "langs"],
+                "properties": {
+                    "id": {"type": "integer"},
+                    "langs": {"type": "array", "items": {"type": "string"}},
+                },
+            },
+        }
+    },
+}
+
+
+def _config_block(cfg):
+    """The <config> block exactly as config.py `show` emits it, so a prompt's
+    'read the config languages' instruction maps to the same shape the old skills
+    saw. Reuses skillio.render — the driver invents no new format."""
+    return "<config>" + render([{k: cfg[k] for k in core.CONFIG_KEYS}]) + "</config>"
+
+
+def _validate_triage(rows, valid_ids):
+    """Validate the triage model's tags and reshape them for Messages.tag.
+
+    `rows` is structured_output["tags"]: [{"id": int, "langs": [str]}]. `valid_ids`
+    is the set of message ids in this batch. Enforces (1) every returned id is one
+    we sent (no hallucinated id), (2) every batch id is tagged (full coverage, so
+    the triage loop always makes progress and terminates), and (3) each code
+    matches LANG_CODE. Returns Messages.tag-shaped rows
+    [{"id": int, "langs": "en,uk"}]. Raises DebriefError (naming the offender) on
+    any violation — the caller aborts the batch, nothing is tagged, and the
+    session stays pending for a clean retry (exactly as the old triage skill did
+    for a bad code)."""
+    clean = []
+    seen = set()
+    for r in rows:
+        rid = r.get("id")
+        raw = r.get("langs") or []
+        codes = [c.strip() for c in raw if isinstance(c, str) and c.strip()]
+        if rid not in valid_ids:
+            raise DebriefError(f"triage returned an unknown message id: {rid!r}")
+        if not codes or not all(LANG_CODE.match(c) for c in codes):
+            raise DebriefError(
+                f"triage: bad language code(s) for id {rid!r}: {raw!r}"
+                " (expected 2-3 lowercase letters, e.g. en or en,uk)"
+            )
+        seen.add(rid)
+        clean.append({"id": rid, "langs": ",".join(codes)})
+    missing = valid_ids - seen
+    if missing:
+        raise DebriefError(f"triage did not tag message id(s): {sorted(missing)}")
+    return clean
+
+
+def _run_triage(session, cfg, *, runner=None):
+    """Loop until no untagged message remains in the session. Each pass: read an
+    untagged batch (DB), run the haiku triage call, validate, and Messages.tag
+    (its OWN committed transaction). Tags written mid-loop are fine — a re-run
+    re-tags identically. Full-coverage validation guarantees each pass tags every
+    row it read, so the loop always terminates. Raises DebriefError on any
+    failure (the session stays pending; partial tags are harmless)."""
+    while True:
+        batch = Messages.list(session=session, untagged=True, limit=TRIAGE_BATCH)
+        if not batch:
+            return
+        data = "\n".join(
+            [
+                _config_block(cfg),
+                "<messages>" + render(batch, fields=["id", "text"]) + "</messages>",
+            ]
+        )
+        out = _run_claude(_prompt("triage"), data, TRIAGE_SCHEMA, HAIKU, runner=runner)
+        valid_ids = {row["id"] for row in batch}
+        clean = _validate_triage(out.get("tags", []), valid_ids)
+        Messages.tag(clean)
 
 
 class DebriefError(Exception):

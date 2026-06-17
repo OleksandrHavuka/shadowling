@@ -217,5 +217,58 @@ class ResolveLearningCodeTest(DebriefTestBase):
             debrief._resolve_learning_code(cfg, runner=runner)
 
 
+class ValidateTriageTest(DebriefTestBase):
+    def test_good_tags_reshaped_for_messages_tag(self):
+        rows = [{"id": 1, "langs": ["en"]}, {"id": 2, "langs": ["en", "uk"]}]
+        clean = debrief._validate_triage(rows, {1, 2})
+        self.assertEqual(clean, [{"id": 1, "langs": "en"}, {"id": 2, "langs": "en,uk"}])
+
+    def test_und_is_a_valid_code(self):
+        clean = debrief._validate_triage([{"id": 1, "langs": ["und"]}], {1})
+        self.assertEqual(clean, [{"id": 1, "langs": "und"}])
+
+    def test_bad_code_raises(self):
+        with self.assertRaises(debrief.DebriefError):
+            debrief._validate_triage([{"id": 1, "langs": ["English"]}], {1})
+
+    def test_unknown_id_raises(self):
+        with self.assertRaises(debrief.DebriefError):
+            debrief._validate_triage([{"id": 999, "langs": ["en"]}], {1})
+
+    def test_missing_id_raises(self):
+        with self.assertRaises(debrief.DebriefError):
+            debrief._validate_triage([{"id": 1, "langs": ["en"]}], {1, 2})
+
+
+class RunTriageTest(DebriefTestBase):
+    def test_loop_tags_then_stops(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        self._seed("друге повідомлення суто українською мовою", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from(
+            {
+                "triage": {
+                    "tags": [{"id": 1, "langs": ["en"]}, {"id": 2, "langs": ["uk"]}]
+                }
+            }
+        )
+        debrief._run_triage("sess-A", cfg, runner=runner)
+        rows = appdb.query("SELECT langs FROM messages ORDER BY id")
+        self.assertEqual(rows[0]["langs"], '["en"]')
+        self.assertEqual(rows[1]["langs"], '["uk"]')
+        # second call would re-list nothing untagged -> no claude call needed
+        self.assertEqual(Messages.list(session="sess-A", untagged=True), [])
+
+    def test_failed_triage_call_raises_and_tags_nothing(self):
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from({"triage": "error_result"})
+        with self.assertRaises(debrief.DebriefError):
+            debrief._run_triage("sess-A", cfg, runner=runner)
+        self.assertIsNone(appdb.query("SELECT langs FROM messages")[0]["langs"])
+
+
 if __name__ == "__main__":
     unittest.main()
