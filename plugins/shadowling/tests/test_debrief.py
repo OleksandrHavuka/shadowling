@@ -513,5 +513,57 @@ class RunSessionTest(DebriefTestBase):
         self.assertEqual(Messages.pending_count(), 1)
 
 
+def _full_runner():
+    return runner_from(
+        {
+            "lang_code": {"code": "en"},
+            "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
+            "grammar": {
+                "findings": [
+                    {
+                        "slug": "art",
+                        "problem": "p",
+                        "original": "a",
+                        "fixed": "b",
+                        "rule": "r",
+                    }
+                ]
+            },
+            "rephrasing": {"findings": []},
+            "idioms": {"findings": []},
+            "verbs": {"findings": []},
+            "friction": {"findings": [], "loot": []},
+        }
+    )
+
+
+class MainTest(DebriefTestBase):
+    def test_no_sessions_exits_zero(self):
+        runner = runner_from({"lang_code": {"code": "en"}})
+        self.assertEqual(debrief.main(runner=runner), 0)
+
+    def test_unconfigured_exits_one(self):
+        os.remove(os.path.join(self.home, "config.json"))
+        self.assertEqual(debrief.main(runner=runner_from({})), 1)
+
+    def test_full_run_tags_persists_marks_and_exits_zero(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        code = debrief.main(runner=_full_runner())
+        self.assertEqual(code, 0)
+        self.assertEqual(len(appdb.query("SELECT * FROM grammar")), 1)
+        self.assertEqual(Messages.pending_count(), 0)
+
+    def test_failed_session_exits_one_and_leaves_pending(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        runner = runner_from({"lang_code": {"code": "en"}, "triage": "error_result"})
+        code = debrief.main(runner=runner)
+        self.assertEqual(code, 1)
+        self.assertEqual(Messages.pending_count(), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

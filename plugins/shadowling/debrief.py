@@ -18,6 +18,7 @@ import re
 import shutil
 import sqlite3
 import subprocess
+import sys
 
 import core
 from appdb import connect, tx
@@ -414,6 +415,48 @@ def _run_session(session, cfg, lang, *, runner=None):
     return _result(session, ok=True)
 
 
+def _print_summary(marked, results):
+    """The compact /debrief Bash output (the primary observability channel):
+    drills marked, one line per session (OK / OK (empty) / ERROR <categories>),
+    then totals."""
+    print(f"marked {marked} drill(s)")
+    for r in results:
+        if r["ok"]:
+            print(f"{r['session']}: OK" + (" (empty)" if r["empty"] else ""))
+        else:
+            print(f"{r['session']}: ERROR {', '.join(r['failed'])}")
+    ok = sum(1 for r in results if r["ok"])
+    failed = len(results) - ok
+    line = f"{ok}/{len(results)} session(s) OK"
+    if failed:
+        line += f"; re-run /debrief to retry the {failed} failed"
+    print(line)
+
+
+def main(runner=None):
+    """The per-run driver. Returns a process exit code: 1 if any session failed
+    (or config/lang resolution failed), else 0. Takes no interactive input and
+    respects SHADOWLING_HOME — cron-safe. `runner` is the injectable subprocess
+    seam (None in production; a fake in tests)."""
+    marked = Messages.mark_drills()  # own commit, idempotent; fences tutor answers
+    cfg = core.load_config()
+    if not core.config_ready(cfg):
+        print(cfg["notice"], file=sys.stderr)
+        return 1
+    try:
+        lang = _resolve_learning_code(cfg, runner=runner)
+    except DebriefError as e:
+        print(f"could not resolve the learning-language code: {e}", file=sys.stderr)
+        return 1
+    sessions = Messages.sessions()
+    if not sessions:
+        print(f"marked {marked} drill(s); nothing to review")
+        return 0
+    results = [_run_session(s["session"], cfg, lang, runner=runner) for s in sessions]
+    _print_summary(marked, results)
+    return 1 if any(not r["ok"] for r in results) else 0
+
+
 class DebriefError(Exception):
     """Any failure in a headless call, its validation, or persistence. Caught per
     session/run; the affected session stays pending and the summary reports it."""
@@ -489,3 +532,7 @@ def _run_claude(system_prompt, data, schema, model, *, runner=None):
     except subprocess.TimeoutExpired as e:
         raise DebriefError(f"claude timed out after {CLAUDE_TIMEOUT}s") from e
     return _parse_result(stdout)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
