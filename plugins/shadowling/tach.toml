@@ -75,3 +75,11 @@ depends_on = ["core", "models.messages"]
 [[modules]]
 path = "sql"
 depends_on = ["appdb", "core"]
+
+[[modules]]
+path = "debrief"
+depends_on = [
+    "appdb", "core", "skillio",
+    "models.grammar", "models.rephrasing", "models.idioms",
+    "models.verbs", "models.friction", "models.vocab", "models.messages",
+]
