@@ -153,7 +153,7 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 325 tests, ~1s
+python3 -m unittest                       # 333 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
@@ -195,18 +195,20 @@ Tracked honestly:
 
 ## Appendix: schema reference
 
-Final schema (after migration 5). Incident tables are append-only; `*_ranked` views
+Final schema (after migration 6). Incident tables are append-only; `*_ranked` views
 compute the products. Display headers (in quotes) are view aliases over the columns.
+Every incident table carries a `NOT NULL session_id` (migration 6) — mandatory
+per-session provenance so the tutor can pick context per-session.
 
 | Table | Columns |
 |---|---|
 | `messages` | id · created_at · text · langs · processed_at · session_id · kind |
-| `grammar` | id · created_at · slug · problem · original · fixed · rule |
-| `rephrasing` | id · created_at · slug · problem · learner_wrote · native_phrase · why |
-| `idioms` | id · created_at · idiom · meaning · context · learner_wrote |
-| `verbs` | id · created_at · verb · past · participle · used_form · correction · context |
-| `decode` | id · created_at · slug · type · expression · meaning · takeaway · learner_wrote · context |
-| `friction` | id · created_at · slug · type · zone · learner_wrote · native_phrase · context |
+| `grammar` | id · created_at · session_id · slug · problem · original · fixed · rule |
+| `rephrasing` | id · created_at · session_id · slug · problem · learner_wrote · native_phrase · why |
+| `idioms` | id · created_at · session_id · idiom · meaning · context · learner_wrote |
+| `verbs` | id · created_at · session_id · verb · past · participle · used_form · correction · context |
+| `decode` | id · created_at · session_id · slug · type · expression · meaning · takeaway · learner_wrote · context |
+| `friction` | id · created_at · session_id · slug · type · zone · learner_wrote · native_phrase · context |
 | `vocab` | word · translation · remaining · status · created_at · updated_at |
 | `attempts` | id · created_at · session_id · item_kind · item_key · exercise · answer · verdict |
 | `mastery` | item_kind · item_key · box · due_date · last_verdict · counter_seen · created_at · updated_at |
