@@ -21,6 +21,7 @@ import subprocess
 import sys
 
 import core
+import langcodes
 from appdb import connect, tx
 from models.friction import Friction
 from models.grammar import Grammar
@@ -104,7 +105,11 @@ TRIAGE_SCHEMA = {
                 "required": ["id", "langs"],
                 "properties": {
                     "id": {"type": "integer"},
-                    "langs": {"type": "array", "items": {"type": "string"}},
+                    "langs": {
+                        "type": "array",
+                        "minItems": 1,
+                        "items": {"type": "string", "enum": sorted(langcodes.CODES)},
+                    },
                 },
             },
         }
@@ -120,30 +125,20 @@ def _config_block(cfg):
 
 
 def _validate_triage(rows, valid_ids):
-    """Validate the triage model's tags and reshape them for Messages.tag.
-
-    `rows` is structured_output["tags"]: [{"id": int, "langs": [str]}]. `valid_ids`
-    is the set of message ids in this batch. Enforces (1) every returned id is one
-    we sent (no hallucinated id), (2) every batch id is tagged (full coverage, so
-    the triage loop always makes progress and terminates), and (3) each code
-    matches LANG_CODE. Returns Messages.tag-shaped rows
-    [{"id": int, "langs": "en,uk"}]. Raises DebriefError (naming the offender) on
-    any violation — the caller aborts the batch, nothing is tagged, and the
-    session stays pending for a clean retry (exactly as the old triage skill did
-    for a bad code)."""
+    """Reshape the triage model's tags for Messages.tag and enforce batch
+    COVERAGE — the only invariant the schema can't express across a batch: every
+    id we sent is tagged exactly once, and no id we did not send appears. Code
+    format/non-emptiness is guaranteed by TRIAGE_SCHEMA (enum from langcodes.CODES
+    + minItems:1). Returns [{"id": int, "langs": "en,uk"}]. Raises DebriefError
+    (naming the offender) on a coverage violation, so the batch aborts and the
+    session stays pending for a clean retry."""
     clean = []
     seen = set()
     for r in rows:
         rid = r.get("id")
-        raw = r.get("langs") or []
-        codes = [c.strip() for c in raw if isinstance(c, str) and c.strip()]
         if rid not in valid_ids:
             raise DebriefError(f"triage returned an unknown message id: {rid!r}")
-        if not codes or not all(LANG_CODE.match(c) for c in codes):
-            raise DebriefError(
-                f"triage: bad language code(s) for id {rid!r}: {raw!r}"
-                " (expected 2-3 lowercase letters, e.g. en or en,uk)"
-            )
+        codes = [c.strip() for c in (r.get("langs") or []) if isinstance(c, str)]
         seen.add(rid)
         clean.append({"id": rid, "langs": ",".join(codes)})
     missing = valid_ids - seen

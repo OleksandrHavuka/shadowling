@@ -223,13 +223,9 @@ class ValidateTriageTest(DebriefTestBase):
         clean = debrief._validate_triage(rows, {1, 2})
         self.assertEqual(clean, [{"id": 1, "langs": "en"}, {"id": 2, "langs": "en,uk"}])
 
-    def test_und_is_a_valid_code(self):
+    def test_und_passes_through(self):
         clean = debrief._validate_triage([{"id": 1, "langs": ["und"]}], {1})
         self.assertEqual(clean, [{"id": 1, "langs": "und"}])
-
-    def test_bad_code_raises(self):
-        with self.assertRaises(debrief.DebriefError):
-            debrief._validate_triage([{"id": 1, "langs": ["English"]}], {1})
 
     def test_unknown_id_raises(self):
         with self.assertRaises(debrief.DebriefError):
@@ -238,6 +234,17 @@ class ValidateTriageTest(DebriefTestBase):
     def test_missing_id_raises(self):
         with self.assertRaises(debrief.DebriefError):
             debrief._validate_triage([{"id": 1, "langs": ["en"]}], {1, 2})
+
+
+class TriageSchemaTest(DebriefTestBase):
+    def test_langs_is_nonempty_enum_from_langcodes(self):
+        import langcodes
+
+        langs = debrief.TRIAGE_SCHEMA["properties"]["tags"]["items"]["properties"][
+            "langs"
+        ]
+        self.assertEqual(langs["minItems"], 1)
+        self.assertEqual(set(langs["items"]["enum"]), set(langcodes.CODES))
 
 
 class RunTriageTest(DebriefTestBase):
