@@ -596,22 +596,34 @@ class MalformedResultTest(DebriefTestBase):
 
 
 class SummaryTest(DebriefTestBase):
-    def test_error_line_includes_reason(self):
-        import io
-        from contextlib import redirect_stdout
+    def test_status_ok_and_empty(self):
+        self.assertEqual(
+            debrief._session_status(debrief._result("sess-A", ok=True)), "OK"
+        )
+        self.assertEqual(
+            debrief._session_status(debrief._result("sess-A", ok=True, empty=True)),
+            "OK (empty)",
+        )
 
-        results = [
-            debrief._result(
-                "sess-A",
-                ok=False,
-                failed=["grammar"],
-                errors={"grammar": "claude timed out after 180s"},
-            )
-        ]
-        buf = io.StringIO()
-        with redirect_stdout(buf):
-            debrief._print_summary(0, results)
-        self.assertIn("grammar — claude timed out after 180s", buf.getvalue())
+    def test_status_error_includes_reason(self):
+        r = debrief._result(
+            "sess-A",
+            ok=False,
+            failed=["grammar"],
+            errors={"grammar": "claude timed out after 180s"},
+        )
+        self.assertEqual(
+            debrief._session_status(r), "ERROR grammar — claude timed out after 180s"
+        )
+
+    def test_totals_line_with_and_without_failures(self):
+        ok = [debrief._result("a", ok=True), debrief._result("b", ok=True)]
+        self.assertEqual(debrief._totals_line(ok), "2/2 session(s) OK")
+        mixed = ok + [debrief._result("c", ok=False, failed=["triage"])]
+        self.assertEqual(
+            debrief._totals_line(mixed),
+            "2/3 session(s) OK; re-run /debrief to retry the 1 failed",
+        )
 
 
 def _full_runner():
@@ -663,6 +675,30 @@ class MainTest(DebriefTestBase):
         code = debrief.main(runner=runner)
         self.assertEqual(code, 1)
         self.assertEqual(Messages.pending_count(), 1)
+
+    def test_streams_per_session_progress_and_totals(self):
+        import io
+        from contextlib import redirect_stdout
+
+        self._seed("First normal english sentence here please", "sess-A")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            debrief.main(runner=_full_runner())
+        out = buf.getvalue()
+        self.assertIn("reviewing 1 session(s)", out)
+        self.assertRegex(out, r"\[1/1\] sess-A … OK")  # live per-session line
+        self.assertIn("1/1 session(s) OK", out)  # closing tally
+
+    def test_streams_error_reason_live(self):
+        import io
+        from contextlib import redirect_stdout
+
+        self._seed("First normal english sentence here please", "sess-A")
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            debrief.main(runner=runner_from({"triage": "error_result"}))
+        out = buf.getvalue()
+        self.assertRegex(out, r"\[1/1\] sess-A … ERROR triage — ")
 
 
 class SessionIsolationTest(DebriefTestBase):

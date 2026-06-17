@@ -14,9 +14,10 @@ python3 "${CLAUDE_PLUGIN_ROOT}/debrief.py"
 
 The driver does everything itself — marks drills, triages each session's
 languages, runs the five analytical specialists per session, and persists each
-session's findings atomically. It prints a compact summary: a `marked N drill(s)`
-line, one `<session>: OK` / `<session>: OK (empty)` / `<session>: ERROR
-<categories>` line per session, then totals.
+session's findings atomically. It streams progress live (flushed) so the run
+never goes dark: a `marked N drill(s); reviewing N session(s)` header, then one
+`[i/N] <session> … OK` / `[i/N] <session> … OK (empty)` / `[i/N] <session> …
+ERROR <categories>` line per session as each completes, then a totals line.
 
 Relay that summary to the user as-is. If any session shows `ERROR`, tell the user
 that a re-run of `/debrief` retries only the failed sessions. If the driver exits

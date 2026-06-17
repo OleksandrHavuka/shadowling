@@ -289,8 +289,8 @@ def _fan_out(jobs, *, runner=None):
 
 def _result(session, *, ok, failed=(), empty=False, errors=None):
     """One per-session result row for the run summary. `failed` is the list of
-    failed stage/category names; `errors` maps each to its reason (printed by
-    _print_summary)."""
+    failed stage/category names; `errors` maps each to its reason (rendered by
+    _session_status)."""
     return {
         "session": session,
         "ok": ok,
@@ -384,25 +384,26 @@ def _run_session_safe(session, cfg, lang, dedup, *, runner=None):
         )
 
 
-def _print_summary(marked, results):
-    """The compact /debrief Bash output: drills marked, one line per session
-    (OK / OK (empty) / ERROR <name — reason; …>), then totals."""
-    print(f"marked {marked} drill(s)")
-    for r in results:
-        if r["ok"]:
-            print(f"{r['session']}: OK" + (" (empty)" if r["empty"] else ""))
-        else:
-            parts = [
-                f"{n} — {r['errors'][n]}" if r["errors"].get(n) else n
-                for n in r["failed"]
-            ]
-            print(f"{r['session']}: ERROR {'; '.join(parts)}")
+def _session_status(r):
+    """The per-session status streamed live as each session completes:
+    OK / OK (empty) / ERROR <name — reason; …>."""
+    if r["ok"]:
+        return "OK (empty)" if r["empty"] else "OK"
+    parts = [
+        f"{n} — {r['errors'][n]}" if r["errors"].get(n) else n for n in r["failed"]
+    ]
+    return f"ERROR {'; '.join(parts)}"
+
+
+def _totals_line(results):
+    """The closing tally: how many sessions succeeded, plus the retry hint when any
+    failed (a re-run reprocesses only the still-pending sessions)."""
     ok = sum(1 for r in results if r["ok"])
     failed = len(results) - ok
     line = f"{ok}/{len(results)} session(s) OK"
     if failed:
         line += f"; re-run /debrief to retry the {failed} failed"
-    print(line)
+    return line
 
 
 def main(runner=None):
@@ -422,22 +423,33 @@ def main(runner=None):
         return 1
     sessions = Messages.sessions()
     if not sessions:
-        print(f"marked {marked} drill(s); nothing to review")
+        print(f"marked {marked} drill(s); nothing to review", flush=True)
         return 0
+    total = len(sessions)
+    # Stream progress live (flush=True) so a long run shows which session it is on
+    # and surfaces each failure as it happens, instead of going dark until the end:
+    # stdout is block-buffered when piped (not a TTY), so nothing reaches the caller
+    # until the buffer flushes. The "[i/N] <session> … " prefix is printed BEFORE the
+    # session runs (no trailing newline) so the in-flight session is visible even
+    # mid-call; _session_status completes that line when it returns.
+    print(f"marked {marked} drill(s); reviewing {total} session(s)", flush=True)
     # Read the dedup snapshot ONCE and reuse it across sessions; only a session that
     # actually persisted findings invalidates it, so the common empty/failed sessions
     # don't trigger the five full-view reads. _run_session_safe isolates each session
     # so one unexpected error can't abort the rest of the run.
     dedup = None
     results = []
-    for s in sessions:
+    for i, s in enumerate(sessions, 1):
         if dedup is None:
             dedup = {cat: spec.model.select() for cat, spec in SPECS.items()}
-        r = _run_session_safe(s["session"], cfg, lang, dedup, runner=runner)
+        session = s["session"]
+        print(f"[{i}/{total}] {session} … ", end="", flush=True)
+        r = _run_session_safe(session, cfg, lang, dedup, runner=runner)
+        print(_session_status(r), flush=True)
         results.append(r)
         if r["ok"] and not r["empty"]:  # this session added findings -> snapshot stale
             dedup = None
-    _print_summary(marked, results)
+    print(_totals_line(results), flush=True)
     return 1 if any(not r["ok"] for r in results) else 0
 
 
