@@ -177,7 +177,8 @@ Tracked honestly:
 - **Retry idempotency (RESOLVED in debrief 3.0)** — the `/debrief` driver
   (`debrief.py`) persists a whole session's findings + its processed-mark in one
   short, per-session `tx()` opened only after all LLM analysis, via the model
-  layer's `insert_with_con` / `add_with_con` / `mark_processed_with_con` siblings.
+  layer's `con=` parameter (`insert(values, con=…)` / `add(word, translation,
+  con=…)` / `mark_processed(session, con=…)`, mirroring `Vocab.relearn`).
   A failure anywhere (a specialist, a finding's key/enum check, or a SQLite error)
   rolls the whole session back — no partial write — so a re-run re-lists and
   re-runs only the failed sessions cleanly. The transaction stays short (after the

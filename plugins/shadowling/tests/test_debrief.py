@@ -33,8 +33,6 @@ def _schema_kind(argv):
     return the right canned output. Each specialist's schema has a unique marker."""
     schema = json.loads(argv[argv.index("--json-schema") + 1])
     props = schema["properties"]
-    if "code" in props:
-        return "lang_code"
     if "tags" in props:
         return "triage"
     if "loot" in props:
