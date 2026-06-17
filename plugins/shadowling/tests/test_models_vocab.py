@@ -217,5 +217,52 @@ class AddRaceTest(VocabRepoBase):
         )
 
 
+class AddWithConTest(VocabRepoBase):
+    def test_add_with_con_inserts_inside_caller_tx(self):
+        con = appdb.connect()
+        try:
+            with appdb.tx(con):
+                r = Vocab.add_with_con("Throughput", "пропускна здатність", con)
+        finally:
+            con.close()
+        self.assertEqual(r["action"], "add")
+        self.assertEqual(r["word"], "throughput")
+        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
+
+    def test_add_with_con_reads_back_its_own_write_in_tx(self):
+        con = appdb.connect()
+        try:
+            with appdb.tx(con):
+                Vocab.add_with_con("throughput", "old", con)
+                r = Vocab.add_with_con("throughput", "new translation", con)
+        finally:
+            con.close()
+        self.assertEqual(r["action"], "refresh")
+        self.assertEqual(r["translation"], "new translation")
+
+    def test_add_with_con_untranslated_writes_nothing(self):
+        con = appdb.connect()
+        try:
+            with appdb.tx(con):
+                r = Vocab.add_with_con("awesome", "awesome", con)
+        finally:
+            con.close()
+        self.assertEqual(r, {"action": "untranslated", "word": "awesome"})
+        self.assertNotIn("awesome", self.rows_by_word())
+
+    def test_add_with_con_relearns_learned_word(self):
+        Vocab.add("throughput", "t")
+        self._set("throughput", remaining=0, status="learned")
+        con = appdb.connect()
+        try:
+            with appdb.tx(con):
+                r = Vocab.add_with_con("throughput", "t2", con)
+        finally:
+            con.close()
+        self.assertEqual(r["action"], "relearn")
+        self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
+        self.assertEqual(self.rows_by_word()["throughput"]["status"], "active")
+
+
 if __name__ == "__main__":
     unittest.main()

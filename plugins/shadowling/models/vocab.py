@@ -41,11 +41,12 @@ def word_in_text(word, text):
 
 class Vocab:
     @staticmethod
-    def add(word, translation):
-        """Add or refresh a vocab pair. Returns ONE render-ready result dict:
-        {action, word, translation, remaining, status} for a persisted row, or
-        {action: 'untranslated', word} when the translation is missing/identical
-        (nothing persisted). action is add | refresh | relearn | untranslated."""
+    def _add_on(con, word, translation):
+        """The full add/refresh/relearn body on an ALREADY-OPEN connection —
+        opens no transaction of its own. Strips the pair, takes the untranslated
+        early return (touching no con), else does the existence read-then-write
+        and the final read-back, all on `con` so a caller's tx reads its own
+        write. Returns the same render-ready result dict as add()."""
         word = word.strip().lower()
         translation = translation.strip()
         # Identity/empty translation = the LLM echoed the term back untranslated.
@@ -53,43 +54,59 @@ class Vocab:
         if not translation or _norm(translation) == _norm(word):
             return {"action": "untranslated", "word": word}
         now = core.now()
+        row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
+        if row is None:
+            con.execute(
+                "INSERT INTO vocab(word, translation, remaining, status,"
+                " created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
+                (word, translation, START_REMAINING, now, now),
+            )
+            action = "add"
+        elif row["status"] == "learned":
+            con.execute(
+                "UPDATE vocab SET translation = ?, remaining = ?,"
+                " status = 'active', updated_at = ? WHERE word = ?",
+                (translation, START_REMAINING, now, word),
+            )
+            action = "relearn"
+        else:
+            con.execute(
+                "UPDATE vocab SET translation = ?, updated_at = ? WHERE word = ?",
+                (translation, now, word),
+            )
+            action = "refresh"
+        new = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
+        return {
+            "action": action,
+            "word": new["word"],
+            "translation": new["translation"],
+            "remaining": new["remaining"],
+            "status": new["status"],
+        }
+
+    @staticmethod
+    def add(word, translation):
+        """Add or refresh a vocab pair. Returns ONE render-ready result dict:
+        {action, word, translation, remaining, status} for a persisted row, or
+        {action: 'untranslated', word} when the translation is missing/identical
+        (nothing persisted). action is add | refresh | relearn | untranslated.
+        Opens its own connection + immediate transaction (the body is _add_on; an
+        untranslated pair commits a harmless empty transaction)."""
         con = connect()
         try:
             with tx(con):  # BEGIN IMMEDIATE serializes the existence-read + write
-                row = con.execute(
-                    "SELECT * FROM vocab WHERE word = ?", (word,)
-                ).fetchone()
-                if row is None:
-                    con.execute(
-                        "INSERT INTO vocab(word, translation, remaining, status,"
-                        " created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
-                        (word, translation, START_REMAINING, now, now),
-                    )
-                    action = "add"
-                elif row["status"] == "learned":
-                    con.execute(
-                        "UPDATE vocab SET translation = ?, remaining = ?,"
-                        " status = 'active', updated_at = ? WHERE word = ?",
-                        (translation, START_REMAINING, now, word),
-                    )
-                    action = "relearn"
-                else:
-                    con.execute(
-                        "UPDATE vocab SET translation = ?, updated_at = ?"
-                        " WHERE word = ?",
-                        (translation, now, word),
-                    )
-                    action = "refresh"
-            new = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
-            return {
-                "action": action,
-                "word": new["word"],
-                "translation": new["translation"],
-                "remaining": new["remaining"],
-                "status": new["status"],
-            }
+                return Vocab._add_on(con, word, translation)
         finally:
             con.close()
+
+    @staticmethod
+    def add_with_con(word, translation, con):
+        """Like add(), but runs on the caller's open tx (the debrief driver's
+        per-session transaction) so a looted pair commits atomically with the
+        session's findings + processed-mark. The read-back runs inside the
+        caller's tx (reads its own write — correct); an untranslated pair writes
+        nothing."""
+        return Vocab._add_on(con, word, translation)
 
     @staticmethod
     def remove(word):
