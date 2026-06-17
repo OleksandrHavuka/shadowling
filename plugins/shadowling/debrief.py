@@ -323,9 +323,10 @@ def _persist(session, findings, loot):
         con.close()
 
 
-def _run_session(session, cfg, lang, *, runner=None):
+def _run_session(session, cfg, lang, dedup, *, runner=None):
     """Process ONE session: triage -> per-language slice gate -> 5-way parallel
-    specialist analysis -> atomic persist. Returns a _result dict. Nothing is
+    specialist analysis -> atomic persist. `dedup` is the {category: existing rows}
+    snapshot read once by the caller (see main). Returns a _result dict. Nothing is
     persisted unless ALL five specialists succeed; a failure anywhere (triage,
     a specialist, or persist) leaves the session pending for the next run."""
     try:
@@ -347,9 +348,9 @@ def _run_session(session, cfg, lang, *, runner=None):
             )
         return _result(session, ok=True, empty=True)
 
-    # All DB reads here, on the MAIN thread, before the fan-out.
+    # All DB reads here, on the MAIN thread, before the fan-out (`dedup` is the
+    # caller's once-per-batch snapshot — see main).
     full_slice = Messages.list(session=session)
-    dedup = {cat: spec.model.select() for cat, spec in SPECS.items()}
     jobs = _build_jobs(cfg, lang, lang_slice, full_slice, dedup)
     findings, failed = _fan_out(jobs, runner=runner)
     if failed:
@@ -364,6 +365,23 @@ def _run_session(session, cfg, lang, *, runner=None):
             session, ok=False, failed=["persist"], errors={"persist": str(e)}
         )
     return _result(session, ok=True)
+
+
+def _run_session_safe(session, cfg, lang, dedup, *, runner=None):
+    """_run_session with a last-resort net: a non-DebriefError that escapes a phase
+    opening its own transaction (e.g. a triage-time 'database is locked' from
+    Messages.tag past busy_timeout) becomes ONE failed session, never a dead run.
+    Expected/precise handling stays inside _run_session; this is the top-level
+    per-session isolation boundary, so the broad except is deliberate."""
+    try:
+        return _run_session(session, cfg, lang, dedup, runner=runner)
+    except Exception as e:  # deliberate per-session isolation boundary
+        return _result(
+            session,
+            ok=False,
+            failed=["unexpected"],
+            errors={"unexpected": f"{type(e).__name__}: {e}"},
+        )
 
 
 def _print_summary(marked, results):
@@ -406,7 +424,19 @@ def main(runner=None):
     if not sessions:
         print(f"marked {marked} drill(s); nothing to review")
         return 0
-    results = [_run_session(s["session"], cfg, lang, runner=runner) for s in sessions]
+    # Read the dedup snapshot ONCE and reuse it across sessions; only a session that
+    # actually persisted findings invalidates it, so the common empty/failed sessions
+    # don't trigger the five full-view reads. _run_session_safe isolates each session
+    # so one unexpected error can't abort the rest of the run.
+    dedup = None
+    results = []
+    for s in sessions:
+        if dedup is None:
+            dedup = {cat: spec.model.select() for cat, spec in SPECS.items()}
+        r = _run_session_safe(s["session"], cfg, lang, dedup, runner=runner)
+        results.append(r)
+        if r["ok"] and not r["empty"]:  # this session added findings -> snapshot stale
+            dedup = None
     _print_summary(marked, results)
     return 1 if any(not r["ok"] for r in results) else 0
 

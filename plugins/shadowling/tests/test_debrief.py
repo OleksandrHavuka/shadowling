@@ -91,6 +91,11 @@ class DebriefTestBase(unittest.TestCase):
         finally:
             con.close()
 
+    def _dedup(self):
+        # the {category: existing rows} snapshot main reads once and passes in;
+        # empty for a fresh test DB, and the fake runner ignores its content anyway
+        return {c: [] for c in debrief.CATEGORIES}
+
 
 TRIVIAL_SCHEMA = {"type": "object", "additionalProperties": False, "properties": {}}
 
@@ -489,7 +494,7 @@ class RunSessionTest(DebriefTestBase):
         self._seed("First normal english sentence here please", "sess-A")
         cfg = core.load_config()
         result = debrief._run_session(
-            "sess-A", cfg, "en", runner=self._all_success_runner()
+            "sess-A", cfg, "en", self._dedup(), runner=self._all_success_runner()
         )
         self.assertTrue(result["ok"])
         self.assertEqual(len(appdb.query("SELECT * FROM grammar")), 1)
@@ -501,7 +506,7 @@ class RunSessionTest(DebriefTestBase):
         self._seed("суто українське повідомлення без англійської", "sess-A")
         cfg = core.load_config()
         runner = runner_from({"triage": {"tags": [{"id": 1, "langs": ["uk"]}]}})
-        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        result = debrief._run_session("sess-A", cfg, "en", self._dedup(), runner=runner)
         self.assertTrue(result["ok"])
         self.assertTrue(result["empty"])
         self.assertEqual(appdb.query("SELECT * FROM grammar"), [])
@@ -522,7 +527,7 @@ class RunSessionTest(DebriefTestBase):
                 "friction": {"findings": [], "loot": []},
             }
         )
-        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        result = debrief._run_session("sess-A", cfg, "en", self._dedup(), runner=runner)
         self.assertFalse(result["ok"])
         self.assertEqual(result["failed"], ["grammar"])
         self.assertIn("grammar", result["errors"])
@@ -535,7 +540,7 @@ class RunSessionTest(DebriefTestBase):
         self._seed("First normal english sentence here please", "sess-A")
         cfg = core.load_config()
         runner = runner_from({"triage": "error_result"})
-        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        result = debrief._run_session("sess-A", cfg, "en", self._dedup(), runner=runner)
         self.assertFalse(result["ok"])
         self.assertEqual(result["failed"], ["triage"])
         self.assertIn("triage", result["errors"])
@@ -559,7 +564,7 @@ class MalformedResultTest(DebriefTestBase):
                 "friction": {"findings": [], "loot": []},
             }
         )
-        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        result = debrief._run_session("sess-A", cfg, "en", self._dedup(), runner=runner)
         self.assertFalse(result["ok"])
         self.assertEqual(result["failed"], ["persist"])
         self.assertEqual(Messages.pending_count(), 1)  # not crashed; still pending
@@ -633,6 +638,45 @@ class MainTest(DebriefTestBase):
         code = debrief.main(runner=runner)
         self.assertEqual(code, 1)
         self.assertEqual(Messages.pending_count(), 1)
+
+
+class SessionIsolationTest(DebriefTestBase):
+    def test_unexpected_error_becomes_one_failed_session(self):
+        def boom(argv, data):
+            raise RuntimeError("kaboom")  # NOT a DebriefError
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        result = debrief._run_session_safe(
+            "sess-A", cfg, "en", self._dedup(), runner=boom
+        )
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failed"], ["unexpected"])
+        self.assertIn("RuntimeError", result["errors"]["unexpected"])
+
+    def test_main_survives_unexpected_error_across_sessions(self):
+        # a non-DebriefError in every session must not abort the whole run
+        def boom(argv, data):
+            raise RuntimeError("kaboom")
+
+        self._seed("First normal english sentence here please", "sess-A")
+        self._seed("Second perfectly fine english sentence now", "sess-B")
+        code = debrief.main(runner=boom)
+        self.assertEqual(code, 1)  # failures -> exit 1, but main completed
+
+
+class DedupSnapshotTest(DebriefTestBase):
+    def test_snapshot_read_once_across_nonwriting_sessions(self):
+        from models.grammar import Grammar
+
+        self._seed("a first fine english sentence here please", "sess-A")
+        self._seed("a second fine english sentence here please", "sess-B")
+        runner = runner_from({"triage": "error_result"})  # neither session persists
+        with mock.patch.object(Grammar, "select", wraps=Grammar.select) as spy:
+            debrief.main(runner=runner)
+        self.assertEqual(
+            spy.call_count, 1
+        )  # snapshot read ONCE, reused across sessions
 
 
 class ConfigBlockTest(DebriefTestBase):
