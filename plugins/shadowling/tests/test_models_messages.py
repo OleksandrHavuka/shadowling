@@ -57,6 +57,16 @@ class CaptureTest(MessagesRepoBase):
         self.assertFalse(Messages.capture("", "s"))
         self.assertFalse(Messages.capture(None, "s"))
 
+    def test_no_session_not_stored(self):
+        # provenance is mandatory: an unattributable turn (no session) isn't logged
+        self.assertFalse(
+            Messages.capture("A long enough sentence but no session", None)
+        )
+        self.assertFalse(
+            Messages.capture("Another fine sentence without a session", "")
+        )
+        self.assertEqual(self._rows(), [])
+
     def test_capture_stores_session_id(self):
         Messages.capture("First normal english sentence here please", "sess-A")
         Messages.capture("Second message in another working session", "sess-B")
@@ -128,8 +138,13 @@ class ListNullGroupTest(MessagesRepoBase):
     def setUp(self):
         super().setUp()
         Messages.capture("First normal english sentence here please", "s")
-        Messages.capture("a second null-session message that is long enough", None)
+        # capture() now rejects a session-less turn, so seed the NULL-session row
+        # directly — the defensive NULL-group scoping must still hold if one exists.
         with closing_con() as con, con:
+            con.execute(
+                "INSERT INTO messages(created_at, text, session_id)"
+                " VALUES ('t', 'a second null-session message that is long', NULL)"
+            )
             con.execute("UPDATE messages SET langs = ? WHERE id IN (1, 2)", ('["en"]',))
 
     def test_falsy_session_scopes_to_null_group_not_global(self):

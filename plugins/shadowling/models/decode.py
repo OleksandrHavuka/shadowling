@@ -4,6 +4,8 @@ User-initiated /aha: a phrase that couldn't be read literally, classified as a
 `fixed` expression (memorize) or a `method`/grammar pattern (learnable). For
 `method` the key is the rule, so one rule aggregates across phrases."""
 
+import core
+
 from .base import Model
 
 
@@ -33,5 +35,6 @@ def record(slug, kind, expression, meaning, takeaway, learner_wrote, context):
             "takeaway": takeaway,
             "learner_wrote": learner_wrote,
             "context": context,
-        }
+        },
+        session=core.session_id(),
     )

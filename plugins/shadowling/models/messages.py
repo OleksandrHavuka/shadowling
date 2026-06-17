@@ -32,14 +32,18 @@ class Messages:
     def capture(text, session_id=None):
         """Store the last user message (any language) if it qualifies; dedups
         against the most recent row. Returns True iff stored. The admission rules
-        (empty / slash / command-wrapper / min-letters / dedup) live here, in one
-        place, rather than in the caller."""
+        (empty / slash / command-wrapper / min-letters / no-session / dedup) live
+        here, in one place, rather than in the caller. A turn with no session_id is
+        unattributable, so it is NOT logged — per-session provenance is mandatory
+        (the analysis findings it would produce carry a NOT NULL session_id)."""
         text = (text or "").strip()
         if not text or text.startswith("/"):
             return False
         if text.startswith(COMMAND_WRAPPERS):  # command echoes, not prose
             return False
         if not _enough_letters(text):
+            return False
+        if not session_id:  # provenance is mandatory — can't attribute the turn
             return False
         with closing(connect()) as con, con:
             last = con.execute(

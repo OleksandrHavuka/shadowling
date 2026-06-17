@@ -38,14 +38,21 @@ class Model:
         return slugify(s)
 
     @classmethod
-    def _insert_on(cls, con, values):
+    def _insert_on(cls, con, values, session=None):
         """The full insert body on an ALREADY-OPEN connection — opens no
-        transaction of its own. Normalizes cls.key via cls.key_norm (rejecting a
-        key that normalizes to empty/blank with ValueError), validates cls.enums,
-        INSERTs the date-stamped row, then reads back the running incident count
-        for the key (visible to this same connection inside the caller's
-        transaction). The single chokepoint, reusable both standalone
-        (insert()) and inside a caller's tx (insert(values, con=...))."""
+        transaction of its own. Stamps mandatory per-session provenance (raises
+        ValueError on a falsy `session` — the session_id column is NOT NULL),
+        normalizes cls.key via cls.key_norm (rejecting a key that normalizes to
+        empty/blank with ValueError), validates cls.enums, INSERTs the
+        date+session-stamped row, then reads back the running incident count for
+        the key (visible to this same connection inside the caller's transaction).
+        The single chokepoint, reusable both standalone (insert()) and inside a
+        caller's tx (insert(values, con=..., session=...))."""
+        if not session:
+            raise ValueError(
+                f"{cls.__name__}: session_id is required (per-session provenance "
+                "is mandatory)"
+            )
         key = cls.key_norm(values[cls.key])
         if not key:
             raise ValueError(
@@ -59,8 +66,8 @@ class Model:
                 raise ValueError(
                     f"{cls.__name__}: {col}={val!r} is not one of {sorted(allowed)}"
                 )
-        cols = ["created_at"] + list(cls.insert_cols)
-        row = [today()] + [values[c] for c in cls.insert_cols]
+        cols = ["created_at", "session_id"] + list(cls.insert_cols)
+        row = [today(), session] + [values[c] for c in cls.insert_cols]
         sql = "INSERT INTO {}({}) VALUES ({})".format(
             cls.table, ", ".join(f'"{c}"' for c in cols), ", ".join("?" for _ in cols)
         )
@@ -71,21 +78,23 @@ class Model:
         ).fetchone()[0]
 
     @classmethod
-    def insert(cls, values, con=None):
-        """values: dict over insert_cols. Returns the incident count for the
-        record's key AFTER the insert (1 = first occurrence). With con=None opens
-        its own connection + transaction; given a caller's open `con`, the write
-        joins their transaction (the debrief driver's per-session tx) so a partial
-        session never persists. The body is _insert_on (the count read sits inside
-        the commit block — same value, same-connection visibility). Mirrors the
-        con= pattern of Vocab.relearn. A ValueError (empty key / bad enum) prints
-        to stderr via the entrypoint, or rolls back the caller's whole tx."""
+    def insert(cls, values, con=None, session=None):
+        """values: dict over insert_cols; `session` stamps mandatory per-session
+        provenance (required — the session_id column is NOT NULL). Returns the
+        incident count for the record's key AFTER the insert (1 = first
+        occurrence). With con=None opens its own connection + transaction; given a
+        caller's open `con`, the write joins their transaction (the debrief
+        driver's per-session tx) so a partial session never persists. The body is
+        _insert_on (the count read sits inside the commit block — same value,
+        same-connection visibility). Mirrors the con= pattern of Vocab.relearn. A
+        ValueError (missing session / empty key / bad enum) prints to stderr via
+        the entrypoint, or rolls back the caller's whole tx."""
         if con is not None:
-            return cls._insert_on(con, values)
+            return cls._insert_on(con, values, session)
         con = connect()
         try:
             with con:
-                return cls._insert_on(con, values)
+                return cls._insert_on(con, values, session)
         finally:
             con.close()
 

@@ -1,5 +1,7 @@
 """models/verbs.py - irregular-verb incidents (append-only) + record fan-out."""
 
+import core
+
 from .base import Model, norm_key
 
 
@@ -23,5 +25,6 @@ def record(verb, past, participle, used_form, correction, context):
             "used_form": used_form,
             "correction": correction,
             "context": context,
-        }
+        },
+        session=core.session_id(),
     )

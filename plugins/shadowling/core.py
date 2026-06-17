@@ -143,6 +143,15 @@ def now():
     return datetime.now().isoformat(timespec="seconds")
 
 
+def session_id():
+    """The ambient Claude Code session id (None if unset) — the single source for
+    stamping per-session provenance on an INTERACTIVE incident write (the record()
+    wrappers run inside the user's session). The headless debrief driver does NOT
+    use this: it passes each analysed message's own session explicitly, since one
+    cron run spans many sessions."""
+    return os.environ.get("CLAUDE_CODE_SESSION_ID")
+
+
 def slugify(s):
     """Canonical kebab-case slug key, robust to whatever the LLM emits.
 

@@ -2,6 +2,8 @@
 
 Natural key: the idiom phrase, normalized (casefold + whitespace collapse)."""
 
+import core
+
 from .base import Model, norm_key
 
 
@@ -23,5 +25,6 @@ def record(idiom, meaning, context, learner_wrote):
             "meaning": meaning,
             "context": context,
             "learner_wrote": learner_wrote,
-        }
+        },
+        session=core.session_id(),
     )

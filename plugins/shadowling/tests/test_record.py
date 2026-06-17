@@ -11,9 +11,12 @@ class RecordTestBase(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp()
         os.environ["SHADOWLING_HOME"] = self.home
+        # record() stamps the ambient session via core.session_id() (mandatory)
+        os.environ["CLAUDE_CODE_SESSION_ID"] = "sess-test"
 
     def tearDown(self):
         os.environ.pop("SHADOWLING_HOME", None)
+        os.environ.pop("CLAUDE_CODE_SESSION_ID", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
     def _incidents(self, table):

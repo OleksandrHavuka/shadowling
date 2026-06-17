@@ -1,3 +1,6 @@
 {
-  "hooks": {}
+  "hooks": {},
+  "enabledPlugins": {
+    "pyright-lsp@claude-plugins-official": true
+  }
 }

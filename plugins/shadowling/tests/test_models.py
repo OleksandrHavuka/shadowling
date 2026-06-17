@@ -18,7 +18,7 @@ class ModelTestBase(unittest.TestCase):
         os.environ.pop("SHADOWLING_HOME", None)
         shutil.rmtree(self.home, ignore_errors=True)
 
-    def _insert(self, slug, original="a", fixed="b"):
+    def _insert(self, slug, original="a", fixed="b", session="sess-test"):
         return Grammar.insert(
             {
                 "slug": slug,
@@ -26,7 +26,8 @@ class ModelTestBase(unittest.TestCase):
                 "original": original,
                 "fixed": fixed,
                 "rule": "r",
-            }
+            },
+            session=session,
         )
 
 
@@ -112,7 +113,8 @@ class InsertEnumValidationTest(ModelTestBase):
                 "takeaway": "t",
                 "learner_wrote": "lw",
                 "context": "c",
-            }
+            },
+            session="sess-test",
         )
 
     def _friction(self, type_):
@@ -124,7 +126,8 @@ class InsertEnumValidationTest(ModelTestBase):
                 "learner_wrote": "lw",
                 "native_phrase": "np",
                 "context": "c",
-            }
+            },
+            session="sess-test",
         )
 
     def test_decode_valid_type_passes(self):
@@ -157,7 +160,8 @@ class LatestRowColumnsTest(ModelTestBase):
                     "original": "old-a",
                     "fixed": "old-b",
                     "rule": "r",
-                }
+                },
+                session="sess-test",
             )
         with mock.patch("models.base.today", return_value="2026-06-09"):
             Grammar.insert(
@@ -167,7 +171,8 @@ class LatestRowColumnsTest(ModelTestBase):
                     "original": "new-a",
                     "fixed": "new-b",
                     "rule": "r",
-                }
+                },
+                session="sess-test",
             )
         row = Grammar.select("s1")
         self.assertEqual(row["counter"], 2)
@@ -177,6 +182,27 @@ class LatestRowColumnsTest(ModelTestBase):
         self.assertEqual(row["fixed"], "new-b")
         self.assertEqual(row["problem"], "new problem")  # ALSO from newest
         self.assertNotIn("last_id", row)
+
+
+class SessionStampTest(ModelTestBase):
+    def test_insert_stamps_session(self):
+        import appdb
+
+        self._insert("s1", session="sess-A")
+        rows = appdb.query("SELECT session_id FROM grammar")
+        self.assertEqual([r["session_id"] for r in rows], ["sess-A"])
+
+    def test_insert_without_session_raises(self):
+        with self.assertRaises(ValueError):
+            Grammar.insert(
+                {
+                    "slug": "s1",
+                    "problem": "p",
+                    "original": "a",
+                    "fixed": "b",
+                    "rule": "r",
+                }
+            )
 
 
 class InsertConTest(ModelTestBase):
@@ -201,6 +227,7 @@ class InsertConTest(ModelTestBase):
                             "rule": "r",
                         },
                         con=con,
+                        session="sess-test",
                     ),
                     1,
                 )
@@ -214,6 +241,7 @@ class InsertConTest(ModelTestBase):
                             "rule": "r",
                         },
                         con=con,
+                        session="sess-test",
                     ),
                     2,
                 )
@@ -236,6 +264,7 @@ class InsertConTest(ModelTestBase):
                         "rule": "r",
                     },
                     con=con,
+                    session="sess-test",
                 )
         finally:
             con.close()
@@ -257,6 +286,7 @@ class InsertConTest(ModelTestBase):
                             "rule": "r",
                         },
                         con=con,
+                        session="sess-test",
                     )
         finally:
             con.close()
@@ -285,6 +315,7 @@ class AtomicSessionRollbackTest(ModelTestBase):
                             "rule": "r",
                         },
                         con=con,
+                        session="sess-test",
                     )
                     Friction.insert(
                         {
@@ -296,6 +327,7 @@ class AtomicSessionRollbackTest(ModelTestBase):
                             "context": "c",
                         },
                         con=con,
+                        session="sess-test",
                     )
                     Messages.mark_processed("sess-A", con=con)
         finally:

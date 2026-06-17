@@ -1,5 +1,7 @@
 """models/grammar.py - grammar incidents (append-only) + record fan-out."""
 
+import core
+
 from .base import Model
 
 
@@ -18,5 +20,6 @@ def record(slug, problem, original, fixed, rule):
             "original": original,
             "fixed": fixed,
             "rule": rule,
-        }
+        },
+        session=core.session_id(),
     )

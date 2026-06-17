@@ -4,6 +4,8 @@ Places where the user bails from the learning language into their native
 language, keyed by zone slug and classified by the five-value taxonomy
 (lexical/phrasal/structural/topical/register)."""
 
+import core
+
 from .base import Model
 
 
@@ -24,5 +26,6 @@ def record(slug, kind, zone, learner_wrote, native_phrase, context):
             "learner_wrote": learner_wrote,
             "native_phrase": native_phrase,
             "context": context,
-        }
+        },
+        session=core.session_id(),
     )
