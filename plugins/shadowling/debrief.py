@@ -19,6 +19,7 @@ import shutil
 import sqlite3
 import subprocess
 import sys
+import time
 import typing
 
 import core
@@ -39,7 +40,15 @@ from skillio import render
 # sonnet for the analytical specialists.
 HAIKU = "claude-haiku-4-5"
 SONNET = "claude-sonnet-4-6"
-CLAUDE_TIMEOUT = 180  # seconds per headless call
+# Sonnet 4.6's `--effort` knob controls thinking depth AND total token spend; the CLI
+# default is `high`, which makes each analytical call burn ~100-140s. The five
+# specialists are subagent-style structured-extraction tasks, so `medium` roughly
+# halves wall-time with negligible quality loss (measured: ~56s vs ~120s, 11 vs 10-12
+# findings). NOT passed to the haiku triage call — effort errors on Haiku 4.5.
+SPECIALIST_EFFORT = "medium"
+CLAUDE_TIMEOUT = 300  # 5 min per headless call — friction (the heaviest specialist)
+# can cross 3 min on a large session; 5 min keeps a slow-but-valid call from being
+# killed. A genuine hang is still bounded (timeout -> DebriefError -> session pending).
 
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
 
@@ -138,16 +147,25 @@ def _run_triage(session, cfg, *, runner=None):
         batch = Messages.list(session=session, untagged=True, limit=TRIAGE_BATCH)
         if not batch:
             return
+        _log(f"    → triage {len(batch)} msg(s)")
+        t0 = time.monotonic()
         data = "\n".join(
             [
                 _config_block(cfg),
                 _messages_block(batch, ["id", "text"]),
             ]
         )
-        out = _run_claude(_prompt("triage"), data, TRIAGE_SCHEMA, HAIKU, runner=runner)
-        valid_ids = {row["id"] for row in batch}
-        clean = _validate_triage(out.get("tags", []), valid_ids)
+        try:
+            out = _run_claude(
+                _prompt("triage"), data, TRIAGE_SCHEMA, HAIKU, runner=runner
+            )
+            valid_ids = {row["id"] for row in batch}
+            clean = _validate_triage(out.get("tags", []), valid_ids)
+        except DebriefError as e:
+            _log(f"    ✗ triage ERROR {time.monotonic() - t0:.0f}s — {e}")
+            raise
         Messages.tag(clean)
+        _log(f"    ✓ triage OK {time.monotonic() - t0:.0f}s ({len(clean)} tagged)")
 
 
 def _findings_schema(*cols, enums=None, extra=None):
@@ -266,24 +284,54 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
     return jobs
 
 
+def _log(msg):
+    """Emit a per-specialist progress line to STDERR (flushed). main streams the
+    per-session summary to STDOUT; the in-flight detail (which of the five
+    specialists is running, how long each took, which failed) goes to STDERR — so the
+    relayed STDOUT summary stays byte-identical while a 1-2 min fan-out is no longer a
+    dark, frozen line."""
+    print(msg, file=sys.stderr, flush=True)
+
+
 def _fan_out(jobs, *, runner=None):
     """Run the five specialists in parallel (one claude subprocess each; NO DB I/O
     in the workers). Returns (findings_by_category, failed) where `failed` maps a
     failed category -> the DebriefError reason; the rest land in `findings`. A
     specialist returning {"findings": []} is a SUCCESS — the gate is valid JSON
-    returned, not non-empty findings."""
+    returned, not non-empty findings. Each specialist's launch, duration, and
+    OK/ERROR streams to STDERR (see _log) so a slow fan-out is visible live instead of
+    a frozen per-session line. Specialists run at SPECIALIST_EFFORT (they are sonnet;
+    effort is NOT passed to the haiku triage call, which rejects it)."""
     findings, failed = {}, {}
+    started = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        futures = {
-            pool.submit(_run_claude, sp, data, schema, model, runner=runner): cat
-            for cat, (sp, data, schema, model) in jobs.items()
-        }
+        futures = {}
+        for cat, (sp, data, schema, model) in jobs.items():
+            started[cat] = time.monotonic()
+            futures[
+                pool.submit(
+                    _run_claude,
+                    sp,
+                    data,
+                    schema,
+                    model,
+                    runner=runner,
+                    effort=SPECIALIST_EFFORT,
+                )
+            ] = cat
+            _log(f"    → {cat} running (effort={SPECIALIST_EFFORT})")
         for fut in concurrent.futures.as_completed(futures):
             cat = futures[fut]
+            dt = time.monotonic() - started[cat]
             try:
                 findings[cat] = fut.result()
+                _log(
+                    f"    ✓ {cat} OK {dt:.0f}s "
+                    f"({len(findings[cat].get('findings', []))} finding(s))"
+                )
             except DebriefError as e:
                 failed[cat] = str(e)
+                _log(f"    ✗ {cat} ERROR {dt:.0f}s — {e}")
     return findings, failed
 
 
@@ -511,13 +559,16 @@ def _resolve_claude():
     return None
 
 
-def _run_claude(system_prompt, data, schema, model, *, runner=None):
+def _run_claude(system_prompt, data, schema, model, *, runner=None, effort=None):
     """Run one headless `claude -p` analysis call and return its validated
     structured_output. `data` (the bulk slice + dedup context) goes on STDIN; only
-    the small static role goes in --system-prompt. `runner` is the injectable
-    subprocess seam: None in production (real subprocess.run after a
-    _resolve_claude() pre-flight), a fake in tests. Raises DebriefError on a
-    missing claude, a timeout, or any unexpected output shape."""
+    the small static role goes in --system-prompt. `effort` (when set) appends
+    `--effort <level>` to cap thinking depth + token spend — pass it for the sonnet
+    specialists (SPECIALIST_EFFORT), omit it for the haiku triage call (Haiku 4.5
+    rejects the flag). `runner` is the injectable subprocess seam: None in production
+    (real subprocess.run after a _resolve_claude() pre-flight), a fake in tests.
+    Raises DebriefError on a missing claude, a timeout, or any unexpected output
+    shape."""
     claude = "claude"
     if runner is None:
         claude = _resolve_claude()
@@ -541,6 +592,8 @@ def _run_claude(system_prompt, data, schema, model, *, runner=None):
         "--max-turns",
         "4",
     ]
+    if effort is not None:
+        argv += ["--effort", effort]
     try:
         stdout = runner(argv, data)
     except subprocess.TimeoutExpired as e:

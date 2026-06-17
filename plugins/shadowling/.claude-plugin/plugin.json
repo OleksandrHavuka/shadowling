@@ -1,7 +1,7 @@
 {
   "name": "shadowling",
   "description": "Passive language learning: add words with /loot (remove with /drop) and Claude glosses them inline in its replies, while /debrief turns your writing in the language you're learning into personal grammar/phrasing/idiom/irregular-verb frequency docs",
-  "version": "0.11.0",
+  "version": "0.12.1",
   "author": {
     "name": "Oleksandr Havuka",
     "email": "7580678+OleksandrHavuka@users.noreply.github.com"

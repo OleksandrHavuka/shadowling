@@ -187,6 +187,35 @@ class RunClaudeTest(DebriefTestBase):
                 "r", "d", TRIVIAL_SCHEMA, "claude-haiku-4-5", runner=boom
             )
 
+    def test_effort_flag_included_when_passed(self):
+        seen = {}
+
+        def runner(argv, data):
+            seen["argv"] = argv
+            return _event_array({"code": "en"})
+
+        debrief._run_claude(
+            "r",
+            "d",
+            TRIVIAL_SCHEMA,
+            "claude-sonnet-4-6",
+            runner=runner,
+            effort="medium",
+        )
+        argv = seen["argv"]
+        self.assertEqual(argv[argv.index("--effort") + 1], "medium")
+
+    def test_effort_flag_absent_by_default(self):
+        # the haiku triage call passes no effort; Haiku 4.5 rejects --effort
+        seen = {}
+
+        def runner(argv, data):
+            seen["argv"] = argv
+            return _event_array({"code": "en"})
+
+        debrief._run_claude("r", "d", TRIVIAL_SCHEMA, "claude-haiku-4-5", runner=runner)
+        self.assertNotIn("--effort", seen["argv"])
+
 
 class ResolveClaudeTest(DebriefTestBase):
     def test_prefers_claude_on_path(self):
@@ -321,6 +350,45 @@ class RunTriageTest(DebriefTestBase):
             debrief._run_triage("sess-A", cfg, runner=runner)
         self.assertIsNone(appdb.query("SELECT langs FROM messages")[0]["langs"])
 
+    def test_triage_call_omits_effort(self):
+        # triage runs on haiku, which rejects --effort; the flag must not be sent
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        seen = {}
+
+        def runner(argv, data):
+            seen["argv"] = argv
+            return _event_array({"tags": [{"id": 1, "langs": ["en"]}]})
+
+        debrief._run_triage("sess-A", cfg, runner=runner)
+        self.assertNotIn("--effort", seen["argv"])
+
+    def test_logs_triage_completion_to_stderr(self):
+        import io
+        from contextlib import redirect_stderr
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from({"triage": {"tags": [{"id": 1, "langs": ["en"]}]}})
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            debrief._run_triage("sess-A", cfg, runner=runner)
+        err = buf.getvalue()
+        self.assertIn("triage", err)
+        self.assertIn("OK", err)  # completion, not just the start line
+
+    def test_logs_triage_error_to_stderr(self):
+        import io
+        from contextlib import redirect_stderr
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from({"triage": "error_result"})
+        buf = io.StringIO()
+        with redirect_stderr(buf), self.assertRaises(debrief.DebriefError):
+            debrief._run_triage("sess-A", cfg, runner=runner)
+        self.assertIn("ERROR", buf.getvalue())
+
 
 class BuildJobsTest(DebriefTestBase):
     def _jobs(self):
@@ -392,6 +460,46 @@ class FanOutTest(DebriefTestBase):
         self.assertIn("grammar", failed)
         self.assertTrue(failed["grammar"])  # carries a reason
         self.assertNotIn("grammar", findings)
+
+    def test_specialists_run_at_specialist_effort(self):
+        # every specialist call carries --effort SPECIALIST_EFFORT (all are sonnet)
+        seen = []
+
+        def runner(argv, data):
+            seen.append(argv)
+            kind = _schema_kind(argv)
+            val = (
+                {"findings": [], "loot": []} if kind == "friction" else {"findings": []}
+            )
+            return _event_array(val)
+
+        debrief._fan_out(self._jobs(), runner=runner)
+        self.assertEqual(len(seen), 5)
+        for argv in seen:
+            self.assertEqual(
+                argv[argv.index("--effort") + 1], debrief.SPECIALIST_EFFORT
+            )
+
+    def test_streams_per_specialist_progress_to_stderr(self):
+        import io
+        from contextlib import redirect_stderr
+
+        runner = runner_from(
+            {
+                "grammar": "error_result",
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {"findings": [], "loot": []},
+            }
+        )
+        buf = io.StringIO()
+        with redirect_stderr(buf):
+            debrief._fan_out(self._jobs(), runner=runner)
+        err = buf.getvalue()
+        self.assertIn("grammar", err)
+        self.assertIn("ERROR", err)  # grammar failed -> surfaced live
+        self.assertIn("rephrasing", err)  # a succeeding specialist is logged too
 
 
 def _findings(grammar=(), rephrasing=(), idioms=(), verbs=(), friction=()):
@@ -610,10 +718,10 @@ class SummaryTest(DebriefTestBase):
             "sess-A",
             ok=False,
             failed=["grammar"],
-            errors={"grammar": "claude timed out after 180s"},
+            errors={"grammar": "claude timed out after 300s"},
         )
         self.assertEqual(
-            debrief._session_status(r), "ERROR grammar — claude timed out after 180s"
+            debrief._session_status(r), "ERROR grammar — claude timed out after 300s"
         )
 
     def test_totals_line_with_and_without_failures(self):
