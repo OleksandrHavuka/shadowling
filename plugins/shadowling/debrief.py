@@ -140,89 +140,59 @@ def _run_triage(session, cfg, *, runner=None):
         Messages.tag(clean)
 
 
-def _findings_schema(*cols):
-    """A {"findings": [ {col: string, ...} ]} object schema; each finding's keys
-    equal the target model's insert_cols, so a finding maps straight into
-    insert_with_con. additionalProperties:false and all-required everywhere."""
+def _findings_schema(*cols, enums=None, extra=None):
+    """Build a {"findings": [ {col: string|enum, ...} ]} schema from a model's
+    column list, so the schema is GENERATED from insert_cols and can't drift from
+    it. `enums` ({col: iterable}) gives a column an `enum`; `extra` ({prop:
+    subschema}) adds top-level properties (friction's `loot`). all-required,
+    additionalProperties:false everywhere."""
+    enums = enums or {}
+    extra = extra or {}
+    props = {
+        c: (
+            {"type": "string", "enum": sorted(enums[c])}
+            if c in enums
+            else {"type": "string"}
+        )
+        for c in cols
+    }
+    item = {
+        "type": "object",
+        "additionalProperties": False,
+        "required": list(cols),
+        "properties": props,
+    }
     return {
         "type": "object",
         "additionalProperties": False,
-        "required": ["findings"],
-        "properties": {
-            "findings": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "additionalProperties": False,
-                    "required": list(cols),
-                    "properties": {c: {"type": "string"} for c in cols},
-                },
-            }
-        },
+        "required": ["findings", *extra],
+        "properties": {"findings": {"type": "array", "items": item}, **extra},
     }
 
 
-GRAMMAR_SCHEMA = _findings_schema("slug", "problem", "original", "fixed", "rule")
-REPHRASING_SCHEMA = _findings_schema(
-    "slug", "problem", "learner_wrote", "native_phrase", "why"
-)
-IDIOMS_SCHEMA = _findings_schema("idiom", "meaning", "context", "learner_wrote")
-VERBS_SCHEMA = _findings_schema(
-    "verb", "past", "participle", "used_form", "correction", "context"
-)
-# friction adds a `type` enum (matches Friction.enums; a stray value is also
-# caught at persist by the model-layer enum check) and a top-level `loot` array.
-FRICTION_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["findings", "loot"],
-    "properties": {
-        "findings": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": [
-                    "slug",
-                    "type",
-                    "zone",
-                    "learner_wrote",
-                    "native_phrase",
-                    "context",
-                ],
-                "properties": {
-                    "slug": {"type": "string"},
-                    "type": {
-                        "type": "string",
-                        "enum": [
-                            "lexical",
-                            "phrasal",
-                            "structural",
-                            "topical",
-                            "register",
-                        ],
-                    },
-                    "zone": {"type": "string"},
-                    "learner_wrote": {"type": "string"},
-                    "native_phrase": {"type": "string"},
-                    "context": {"type": "string"},
-                },
-            },
-        },
-        "loot": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "additionalProperties": False,
-                "required": ["word", "translation"],
-                "properties": {
-                    "word": {"type": "string"},
-                    "translation": {"type": "string"},
-                },
-            },
+# A {word, translation} pair array — friction's vocabulary loot.
+_PAIRS_SCHEMA = {
+    "type": "array",
+    "items": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["word", "translation"],
+        "properties": {
+            "word": {"type": "string"},
+            "translation": {"type": "string"},
         },
     },
 }
+
+# Every schema is derived from the model that persists it: the finding keys ARE
+# the model's insert_cols, and friction's `type` enum IS Friction.enums["type"].
+GRAMMAR_SCHEMA = _findings_schema(*Grammar.insert_cols)
+REPHRASING_SCHEMA = _findings_schema(*Rephrasing.insert_cols)
+IDIOMS_SCHEMA = _findings_schema(*Idioms.insert_cols)
+VERBS_SCHEMA = _findings_schema(*Verbs.insert_cols)
+FRICTION_SCHEMA = _findings_schema(
+    *Friction.insert_cols, enums=Friction.enums, extra={"loot": _PAIRS_SCHEMA}
+)
 
 CATEGORIES = ("grammar", "rephrasing", "idioms", "verbs", "friction")
 

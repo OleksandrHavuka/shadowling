@@ -233,6 +233,36 @@ class TriageSchemaTest(DebriefTestBase):
         self.assertEqual(set(langs["items"]["enum"]), set(langcodes.CODES))
 
 
+class SchemaContractTest(DebriefTestBase):
+    def test_findings_keys_equal_insert_cols(self):
+        from models.grammar import Grammar
+        from models.idioms import Idioms
+        from models.rephrasing import Rephrasing
+        from models.verbs import Verbs
+
+        cases = [
+            (debrief.GRAMMAR_SCHEMA, Grammar),
+            (debrief.REPHRASING_SCHEMA, Rephrasing),
+            (debrief.IDIOMS_SCHEMA, Idioms),
+            (debrief.VERBS_SCHEMA, Verbs),
+        ]
+        for schema, model in cases:
+            item = schema["properties"]["findings"]["items"]
+            self.assertEqual(item["required"], list(model.insert_cols))
+            self.assertEqual(set(item["properties"]), set(model.insert_cols))
+
+    def test_friction_keys_enum_and_loot(self):
+        from models.friction import Friction
+
+        item = debrief.FRICTION_SCHEMA["properties"]["findings"]["items"]
+        self.assertEqual(item["required"], list(Friction.insert_cols))
+        self.assertEqual(
+            set(item["properties"]["type"]["enum"]), Friction.enums["type"]
+        )
+        self.assertIn("loot", debrief.FRICTION_SCHEMA["properties"])
+        self.assertIn("loot", debrief.FRICTION_SCHEMA["required"])
+
+
 class RunTriageTest(DebriefTestBase):
     def test_loop_tags_then_stops(self):
         from models.messages import Messages
