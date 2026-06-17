@@ -16,10 +16,18 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 
 import core
+from appdb import connect, tx
+from models.friction import Friction
+from models.grammar import Grammar
+from models.idioms import Idioms
 from models.messages import Messages
+from models.rephrasing import Rephrasing
+from models.verbs import Verbs
+from models.vocab import Vocab
 from skillio import render
 
 # The spec-verified model ids (claude 2.1.178, 2026-06-16/17): haiku for triage +
@@ -320,6 +328,90 @@ def _fan_out(jobs, *, runner=None):
             except DebriefError:
                 failed.append(cat)
     return findings, sorted(failed)
+
+
+def _result(session, *, ok, failed=(), empty=False, error=None):
+    """One per-session result row for the run summary."""
+    return {
+        "session": session,
+        "ok": ok,
+        "failed": list(failed),
+        "empty": empty,
+        "error": error,
+    }
+
+
+def _persist(session, findings, loot):
+    """Write a whole session in ONE per-session transaction: all five categories'
+    findings + friction's loot + the processed-mark. Opened only AFTER all the
+    slow LLM work, so it does not block other writers across the analysis; tx()
+    (BEGIN IMMEDIATE) makes a concurrent capture-hook writer wait rather than
+    interleave. Any failure (a ValueError from a finding's key/enum check, or a
+    SQLite error) rolls the WHOLE session back — no partial write — and the next
+    /debrief re-lists and re-runs it cleanly."""
+    con = connect()  # fresh connection (cheap re-check; not the read-phase one)
+    try:
+        with tx(con):
+            for item in findings["grammar"]:
+                Grammar.insert_with_con(item, con)
+            for item in findings["rephrasing"]:
+                Rephrasing.insert_with_con(item, con)
+            for item in findings["idioms"]:
+                Idioms.insert_with_con(item, con)
+            for item in findings["verbs"]:
+                Verbs.insert_with_con(item, con)
+            for item in findings["friction"]:
+                Friction.insert_with_con(item, con)
+            for pair in loot:
+                Vocab.add_with_con(pair["word"], pair["translation"], con)
+            Messages.mark_processed_with_con(session, con)
+    finally:
+        con.close()
+
+
+def _run_session(session, cfg, lang, *, runner=None):
+    """Process ONE session: triage -> per-language slice gate -> 5-way parallel
+    specialist analysis -> atomic persist. Returns a _result dict. Nothing is
+    persisted unless ALL five specialists succeed; a failure anywhere (triage,
+    a specialist, or persist) leaves the session pending for the next run."""
+    try:
+        _run_triage(session, cfg, runner=runner)
+    except DebriefError as e:
+        return _result(session, ok=False, failed=["triage"], error=str(e))
+
+    lang_slice = Messages.list(session=session, lang=lang)
+    if not lang_slice:
+        # Empty-language gate: triage tagged every row but none carries the
+        # learning-language code, so neither the lang specialists nor friction's
+        # code-switching analysis have anything. Persist just the processed-mark
+        # (the tagged rows must not stay pending) and return OK.
+        try:
+            _persist(session, {c: [] for c in CATEGORIES}, [])
+        except (ValueError, sqlite3.Error) as e:
+            return _result(session, ok=False, failed=["persist"], error=str(e))
+        return _result(session, ok=True, empty=True)
+
+    # All DB reads here, on the MAIN thread, before the fan-out.
+    full_slice = Messages.list(session=session)
+    dedup = {
+        "grammar": Grammar.select(),
+        "rephrasing": Rephrasing.select(),
+        "idioms": Idioms.select(),
+        "verbs": Verbs.select(),
+        "friction": Friction.select(),
+    }
+    jobs = _build_jobs(cfg, lang, lang_slice, full_slice, dedup)
+    findings, failed = _fan_out(jobs, runner=runner)
+    if failed:
+        return _result(session, ok=False, failed=failed)
+
+    persist_findings = {c: findings[c]["findings"] for c in CATEGORIES}
+    loot = findings["friction"].get("loot", [])
+    try:
+        _persist(session, persist_findings, loot)
+    except (ValueError, sqlite3.Error) as e:
+        return _result(session, ok=False, failed=["persist"], error=str(e))
+    return _result(session, ok=True)
 
 
 class DebriefError(Exception):

@@ -344,5 +344,174 @@ class FanOutTest(DebriefTestBase):
         self.assertNotIn("grammar", findings)
 
 
+def _findings(grammar=(), rephrasing=(), idioms=(), verbs=(), friction=()):
+    return {
+        "grammar": list(grammar),
+        "rephrasing": list(rephrasing),
+        "idioms": list(idioms),
+        "verbs": list(verbs),
+        "friction": list(friction),
+    }
+
+
+class PersistTest(DebriefTestBase):
+    def setUp(self):
+        super().setUp()
+        self._seed("First normal english sentence here please", "sess-A")
+        from models.messages import Messages
+
+        Messages.tag([{"id": "1", "langs": "en"}])
+
+    def test_persists_all_categories_loot_and_mark_in_one_tx(self):
+        findings = _findings(
+            grammar=[
+                {
+                    "slug": "art",
+                    "problem": "p",
+                    "original": "a",
+                    "fixed": "b",
+                    "rule": "r",
+                }
+            ],
+            friction=[
+                {
+                    "slug": "z",
+                    "type": "register",
+                    "zone": "zn",
+                    "learner_wrote": "lw",
+                    "native_phrase": "np",
+                    "context": "c",
+                }
+            ],
+        )
+        debrief._persist(
+            "sess-A", findings, [{"word": "hello", "translation": "привіт"}]
+        )
+        self.assertEqual(len(appdb.query("SELECT * FROM grammar")), 1)
+        self.assertEqual(len(appdb.query("SELECT * FROM friction")), 1)
+        self.assertEqual(
+            appdb.query("SELECT translation FROM vocab WHERE word='hello'")[0][
+                "translation"
+            ],
+            "привіт",
+        )
+        self.assertIsNotNone(
+            appdb.query("SELECT processed_at FROM messages WHERE id=1")[0][
+                "processed_at"
+            ]
+        )
+
+    def test_bad_finding_rolls_everything_back_and_leaves_session_pending(self):
+        findings = _findings(
+            grammar=[
+                {
+                    "slug": "art",
+                    "problem": "p",
+                    "original": "a",
+                    "fixed": "b",
+                    "rule": "r",
+                }
+            ],
+            friction=[
+                {
+                    "slug": "z",
+                    "type": "bogus",
+                    "zone": "zn",
+                    "learner_wrote": "lw",
+                    "native_phrase": "np",
+                    "context": "c",
+                }
+            ],
+        )
+        with self.assertRaises(ValueError):
+            debrief._persist("sess-A", findings, [])
+        self.assertEqual(appdb.query("SELECT * FROM grammar"), [])
+        self.assertIsNone(
+            appdb.query("SELECT processed_at FROM messages WHERE id=1")[0][
+                "processed_at"
+            ]
+        )
+
+
+class RunSessionTest(DebriefTestBase):
+    def _all_success_runner(self):
+        return runner_from(
+            {
+                "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
+                "grammar": {
+                    "findings": [
+                        {
+                            "slug": "art",
+                            "problem": "p",
+                            "original": "a",
+                            "fixed": "b",
+                            "rule": "r",
+                        }
+                    ]
+                },
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {"findings": [], "loot": []},
+            }
+        )
+
+    def test_full_session_tags_persists_and_marks(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        result = debrief._run_session(
+            "sess-A", cfg, "en", runner=self._all_success_runner()
+        )
+        self.assertTrue(result["ok"])
+        self.assertEqual(len(appdb.query("SELECT * FROM grammar")), 1)
+        self.assertEqual(Messages.pending_count(), 0)
+
+    def test_empty_language_session_just_marks(self):
+        from models.messages import Messages
+
+        self._seed("суто українське повідомлення без англійської", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from({"triage": {"tags": [{"id": 1, "langs": ["uk"]}]}})
+        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        self.assertTrue(result["ok"])
+        self.assertTrue(result["empty"])
+        self.assertEqual(appdb.query("SELECT * FROM grammar"), [])
+        self.assertEqual(Messages.pending_count(), 0)  # tagged row marked, not pending
+
+    def test_specialist_failure_persists_nothing_and_leaves_pending(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from(
+            {
+                "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
+                "grammar": "error_result",
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {"findings": [], "loot": []},
+            }
+        )
+        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failed"], ["grammar"])
+        self.assertEqual(appdb.query("SELECT * FROM grammar"), [])
+        self.assertEqual(Messages.pending_count(), 1)  # tagged but unprocessed -> retry
+
+    def test_triage_failure_leaves_session_pending(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from({"triage": "error_result"})
+        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failed"], ["triage"])
+        self.assertEqual(Messages.pending_count(), 1)
+
+
 if __name__ == "__main__":
     unittest.main()
