@@ -277,5 +277,40 @@ class ReadOnlyQueryTest(MessagesRepoBase):
             appdb.query("DELETE FROM messages")
 
 
+class MarkProcessedWithConTest(MessagesRepoBase):
+    def setUp(self):
+        super().setUp()
+        Messages.capture("First normal english sentence here please", "sess-A")
+        Messages.capture("Second message in another working session", "sess-B")
+
+    def test_mark_with_con_stamps_inside_caller_tx(self):
+        Messages.tag([{"id": "1", "langs": "en"}])  # only sess-A tagged
+        con = appdb.connect()
+        try:
+            with appdb.tx(con):
+                out = Messages.mark_processed_with_con("sess-A", con)
+        finally:
+            con.close()
+        self.assertEqual(out["processed"], 1)
+        rows = appdb.query(
+            "SELECT id, processed_at IS NOT NULL AS p FROM messages ORDER BY id"
+        )
+        self.assertEqual([(r["id"], r["p"]) for r in rows], [(1, 1), (2, 0)])
+
+    def test_mark_with_con_rolls_back_with_caller_tx(self):
+        Messages.tag([{"id": "1", "langs": "en"}])
+        con = appdb.connect()
+        try:
+            with self.assertRaises(RuntimeError):
+                with appdb.tx(con):
+                    Messages.mark_processed_with_con("sess-A", con)
+                    raise RuntimeError("caller aborts the tx")
+        finally:
+            con.close()
+        # rollback: row 1 stays unprocessed
+        rows = appdb.query("SELECT processed_at FROM messages WHERE id = 1")
+        self.assertIsNone(rows[0]["processed_at"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -121,11 +121,13 @@ class Messages:
         return ok
 
     @staticmethod
-    def mark_processed(session=None):
-        """Stamp tagged+unprocessed rows (and drill rows — excluded from analysis
-        but must not stay pending forever); untagged natural rows stay. A
-        non-empty `session` scopes to that session; a falsy `session` scopes to
-        the bounded NULL-session group (`session_id IS NULL`) — never global."""
+    def _mark_processed_on(con, session=None):
+        """The full mark_processed body on an ALREADY-OPEN connection — opens no
+        transaction of its own. Stamps tagged+unprocessed rows (and drill rows —
+        excluded from analysis but must not stay pending forever); untagged
+        natural rows stay. A non-empty `session` scopes to that session; a falsy
+        `session` scopes to the bounded NULL-session group (`session_id IS NULL`)
+        — never global. Returns {"processed", "kept"}."""
         sql = (
             "UPDATE messages SET processed_at=? WHERE processed_at IS NULL "
             "AND (langs IS NOT NULL OR kind = 'drill')"
@@ -136,13 +138,25 @@ class Messages:
             params.append(session)
         else:
             sql += " AND session_id IS NULL"
-        with closing(connect()) as con, con:
-            cur = con.execute(sql, params)
-            kept = con.execute(
-                "SELECT COUNT(*) FROM messages"
-                " WHERE processed_at IS NULL AND kind IS NULL"
-            ).fetchone()[0]
+        cur = con.execute(sql, params)
+        kept = con.execute(
+            "SELECT COUNT(*) FROM messages WHERE processed_at IS NULL AND kind IS NULL"
+        ).fetchone()[0]
         return {"processed": cur.rowcount, "kept": kept}
+
+    @staticmethod
+    def mark_processed(session=None):
+        """Open a connection + transaction and run _mark_processed_on (the
+        NULL-session branch keeps working). Same signature/return as before."""
+        with closing(connect()) as con, con:
+            return Messages._mark_processed_on(con, session)
+
+    @staticmethod
+    def mark_processed_with_con(session, con):
+        """Like mark_processed(), but runs on the caller's open tx so the
+        processed-mark commits atomically with the session's findings (the debrief
+        driver always passes a real session id)."""
+        return Messages._mark_processed_on(con, session)
 
     @staticmethod
     def _similarity(a, b):
