@@ -262,5 +262,55 @@ class InsertWithConTest(ModelTestBase):
             con.close()
 
 
+class AtomicSessionRollbackTest(ModelTestBase):
+    def test_bad_enum_mid_tx_writes_nothing_and_leaves_session_pending(self):
+        import appdb
+        from models.messages import Messages
+
+        Messages.capture("First normal english sentence here please", "sess-A")
+        Messages.tag([{"id": "1", "langs": "en"}])  # tagged, still unprocessed
+
+        con = appdb.connect()
+        try:
+            with self.assertRaises(ValueError):
+                with appdb.tx(con):
+                    # one valid grammar finding, then a friction finding with a
+                    # type outside Friction.enums -> ValueError inside _insert_on
+                    Grammar.insert_with_con(
+                        {
+                            "slug": "art",
+                            "problem": "p",
+                            "original": "a",
+                            "fixed": "b",
+                            "rule": "r",
+                        },
+                        con,
+                    )
+                    Friction.insert_with_con(
+                        {
+                            "slug": "z",
+                            "type": "bogus",
+                            "zone": "zn",
+                            "learner_wrote": "lw",
+                            "native_phrase": "np",
+                            "context": "c",
+                        },
+                        con,
+                    )
+                    Messages.mark_processed_with_con("sess-A", con)
+        finally:
+            con.close()
+
+        # full rollback: the valid grammar row is gone, no friction row, and the
+        # session is still pending (processed_at NULL) so the next run retries clean
+        self.assertEqual(Grammar.select(), [])
+        self.assertEqual(appdb.query("SELECT * FROM friction"), [])
+        self.assertIsNone(
+            appdb.query("SELECT processed_at FROM messages WHERE id = 1")[0][
+                "processed_at"
+            ]
+        )
+
+
 if __name__ == "__main__":
     unittest.main()
