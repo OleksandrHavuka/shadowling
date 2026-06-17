@@ -201,7 +201,34 @@ def _migration_5(con):
         con.execute(stmt)
 
 
-MIGRATIONS = [_migration_1, _migration_2, _migration_3, _migration_4, _migration_5]
+def _migration_6(con):
+    """Mandatory per-session provenance + clean regen. Add a NOT NULL session_id to
+    the six incident tables so the tutor can pick context per-session (DEFAULT ''
+    only satisfies SQLite's "a NOT NULL ADD COLUMN needs a non-null default" rule;
+    the model always stamps a real session, so '' is never written). Existing
+    findings carry no session, so WIPE the incident tables; DELETE messages with no
+    session_id (unattributable, pre-tutor rows); reset messages.processed_at so the
+    next /debrief re-runs every session and re-persists with session_id (langs kept
+    -> no re-triage). Non-vocab mastery is wiped (regenerated slugs are
+    LLM-nondeterministic and would orphan SR rows). vocab untouched. decode is wiped
+    with the rest (debrief never regenerates it; /aha repopulates going forward)."""
+    incident = ("grammar", "rephrasing", "idioms", "verbs", "friction", "decode")
+    for tbl in incident:
+        con.execute(f"ALTER TABLE {tbl} ADD COLUMN session_id TEXT NOT NULL DEFAULT ''")
+        con.execute(f"DELETE FROM {tbl}")
+    con.execute("DELETE FROM messages WHERE session_id IS NULL")
+    con.execute("UPDATE messages SET processed_at = NULL")
+    con.execute("DELETE FROM mastery WHERE item_kind != 'vocab'")
+
+
+MIGRATIONS = [
+    _migration_1,
+    _migration_2,
+    _migration_3,
+    _migration_4,
+    _migration_5,
+    _migration_6,
+]
 
 # --- views: derived code, never migrated --------------------------------------
 # Each *_ranked view splits true aggregates (MIN/MAX created_at, COUNT) from the

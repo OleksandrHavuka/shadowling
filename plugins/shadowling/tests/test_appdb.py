@@ -138,25 +138,29 @@ class Migration2Test(AppDbTestBase):
             con.close()
 
     def test_upgrade_wipes_messages_keeps_other_data(self):
-        # build a true v1 db (shipped 0.7.x schema) + legacy data, then let
-        # connect() replay migrations 2 and 3 against it.
+        # Migration 2 wipes the message corpus (pre-prod waiver) but keeps the other
+        # tables. Replay 2..5 on a raw connection and assert there: the terminal
+        # migration 6 wipes the incident tables too, so "keeps grammar" is only
+        # observable before it (migration 6's wipe + the .bak backup are their own
+        # tests).
         con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row  # _migration_2 reads PRAGMA rows by name
         appdb._migration_1(con)
-        con.execute("PRAGMA user_version = 1")
         con.execute(
             "INSERT INTO messages(ts, text) VALUES ('t', 'legacy message here')"
         )
         con.execute("INSERT INTO grammar(date, slug) VALUES ('d', 's1')")
-        con.commit()
+        for migration in appdb.MIGRATIONS[
+            1:5
+        ]:  # replay 2..5; skip the terminal wipe (6)
+            migration(con)
+        self.assertEqual(
+            con.execute("SELECT COUNT(*) AS n FROM messages").fetchone()["n"], 0
+        )  # corpus wiped by migration 2
+        self.assertEqual(
+            con.execute("SELECT COUNT(*) AS n FROM grammar").fetchone()["n"], 1
+        )  # everything else intact at this point
         con.close()
-        appdb.connect().close()  # replays migrations 2 + 3
-        self.assertTrue(os.path.exists(appdb.db_path() + ".bak"))
-        self.assertEqual(
-            appdb.query("SELECT COUNT(*) AS n FROM messages"), [{"n": 0}]
-        )  # corpus wiped (pre-prod waiver)
-        self.assertEqual(
-            appdb.query("SELECT COUNT(*) AS n FROM grammar"), [{"n": 1}]
-        )  # everything else intact
 
 
 class Migration3Test(AppDbTestBase):
@@ -190,9 +194,11 @@ class Migration3Test(AppDbTestBase):
             con.close()
 
     def test_upgrade_preserves_incident_and_vocab_data(self):
+        # The rename migrations preserve rows; assert on a raw connection after
+        # replaying 2..5 (the terminal migration 6 wipes incidents — its own test).
         con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
         appdb._migration_1(con)
-        con.execute("PRAGMA user_version = 1")
         con.execute("INSERT INTO grammar(date, slug) VALUES ('2026-06-01', 'g1')")
         con.execute(
             "INSERT INTO rephrasing(date, slug, yours)"
@@ -202,20 +208,20 @@ class Migration3Test(AppDbTestBase):
             "INSERT INTO vocab(word, translation, remaining, status)"
             " VALUES ('throughput', 'переклад', 5, 'active')"
         )
-        con.commit()
-        con.close()
-        appdb.connect().close()  # replays migrations 2 + 3 (RENAME preserves rows)
+        for migration in appdb.MIGRATIONS[1:5]:  # replay 2..5 (renames); skip wipe (6)
+            migration(con)
         self.assertEqual(
-            appdb.query("SELECT created_at, slug FROM grammar"),
+            [dict(r) for r in con.execute("SELECT created_at, slug FROM grammar")],
             [{"created_at": "2026-06-01", "slug": "g1"}],
         )
         self.assertEqual(
-            appdb.query("SELECT learner_wrote FROM rephrasing"),
+            [dict(r) for r in con.execute("SELECT learner_wrote FROM rephrasing")],
             [{"learner_wrote": "my clunky phrasing"}],
         )
-        row = appdb.query("SELECT word, created_at FROM vocab")[0]
+        row = con.execute("SELECT word, created_at FROM vocab").fetchone()
         self.assertEqual(row["word"], "throughput")
         self.assertIsNone(row["created_at"])  # added column backfills NULL
+        con.close()
 
 
 class Migration4Test(AppDbTestBase):
@@ -238,8 +244,8 @@ class Migration4Test(AppDbTestBase):
 
     def test_upgrade_preserves_native_phrase_data(self):
         con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
         appdb._migration_1(con)
-        con.execute("PRAGMA user_version = 1")
         con.execute(
             'INSERT INTO rephrasing(date, slug, "natural")'
             " VALUES ('2026-06-01', 'r1', 'take a photo')"
@@ -248,17 +254,17 @@ class Migration4Test(AppDbTestBase):
             "INSERT INTO friction(date, slug, natural_english)"
             " VALUES ('2026-06-01', 'f1', 'I see it differently')"
         )
-        con.commit()
-        con.close()
-        appdb.connect().close()  # replays migrations 2, 3, 4 (RENAME preserves rows)
+        for migration in appdb.MIGRATIONS[1:5]:  # replay 2..5 (renames); skip wipe (6)
+            migration(con)
         self.assertEqual(
-            appdb.query("SELECT native_phrase FROM rephrasing"),
+            [dict(r) for r in con.execute("SELECT native_phrase FROM rephrasing")],
             [{"native_phrase": "take a photo"}],
         )
         self.assertEqual(
-            appdb.query("SELECT native_phrase FROM friction"),
+            [dict(r) for r in con.execute("SELECT native_phrase FROM friction")],
             [{"native_phrase": "I see it differently"}],
         )
+        con.close()
 
 
 class Migration5Test(AppDbTestBase):
@@ -278,21 +284,79 @@ class Migration5Test(AppDbTestBase):
 
     def test_upgrade_renames_example_fix_keeps_data(self):
         con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
         appdb._migration_1(con)
-        con.execute("PRAGMA user_version = 1")
         con.execute(
             "INSERT INTO verbs(date, verb, example_fix)"
             " VALUES ('2026-06-01', 'go', 'I have went -> I have gone')"
         )
+        for migration in appdb.MIGRATIONS[1:5]:  # replay 2..5 (rename); skip wipe (6)
+            migration(con)
+        row = con.execute(
+            "SELECT verb, correction, used_form, context FROM verbs"
+        ).fetchone()
+        self.assertEqual(row["verb"], "go")
+        # legacy example_fix text survives under the new name
+        self.assertEqual(row["correction"], "I have went -> I have gone")
+        self.assertIsNone(row["used_form"])  # added columns backfill NULL
+        self.assertIsNone(row["context"])
+        con.close()
+
+
+class Migration6Test(AppDbTestBase):
+    INCIDENT = ("grammar", "rephrasing", "idioms", "verbs", "friction", "decode")
+
+    def test_fresh_db_has_session_id_not_null(self):
+        con = appdb.connect()
+        try:
+            self.assertEqual(
+                con.execute("PRAGMA user_version").fetchone()[0], len(appdb.MIGRATIONS)
+            )
+            for tbl in self.INCIDENT:
+                info = {r["name"]: r for r in con.execute(f"PRAGMA table_info({tbl})")}
+                self.assertIn("session_id", info, tbl)
+                self.assertEqual(info["session_id"]["notnull"], 1, tbl)
+        finally:
+            con.close()
+
+    def test_upgrade_wipes_incidents_deletes_null_session_keeps_vocab_mastery(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row  # _migration_2 reads PRAGMA rows by name
+        for migration in appdb.MIGRATIONS[:5]:  # build a true pre-6 (v5) database
+            migration(con)
+        con.execute("PRAGMA user_version = 5")
+        con.execute(
+            "INSERT INTO grammar(created_at, slug, problem, original, fixed, rule)"
+            " VALUES ('2026-06-01', 'art', 'p', 'a', 'b', 'r')"
+        )
+        con.execute(
+            "INSERT INTO messages(created_at, text, session_id, processed_at)"
+            " VALUES ('2026-06-01', 'a session-bearing sentence', 'sess-A', 'done')"
+        )
+        con.execute(
+            "INSERT INTO messages(created_at, text, session_id, processed_at)"
+            " VALUES ('2026-06-01', 'an unattributable pre-tutor row', NULL, 'done')"
+        )
+        for kind in ("grammar", "vocab"):
+            con.execute(
+                "INSERT INTO mastery(item_kind, item_key, box, due_date,"
+                " last_verdict, counter_seen, created_at, updated_at)"
+                " VALUES (?, 'k', 1, '2026-06-02', 'pass', 1, 'c', 'u')",
+                (kind,),
+            )
         con.commit()
         con.close()
-        appdb.connect().close()  # replays migrations 2..5 (RENAME preserves rows)
-        rows = appdb.query("SELECT verb, correction, used_form, context FROM verbs")
-        self.assertEqual(rows[0]["verb"], "go")
-        # legacy example_fix text survives under the new name
-        self.assertEqual(rows[0]["correction"], "I have went -> I have gone")
-        self.assertIsNone(rows[0]["used_form"])  # added columns backfill NULL
-        self.assertIsNone(rows[0]["context"])
+
+        appdb.connect().close()  # replays _migration_6
+
+        self.assertEqual(appdb.query("SELECT * FROM grammar"), [])  # incidents wiped
+        self.assertEqual(appdb.query("SELECT * FROM decode"), [])
+        msgs = appdb.query("SELECT session_id, processed_at FROM messages")
+        self.assertEqual(len(msgs), 1)  # null-session row deleted
+        self.assertEqual(msgs[0]["session_id"], "sess-A")
+        self.assertIsNone(msgs[0]["processed_at"])  # processed_at reset
+        kinds = {r["item_kind"] for r in appdb.query("SELECT item_kind FROM mastery")}
+        self.assertEqual(kinds, {"vocab"})  # non-vocab mastery wiped, vocab kept
 
 
 class ViewsTest(AppDbTestBase):
