@@ -12,6 +12,7 @@ transaction, so a failure rolls back clean and a retry starts fresh. Stdlib only
 Python 3.9+; cron-safe by construction (no interactive input)."""
 
 import concurrent.futures
+import functools
 import json
 import os
 import shutil
@@ -22,6 +23,7 @@ import sys
 import core
 import langcodes
 from appdb import connect, tx
+from config import config_block
 from models.friction import Friction
 from models.grammar import Grammar
 from models.idioms import Idioms
@@ -40,8 +42,10 @@ CLAUDE_TIMEOUT = 180  # seconds per headless call
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
 
 
+@functools.cache
 def _prompt(name):
-    """Read a specialist's static system prompt from prompts/<name>.txt."""
+    """Read a specialist's static system prompt from prompts/<name>.txt (memoized
+    — the files are static for the process lifetime)."""
     with open(os.path.join(PROMPTS_DIR, f"{name}.txt"), encoding="utf-8") as f:
         return f.read()
 
@@ -88,10 +92,14 @@ TRIAGE_SCHEMA = {
 
 
 def _config_block(cfg):
-    """The <config> block exactly as config.py `show` emits it, so a prompt's
-    'read the config languages' instruction maps to the same shape the old skills
-    saw. Reuses skillio.render — the driver invents no new format."""
-    return "<config>" + render([{k: cfg[k] for k in core.CONFIG_KEYS}]) + "</config>"
+    """The <config> block, owned by config.config_block (single source)."""
+    return config_block(cfg)
+
+
+def _messages_block(rows, fields):
+    """Wrap skillio.render(rows, fields=…) in the <messages> tag the specialists
+    read — the one idiom every message slice uses."""
+    return "<messages>" + render(rows, fields=fields) + "</messages>"
 
 
 def _validate_triage(rows, valid_ids):
@@ -131,7 +139,7 @@ def _run_triage(session, cfg, *, runner=None):
         data = "\n".join(
             [
                 _config_block(cfg),
-                "<messages>" + render(batch, fields=["id", "text"]) + "</messages>",
+                _messages_block(batch, ["id", "text"]),
             ]
         )
         out = _run_claude(_prompt("triage"), data, TRIAGE_SCHEMA, HAIKU, runner=runner)
@@ -205,7 +213,7 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
     slice + their own dedup; friction gets the full timeline (with langs) + the
     learning code + its own dedup + grammar dedup (cross-correlation)."""
     cfg_block = _config_block(cfg)
-    lang_msgs = "<messages>" + render(lang_slice, fields=["id", "text"]) + "</messages>"
+    lang_msgs = _messages_block(lang_slice, ["id", "text"])
 
     def lang_job(name, schema, dedup_tag):
         data = "\n".join(
@@ -223,11 +231,7 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
         "idioms": lang_job("idioms", IDIOMS_SCHEMA, "idioms"),
         "verbs": lang_job("verbs", VERBS_SCHEMA, "verbs"),
     }
-    friction_msgs = (
-        "<messages>"
-        + render(full_slice, fields=["id", "text", "langs"])
-        + "</messages>"
-    )
+    friction_msgs = _messages_block(full_slice, ["id", "text", "langs"])
     jobs["friction"] = (
         _prompt("friction"),
         "\n".join(

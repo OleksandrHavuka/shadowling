@@ -632,5 +632,24 @@ class MainTest(DebriefTestBase):
         self.assertEqual(Messages.pending_count(), 1)
 
 
+class ConfigBlockTest(DebriefTestBase):
+    def test_debrief_uses_shared_config_block(self):
+        import config
+
+        cfg = core.load_config()
+        expected = config.config_block(cfg)
+        self.assertTrue(expected.startswith("<config>"))
+        self.assertEqual(debrief._config_block(cfg), expected)
+
+
+class MessagesBlockTest(DebriefTestBase):
+    def test_wraps_render_in_messages_tag(self):
+        rows = [{"id": 1, "text": "hi there friend", "langs": '["en"]'}]
+        block = debrief._messages_block(rows, ["id", "text"])
+        self.assertTrue(block.startswith("<messages>"))
+        self.assertTrue(block.endswith("</messages>"))
+        self.assertIn("hi there friend", block)
+
+
 if __name__ == "__main__":
     unittest.main()

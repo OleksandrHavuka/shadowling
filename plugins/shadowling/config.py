@@ -25,13 +25,20 @@ USAGE = (
 )
 
 
+def config_block(cfg):
+    """The <config> block: every CONFIG_KEYS value rendered once inside
+    <config>…</config>. The single shape both `config.py show` and the debrief
+    driver emit, so a prompt's 'read the config languages' maps to one format."""
+    return f"<config>{render([{k: cfg[k] for k in CONFIG_KEYS}])}</config>"
+
+
 def main(argv):
     if argv and argv[0] == "show":
         cfg = load_config()
         if cfg["missing"]:  # same whole-plugin gate as `get`
             print(cfg["notice"], file=sys.stderr)
             return 1
-        print(f"<config>{render([{k: cfg[k] for k in CONFIG_KEYS}])}</config>")
+        print(config_block(cfg))
         return 0
     if len(argv) < 2 or argv[0] not in ("get", "set") or argv[1] not in CONFIG_KEYS:
         print(USAGE, file=sys.stderr)

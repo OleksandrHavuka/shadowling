@@ -83,7 +83,7 @@ depends_on = []
 [[modules]]
 path = "debrief"
 depends_on = [
-    "appdb", "core", "skillio", "langcodes",
+    "appdb", "core", "skillio", "langcodes", "config",
     "models.grammar", "models.rephrasing", "models.idioms",
     "models.verbs", "models.friction", "models.vocab", "models.messages",
 ]
