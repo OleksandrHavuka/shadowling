@@ -12,6 +12,8 @@ transaction, so a failure rolls back clean and a retry starts fresh. Stdlib only
 Python 3.9+; cron-safe by construction (no interactive input)."""
 
 import json
+import os
+import re
 import shutil
 import subprocess
 
@@ -20,6 +22,58 @@ import subprocess
 HAIKU = "claude-haiku-4-5"
 SONNET = "claude-sonnet-4-6"
 CLAUDE_TIMEOUT = 180  # seconds per headless call
+
+# ISO-style language code (moved here from skills/debrief-triage/triage.py); "und"
+# fits too. Used both for triage validation and the language-code resolution.
+LANG_CODE = re.compile(r"^[a-z]{2,3}$")
+
+PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
+
+# The language-code resolver's role is a one-liner (not rewritten from a SKILL.md
+# body), so it stays an inline constant rather than a prompts/*.txt file.
+LANG_CODE_PROMPT = (
+    "You map a natural-language NAME to its ISO 639 language code. The input is a "
+    "single <learning_language> tag holding a language name (e.g. English, "
+    "Ukrainian, German). Return the lowercase ISO 639-1 two-letter code when one "
+    "exists (English->en, German->de, Spanish->es, Ukrainian->uk), else the ISO "
+    "639-3 three-letter code. Answer ONLY by calling the StructuredOutput tool "
+    'once with {"code": "<code>"}.'
+)
+LANG_CODE_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["code"],
+    "properties": {"code": {"type": "string"}},
+}
+
+
+def _prompt(name):
+    """Read a specialist's static system prompt from prompts/<name>.txt."""
+    with open(os.path.join(PROMPTS_DIR, f"{name}.txt"), encoding="utf-8") as f:
+        return f.read()
+
+
+def _resolve_learning_code(cfg, *, runner=None, attempts=2):
+    """Map the configured learning-language NAME ('English') to its ISO 639 code
+    ('en') via a tiny haiku call. Deriving the code from the name stays model
+    judgment (per the ENGINEERING.md deterministic-boundary table), so the plugin
+    keeps no language->code table and stays language-agnostic. A couple of
+    internal retries; raises DebriefError if it still fails (the run then
+    processes nothing and a later run retries)."""
+    data = "<learning_language>" + cfg["learning_language"] + "</learning_language>"
+    last = DebriefError("language-code resolution never ran")
+    for _ in range(attempts):
+        try:
+            out = _run_claude(
+                LANG_CODE_PROMPT, data, LANG_CODE_SCHEMA, HAIKU, runner=runner
+            )
+            code = str(out.get("code", "")).strip().lower()
+            if LANG_CODE.match(code):
+                return code
+            last = DebriefError(f"resolved code {code!r} is not a valid ISO 639 code")
+        except DebriefError as e:
+            last = e
+    raise last
 
 
 class DebriefError(Exception):
