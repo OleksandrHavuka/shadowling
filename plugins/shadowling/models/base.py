@@ -38,13 +38,14 @@ class Model:
         return slugify(s)
 
     @classmethod
-    def insert(cls, values):
-        """values: dict over insert_cols. Returns the incident count for the
-        record's key AFTER the insert (1 = first occurrence).
-
-        The chokepoint: normalizes cls.key via cls.key_norm and rejects a key
-        that normalizes to empty/blank by raising ValueError (the entrypoint
-        prints it to stderr so the LLM self-corrects — same contract as skillio)."""
+    def _insert_on(cls, con, values):
+        """The full insert body on an ALREADY-OPEN connection — opens no
+        transaction of its own. Normalizes cls.key via cls.key_norm (rejecting a
+        key that normalizes to empty/blank with ValueError), validates cls.enums,
+        INSERTs the date-stamped row, then reads back the running incident count
+        for the key (visible to this same connection inside the caller's
+        transaction). The single chokepoint, now reusable both standalone
+        (insert) and inside a caller's tx (insert_with_con)."""
         key = cls.key_norm(values[cls.key])
         if not key:
             raise ValueError(
@@ -63,16 +64,36 @@ class Model:
         sql = "INSERT INTO {}({}) VALUES ({})".format(
             cls.table, ", ".join(f'"{c}"' for c in cols), ", ".join("?" for _ in cols)
         )
+        con.execute(sql, row)
+        return con.execute(
+            f'SELECT COUNT(*) FROM {cls.table} WHERE "{cls.key}" = ?',
+            (key,),
+        ).fetchone()[0]
+
+    @classmethod
+    def insert(cls, values):
+        """values: dict over insert_cols. Returns the incident count for the
+        record's key AFTER the insert (1 = first occurrence). Opens its own
+        connection + transaction; the body lives in _insert_on (the count read
+        now sits inside the commit block — same value, same-connection
+        visibility). The entrypoint prints any ValueError to stderr so the LLM
+        self-corrects — same contract as skillio."""
         con = connect()
         try:
             with con:
-                con.execute(sql, row)
-            return con.execute(
-                f'SELECT COUNT(*) FROM {cls.table} WHERE "{cls.key}" = ?',
-                (key,),
-            ).fetchone()[0]
+                return cls._insert_on(con, values)
         finally:
             con.close()
+
+    @classmethod
+    def insert_with_con(cls, values, con):
+        """Like insert(), but runs on the caller's already-open connection so the
+        write joins the caller's transaction (the debrief driver's per-session
+        tx). The caller's `with tx(con):` commits or rolls back; a ValueError
+        here (empty key / bad enum) rolls the WHOLE caller transaction back, so a
+        partial session is never persisted. Returns the post-insert count (the
+        driver ignores it)."""
+        return cls._insert_on(con, values)
 
     @classmethod
     def select(cls, key=None):

@@ -179,5 +179,88 @@ class LatestRowColumnsTest(ModelTestBase):
         self.assertNotIn("last_id", row)
 
 
+class InsertWithConTest(ModelTestBase):
+    def _con(self):
+        import appdb
+
+        return appdb.connect()
+
+    def test_insert_with_con_returns_running_count_inside_caller_tx(self):
+        import appdb
+
+        con = self._con()
+        try:
+            with appdb.tx(con):
+                self.assertEqual(
+                    Grammar.insert_with_con(
+                        {
+                            "slug": "s1",
+                            "problem": "p",
+                            "original": "a",
+                            "fixed": "b",
+                            "rule": "r",
+                        },
+                        con,
+                    ),
+                    1,
+                )
+                self.assertEqual(
+                    Grammar.insert_with_con(
+                        {
+                            "slug": "s1",
+                            "problem": "p",
+                            "original": "c",
+                            "fixed": "d",
+                            "rule": "r",
+                        },
+                        con,
+                    ),
+                    2,
+                )
+        finally:
+            con.close()
+        self.assertEqual(Grammar.select("s1")["counter"], 2)
+
+    def test_insert_with_con_normalizes_key_like_insert(self):
+        import appdb
+
+        con = self._con()
+        try:
+            with appdb.tx(con):
+                Grammar.insert_with_con(
+                    {
+                        "slug": "Word Choice",
+                        "problem": "p",
+                        "original": "a",
+                        "fixed": "b",
+                        "rule": "r",
+                    },
+                    con,
+                )
+        finally:
+            con.close()
+        self.assertIsNotNone(Grammar.select("word-choice"))
+
+    def test_insert_with_con_rejects_empty_key_inside_tx(self):
+        import appdb
+
+        con = self._con()
+        try:
+            with self.assertRaises(ValueError):
+                with appdb.tx(con):
+                    Grammar.insert_with_con(
+                        {
+                            "slug": "  _-_  ",
+                            "problem": "p",
+                            "original": "a",
+                            "fixed": "b",
+                            "rule": "r",
+                        },
+                        con,
+                    )
+        finally:
+            con.close()
+
+
 if __name__ == "__main__":
     unittest.main()
