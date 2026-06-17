@@ -179,20 +179,20 @@ class LatestRowColumnsTest(ModelTestBase):
         self.assertNotIn("last_id", row)
 
 
-class InsertWithConTest(ModelTestBase):
+class InsertConTest(ModelTestBase):
     def _con(self):
         import appdb
 
         return appdb.connect()
 
-    def test_insert_with_con_returns_running_count_inside_caller_tx(self):
+    def test_insert_con_returns_running_count_inside_caller_tx(self):
         import appdb
 
         con = self._con()
         try:
             with appdb.tx(con):
                 self.assertEqual(
-                    Grammar.insert_with_con(
+                    Grammar.insert(
                         {
                             "slug": "s1",
                             "problem": "p",
@@ -200,12 +200,12 @@ class InsertWithConTest(ModelTestBase):
                             "fixed": "b",
                             "rule": "r",
                         },
-                        con,
+                        con=con,
                     ),
                     1,
                 )
                 self.assertEqual(
-                    Grammar.insert_with_con(
+                    Grammar.insert(
                         {
                             "slug": "s1",
                             "problem": "p",
@@ -213,7 +213,7 @@ class InsertWithConTest(ModelTestBase):
                             "fixed": "d",
                             "rule": "r",
                         },
-                        con,
+                        con=con,
                     ),
                     2,
                 )
@@ -221,13 +221,13 @@ class InsertWithConTest(ModelTestBase):
             con.close()
         self.assertEqual(Grammar.select("s1")["counter"], 2)
 
-    def test_insert_with_con_normalizes_key_like_insert(self):
+    def test_insert_con_normalizes_key_like_insert(self):
         import appdb
 
         con = self._con()
         try:
             with appdb.tx(con):
-                Grammar.insert_with_con(
+                Grammar.insert(
                     {
                         "slug": "Word Choice",
                         "problem": "p",
@@ -235,20 +235,20 @@ class InsertWithConTest(ModelTestBase):
                         "fixed": "b",
                         "rule": "r",
                     },
-                    con,
+                    con=con,
                 )
         finally:
             con.close()
         self.assertIsNotNone(Grammar.select("word-choice"))
 
-    def test_insert_with_con_rejects_empty_key_inside_tx(self):
+    def test_insert_con_rejects_empty_key_inside_tx(self):
         import appdb
 
         con = self._con()
         try:
             with self.assertRaises(ValueError):
                 with appdb.tx(con):
-                    Grammar.insert_with_con(
+                    Grammar.insert(
                         {
                             "slug": "  _-_  ",
                             "problem": "p",
@@ -256,7 +256,7 @@ class InsertWithConTest(ModelTestBase):
                             "fixed": "b",
                             "rule": "r",
                         },
-                        con,
+                        con=con,
                     )
         finally:
             con.close()
@@ -276,7 +276,7 @@ class AtomicSessionRollbackTest(ModelTestBase):
                 with appdb.tx(con):
                     # one valid grammar finding, then a friction finding with a
                     # type outside Friction.enums -> ValueError inside _insert_on
-                    Grammar.insert_with_con(
+                    Grammar.insert(
                         {
                             "slug": "art",
                             "problem": "p",
@@ -284,9 +284,9 @@ class AtomicSessionRollbackTest(ModelTestBase):
                             "fixed": "b",
                             "rule": "r",
                         },
-                        con,
+                        con=con,
                     )
-                    Friction.insert_with_con(
+                    Friction.insert(
                         {
                             "slug": "z",
                             "type": "bogus",
@@ -295,9 +295,9 @@ class AtomicSessionRollbackTest(ModelTestBase):
                             "native_phrase": "np",
                             "context": "c",
                         },
-                        con,
+                        con=con,
                     )
-                    Messages.mark_processed_with_con("sess-A", con)
+                    Messages.mark_processed("sess-A", con=con)
         finally:
             con.close()
 

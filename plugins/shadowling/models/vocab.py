@@ -85,28 +85,22 @@ class Vocab:
         }
 
     @staticmethod
-    def add(word, translation):
-        """Add or refresh a vocab pair. Returns ONE render-ready result dict:
-        {action, word, translation, remaining, status} for a persisted row, or
-        {action: 'untranslated', word} when the translation is missing/identical
-        (nothing persisted). action is add | refresh | relearn | untranslated.
-        Opens its own connection + immediate transaction (the body is _add_on; an
-        untranslated pair commits a harmless empty transaction)."""
+    def add(word, translation, con=None):
+        """Add or refresh a vocab pair. Returns ONE render-ready result dict
+        ({action, word, translation, remaining, status} or {action:
+        'untranslated', word}). action is add | refresh | relearn | untranslated.
+        With con=None opens its own immediate transaction; given a caller's open
+        `con` (the debrief driver's per-session tx) the looted pair commits
+        atomically with the session's findings + processed-mark. Body is _add_on;
+        an untranslated pair writes nothing. Mirrors Vocab.relearn's con=."""
+        if con is not None:
+            return Vocab._add_on(con, word, translation)
         con = connect()
         try:
             with tx(con):  # BEGIN IMMEDIATE serializes the existence-read + write
                 return Vocab._add_on(con, word, translation)
         finally:
             con.close()
-
-    @staticmethod
-    def add_with_con(word, translation, con):
-        """Like add(), but runs on the caller's open tx (the debrief driver's
-        per-session transaction) so a looted pair commits atomically with the
-        session's findings + processed-mark. The read-back runs inside the
-        caller's tx (reads its own write — correct); an untranslated pair writes
-        nothing."""
-        return Vocab._add_on(con, word, translation)
 
     @staticmethod
     def remove(word):

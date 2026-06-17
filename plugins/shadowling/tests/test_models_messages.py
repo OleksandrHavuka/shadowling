@@ -277,18 +277,18 @@ class ReadOnlyQueryTest(MessagesRepoBase):
             appdb.query("DELETE FROM messages")
 
 
-class MarkProcessedWithConTest(MessagesRepoBase):
+class MarkProcessedConTest(MessagesRepoBase):
     def setUp(self):
         super().setUp()
         Messages.capture("First normal english sentence here please", "sess-A")
         Messages.capture("Second message in another working session", "sess-B")
 
-    def test_mark_with_con_stamps_inside_caller_tx(self):
+    def test_mark_con_stamps_inside_caller_tx(self):
         Messages.tag([{"id": "1", "langs": "en"}])  # only sess-A tagged
         con = appdb.connect()
         try:
             with appdb.tx(con):
-                out = Messages.mark_processed_with_con("sess-A", con)
+                out = Messages.mark_processed("sess-A", con=con)
         finally:
             con.close()
         self.assertEqual(out["processed"], 1)
@@ -297,13 +297,13 @@ class MarkProcessedWithConTest(MessagesRepoBase):
         )
         self.assertEqual([(r["id"], r["p"]) for r in rows], [(1, 1), (2, 0)])
 
-    def test_mark_with_con_rolls_back_with_caller_tx(self):
+    def test_mark_con_rolls_back_with_caller_tx(self):
         Messages.tag([{"id": "1", "langs": "en"}])
         con = appdb.connect()
         try:
             with self.assertRaises(RuntimeError):
                 with appdb.tx(con):
-                    Messages.mark_processed_with_con("sess-A", con)
+                    Messages.mark_processed("sess-A", con=con)
                     raise RuntimeError("caller aborts the tx")
         finally:
             con.close()

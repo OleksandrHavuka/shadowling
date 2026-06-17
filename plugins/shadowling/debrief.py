@@ -289,18 +289,18 @@ def _persist(session, findings, loot):
     try:
         with tx(con):
             for item in findings["grammar"]:
-                Grammar.insert_with_con(item, con)
+                Grammar.insert(item, con=con)
             for item in findings["rephrasing"]:
-                Rephrasing.insert_with_con(item, con)
+                Rephrasing.insert(item, con=con)
             for item in findings["idioms"]:
-                Idioms.insert_with_con(item, con)
+                Idioms.insert(item, con=con)
             for item in findings["verbs"]:
-                Verbs.insert_with_con(item, con)
+                Verbs.insert(item, con=con)
             for item in findings["friction"]:
-                Friction.insert_with_con(item, con)
+                Friction.insert(item, con=con)
             for pair in loot:
-                Vocab.add_with_con(pair["word"], pair["translation"], con)
-            Messages.mark_processed_with_con(session, con)
+                Vocab.add(pair["word"], pair["translation"], con=con)
+            Messages.mark_processed(session, con=con)
     finally:
         con.close()
 

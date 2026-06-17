@@ -145,18 +145,17 @@ class Messages:
         return {"processed": cur.rowcount, "kept": kept}
 
     @staticmethod
-    def mark_processed(session=None):
-        """Open a connection + transaction and run _mark_processed_on (the
-        NULL-session branch keeps working). Same signature/return as before."""
+    def mark_processed(session=None, con=None):
+        """Stamp tagged+unprocessed (and drill) rows processed. With con=None
+        opens its own connection + transaction; given a caller's open `con` (the
+        debrief driver's per-session tx) the processed-mark commits atomically
+        with the session's findings. Body is _mark_processed_on. A falsy `session`
+        scopes to the bounded NULL-session group (never global) — see
+        Messages.list, which now uses the same rule. Mirrors Vocab.relearn's con=."""
+        if con is not None:
+            return Messages._mark_processed_on(con, session)
         with closing(connect()) as con, con:
             return Messages._mark_processed_on(con, session)
-
-    @staticmethod
-    def mark_processed_with_con(session, con):
-        """Like mark_processed(), but runs on the caller's open tx so the
-        processed-mark commits atomically with the session's findings (the debrief
-        driver always passes a real session id)."""
-        return Messages._mark_processed_on(con, session)
 
     @staticmethod
     def _similarity(a, b):

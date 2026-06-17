@@ -44,8 +44,8 @@ class Model:
         key that normalizes to empty/blank with ValueError), validates cls.enums,
         INSERTs the date-stamped row, then reads back the running incident count
         for the key (visible to this same connection inside the caller's
-        transaction). The single chokepoint, now reusable both standalone
-        (insert) and inside a caller's tx (insert_with_con)."""
+        transaction). The single chokepoint, reusable both standalone
+        (insert()) and inside a caller's tx (insert(values, con=...))."""
         key = cls.key_norm(values[cls.key])
         if not key:
             raise ValueError(
@@ -71,29 +71,23 @@ class Model:
         ).fetchone()[0]
 
     @classmethod
-    def insert(cls, values):
+    def insert(cls, values, con=None):
         """values: dict over insert_cols. Returns the incident count for the
-        record's key AFTER the insert (1 = first occurrence). Opens its own
-        connection + transaction; the body lives in _insert_on (the count read
-        now sits inside the commit block — same value, same-connection
-        visibility). The entrypoint prints any ValueError to stderr so the LLM
-        self-corrects — same contract as skillio."""
+        record's key AFTER the insert (1 = first occurrence). With con=None opens
+        its own connection + transaction; given a caller's open `con`, the write
+        joins their transaction (the debrief driver's per-session tx) so a partial
+        session never persists. The body is _insert_on (the count read sits inside
+        the commit block — same value, same-connection visibility). Mirrors the
+        con= pattern of Vocab.relearn. A ValueError (empty key / bad enum) prints
+        to stderr via the entrypoint, or rolls back the caller's whole tx."""
+        if con is not None:
+            return cls._insert_on(con, values)
         con = connect()
         try:
             with con:
                 return cls._insert_on(con, values)
         finally:
             con.close()
-
-    @classmethod
-    def insert_with_con(cls, values, con):
-        """Like insert(), but runs on the caller's already-open connection so the
-        write joins the caller's transaction (the debrief driver's per-session
-        tx). The caller's `with tx(con):` commits or rolls back; a ValueError
-        here (empty key / bad enum) rolls the WHOLE caller transaction back, so a
-        partial session is never persisted. Returns the post-insert count (the
-        driver ignores it)."""
-        return cls._insert_on(con, values)
 
     @classmethod
     def select(cls, key=None):
