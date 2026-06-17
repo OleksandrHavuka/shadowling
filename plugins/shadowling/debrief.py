@@ -247,11 +247,11 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
 
 def _fan_out(jobs, *, runner=None):
     """Run the five specialists in parallel (one claude subprocess each; NO DB I/O
-    in the workers). Returns (findings_by_category, failed_categories): a category
-    whose call raises DebriefError lands in `failed`; the rest in `findings`. A
-    specialist returning {"findings": []} is a SUCCESS — the gate is about valid
-    JSON returned, not non-empty findings."""
-    findings, failed = {}, []
+    in the workers). Returns (findings_by_category, failed) where `failed` maps a
+    failed category -> the DebriefError reason; the rest land in `findings`. A
+    specialist returning {"findings": []} is a SUCCESS — the gate is valid JSON
+    returned, not non-empty findings."""
+    findings, failed = {}, {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
         futures = {
             pool.submit(_run_claude, sp, data, schema, model, runner=runner): cat
@@ -261,19 +261,21 @@ def _fan_out(jobs, *, runner=None):
             cat = futures[fut]
             try:
                 findings[cat] = fut.result()
-            except DebriefError:
-                failed.append(cat)
-    return findings, sorted(failed)
+            except DebriefError as e:
+                failed[cat] = str(e)
+    return findings, failed
 
 
-def _result(session, *, ok, failed=(), empty=False, error=None):
-    """One per-session result row for the run summary."""
+def _result(session, *, ok, failed=(), empty=False, errors=None):
+    """One per-session result row for the run summary. `failed` is the list of
+    failed stage/category names; `errors` maps each to its reason (printed by
+    _print_summary)."""
     return {
         "session": session,
         "ok": ok,
         "failed": list(failed),
         "empty": empty,
-        "error": error,
+        "errors": dict(errors or {}),
     }
 
 
@@ -313,7 +315,7 @@ def _run_session(session, cfg, lang, *, runner=None):
     try:
         _run_triage(session, cfg, runner=runner)
     except DebriefError as e:
-        return _result(session, ok=False, failed=["triage"], error=str(e))
+        return _result(session, ok=False, failed=["triage"], errors={"triage": str(e)})
 
     lang_slice = Messages.list(session=session, lang=lang)
     if not lang_slice:
@@ -323,8 +325,10 @@ def _run_session(session, cfg, lang, *, runner=None):
         # (the tagged rows must not stay pending) and return OK.
         try:
             _persist(session, {c: [] for c in CATEGORIES}, [])
-        except (ValueError, sqlite3.Error) as e:
-            return _result(session, ok=False, failed=["persist"], error=str(e))
+        except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
+            return _result(
+                session, ok=False, failed=["persist"], errors={"persist": str(e)}
+            )
         return _result(session, ok=True, empty=True)
 
     # All DB reads here, on the MAIN thread, before the fan-out.
@@ -339,27 +343,32 @@ def _run_session(session, cfg, lang, *, runner=None):
     jobs = _build_jobs(cfg, lang, lang_slice, full_slice, dedup)
     findings, failed = _fan_out(jobs, runner=runner)
     if failed:
-        return _result(session, ok=False, failed=failed)
+        return _result(session, ok=False, failed=sorted(failed), errors=failed)
 
-    persist_findings = {c: findings[c]["findings"] for c in CATEGORIES}
-    loot = findings["friction"].get("loot", [])
     try:
+        persist_findings = {c: findings[c]["findings"] for c in CATEGORIES}
+        loot = findings["friction"].get("loot", [])
         _persist(session, persist_findings, loot)
-    except (ValueError, sqlite3.Error) as e:
-        return _result(session, ok=False, failed=["persist"], error=str(e))
+    except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
+        return _result(
+            session, ok=False, failed=["persist"], errors={"persist": str(e)}
+        )
     return _result(session, ok=True)
 
 
 def _print_summary(marked, results):
-    """The compact /debrief Bash output (the primary observability channel):
-    drills marked, one line per session (OK / OK (empty) / ERROR <categories>),
-    then totals."""
+    """The compact /debrief Bash output: drills marked, one line per session
+    (OK / OK (empty) / ERROR <name — reason; …>), then totals."""
     print(f"marked {marked} drill(s)")
     for r in results:
         if r["ok"]:
             print(f"{r['session']}: OK" + (" (empty)" if r["empty"] else ""))
         else:
-            print(f"{r['session']}: ERROR {', '.join(r['failed'])}")
+            parts = [
+                f"{n} — {r['errors'][n]}" if r["errors"].get(n) else n
+                for n in r["failed"]
+            ]
+            print(f"{r['session']}: ERROR {'; '.join(parts)}")
     ok = sum(1 for r in results if r["ok"])
     failed = len(results) - ok
     line = f"{ok}/{len(results)} session(s) OK"

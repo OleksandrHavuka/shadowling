@@ -347,7 +347,7 @@ class FanOutTest(DebriefTestBase):
             }
         )
         findings, failed = debrief._fan_out(self._jobs(), runner=runner)
-        self.assertEqual(failed, [])
+        self.assertEqual(failed, {})
         self.assertEqual(
             set(findings), {"grammar", "rephrasing", "idioms", "verbs", "friction"}
         )
@@ -363,7 +363,8 @@ class FanOutTest(DebriefTestBase):
             }
         )
         findings, failed = debrief._fan_out(self._jobs(), runner=runner)
-        self.assertEqual(failed, ["grammar"])
+        self.assertIn("grammar", failed)
+        self.assertTrue(failed["grammar"])  # carries a reason
         self.assertNotIn("grammar", findings)
 
 
@@ -521,6 +522,7 @@ class RunSessionTest(DebriefTestBase):
         result = debrief._run_session("sess-A", cfg, "en", runner=runner)
         self.assertFalse(result["ok"])
         self.assertEqual(result["failed"], ["grammar"])
+        self.assertIn("grammar", result["errors"])
         self.assertEqual(appdb.query("SELECT * FROM grammar"), [])
         self.assertEqual(Messages.pending_count(), 1)  # tagged but unprocessed -> retry
 
@@ -533,7 +535,50 @@ class RunSessionTest(DebriefTestBase):
         result = debrief._run_session("sess-A", cfg, "en", runner=runner)
         self.assertFalse(result["ok"])
         self.assertEqual(result["failed"], ["triage"])
+        self.assertIn("triage", result["errors"])
         self.assertEqual(Messages.pending_count(), 1)
+
+
+class MalformedResultTest(DebriefTestBase):
+    def test_missing_findings_key_fails_one_session_not_the_run(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        # grammar returns a schema-shaped-but-missing-'findings' object
+        runner = runner_from(
+            {
+                "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
+                "grammar": {},  # no "findings" key -> KeyError in extraction
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {"findings": [], "loot": []},
+            }
+        )
+        result = debrief._run_session("sess-A", cfg, "en", runner=runner)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["failed"], ["persist"])
+        self.assertEqual(Messages.pending_count(), 1)  # not crashed; still pending
+
+
+class SummaryTest(DebriefTestBase):
+    def test_error_line_includes_reason(self):
+        import io
+        from contextlib import redirect_stdout
+
+        results = [
+            debrief._result(
+                "sess-A",
+                ok=False,
+                failed=["grammar"],
+                errors={"grammar": "claude timed out after 180s"},
+            )
+        ]
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            debrief._print_summary(0, results)
+        self.assertIn("grammar — claude timed out after 180s", buf.getvalue())
 
 
 def _full_runner():
