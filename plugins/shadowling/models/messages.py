@@ -76,7 +76,10 @@ class Messages:
     def list(lang=None, untagged=False, limit=None, session=None):
         """Unprocessed rows (plain dicts: id, created_at, text, langs), optionally
         sliced. Presentation (the <messages> tag block) is composed at the
-        boundary via skillio.render — the repository returns data only."""
+        boundary via skillio.render — the repository returns data only. A falsy
+        `session` scopes to the bounded `session_id IS NULL` group (never global),
+        matching mark_processed — so the driver's per-session pipeline reads,
+        analyses, and marks exactly the same NULL-group rows."""
         sql = (
             "SELECT id, created_at, text, langs FROM messages "
             "WHERE processed_at IS NULL AND kind IS NULL"
@@ -85,6 +88,8 @@ class Messages:
         if session:
             sql += " AND session_id = ?"
             params.append(session)
+        else:
+            sql += " AND session_id IS NULL"
         if untagged:
             sql += " AND langs IS NULL"
         elif lang:

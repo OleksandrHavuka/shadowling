@@ -102,7 +102,7 @@ class ListTest(MessagesRepoBase):
             con.execute("UPDATE messages SET langs = ? WHERE id = 2", ('["uk"]',))
 
     def test_lists_all_unprocessed_as_rows(self):
-        rows = Messages.list()
+        rows = Messages.list(session="s")
         self.assertEqual([r["id"] for r in rows], [1, 2, 3])
         self.assertEqual(rows[0]["langs"], '["en"]')
         self.assertIsNone(rows[2]["langs"])  # row 3 untagged
@@ -111,17 +111,41 @@ class ListTest(MessagesRepoBase):
         self.assertIn("text", rows[0])
 
     def test_untagged_slice(self):
-        rows = Messages.list(untagged=True)
+        rows = Messages.list(session="s", untagged=True)
         self.assertEqual([r["id"] for r in rows], [3])
 
     def test_lang_slice_includes_mixed(self):
         with closing_con() as con, con:
             con.execute("UPDATE messages SET langs = ? WHERE id = 3", ('["en","uk"]',))
-        rows = Messages.list(lang="en")
+        rows = Messages.list(session="s", lang="en")
         self.assertEqual([r["id"] for r in rows], [1, 3])
 
     def test_limit_zero_empty(self):
-        self.assertEqual(Messages.list(untagged=True, limit=0), [])
+        self.assertEqual(Messages.list(session="s", untagged=True, limit=0), [])
+
+
+class ListNullGroupTest(MessagesRepoBase):
+    def setUp(self):
+        super().setUp()
+        Messages.capture("First normal english sentence here please", "s")
+        Messages.capture("a second null-session message that is long enough", None)
+        with closing_con() as con, con:
+            con.execute("UPDATE messages SET langs = ? WHERE id IN (1, 2)", ('["en"]',))
+
+    def test_falsy_session_scopes_to_null_group_not_global(self):
+        rows = Messages.list(session=None)
+        self.assertEqual([r["id"] for r in rows], [2])  # only the NULL-session row
+
+    def test_list_null_group_matches_mark_processed_null_group(self):
+        listed = {r["id"] for r in Messages.list(session=None)}
+        Messages.mark_processed(None)
+        marked = {
+            r["id"]
+            for r in appdb.query(
+                "SELECT id FROM messages WHERE processed_at IS NOT NULL"
+            )
+        }
+        self.assertEqual(listed, marked)  # the analysed set == the marked set
 
 
 class SessionsAndMarkTest(MessagesRepoBase):
