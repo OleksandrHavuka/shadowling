@@ -11,6 +11,7 @@ whole session's findings + its processed-mark in ONE short per-session
 transaction, so a failure rolls back clean and a retry starts fresh. Stdlib only,
 Python 3.9+; cron-safe by construction (no interactive input)."""
 
+import concurrent.futures
 import json
 import os
 import re
@@ -163,6 +164,162 @@ def _run_triage(session, cfg, *, runner=None):
         valid_ids = {row["id"] for row in batch}
         clean = _validate_triage(out.get("tags", []), valid_ids)
         Messages.tag(clean)
+
+
+def _findings_schema(*cols):
+    """A {"findings": [ {col: string, ...} ]} object schema; each finding's keys
+    equal the target model's insert_cols, so a finding maps straight into
+    insert_with_con. additionalProperties:false and all-required everywhere."""
+    return {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["findings"],
+        "properties": {
+            "findings": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": list(cols),
+                    "properties": {c: {"type": "string"} for c in cols},
+                },
+            }
+        },
+    }
+
+
+GRAMMAR_SCHEMA = _findings_schema("slug", "problem", "original", "fixed", "rule")
+REPHRASING_SCHEMA = _findings_schema(
+    "slug", "problem", "learner_wrote", "native_phrase", "why"
+)
+IDIOMS_SCHEMA = _findings_schema("idiom", "meaning", "context", "learner_wrote")
+VERBS_SCHEMA = _findings_schema(
+    "verb", "past", "participle", "used_form", "correction", "context"
+)
+# friction adds a `type` enum (matches Friction.enums; a stray value is also
+# caught at persist by the model-layer enum check) and a top-level `loot` array.
+FRICTION_SCHEMA = {
+    "type": "object",
+    "additionalProperties": False,
+    "required": ["findings", "loot"],
+    "properties": {
+        "findings": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": [
+                    "slug",
+                    "type",
+                    "zone",
+                    "learner_wrote",
+                    "native_phrase",
+                    "context",
+                ],
+                "properties": {
+                    "slug": {"type": "string"},
+                    "type": {
+                        "type": "string",
+                        "enum": [
+                            "lexical",
+                            "phrasal",
+                            "structural",
+                            "topical",
+                            "register",
+                        ],
+                    },
+                    "zone": {"type": "string"},
+                    "learner_wrote": {"type": "string"},
+                    "native_phrase": {"type": "string"},
+                    "context": {"type": "string"},
+                },
+            },
+        },
+        "loot": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["word", "translation"],
+                "properties": {
+                    "word": {"type": "string"},
+                    "translation": {"type": "string"},
+                },
+            },
+        },
+    },
+}
+
+CATEGORIES = ("grammar", "rephrasing", "idioms", "verbs", "friction")
+
+
+def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
+    """Build the per-specialist (system_prompt, stdin_data, schema, model) jobs on
+    the MAIN thread (all DB reads already done; the workers do only the
+    subprocess). Reuses skillio.render for every data block so the driver invents
+    no new format. The four lang-sliced specialists get the learning-language
+    slice + their own dedup; friction gets the full timeline (with langs) + the
+    learning code + its own dedup + grammar dedup (cross-correlation)."""
+    cfg_block = _config_block(cfg)
+    lang_msgs = "<messages>" + render(lang_slice, fields=["id", "text"]) + "</messages>"
+
+    def lang_job(name, schema, dedup_tag):
+        data = "\n".join(
+            [
+                cfg_block,
+                lang_msgs,
+                f"<{dedup_tag}>" + render(dedup[dedup_tag]) + f"</{dedup_tag}>",
+            ]
+        )
+        return (_prompt(name), data, schema, SONNET)
+
+    jobs = {
+        "grammar": lang_job("grammar", GRAMMAR_SCHEMA, "grammar"),
+        "rephrasing": lang_job("rephrasing", REPHRASING_SCHEMA, "rephrasing"),
+        "idioms": lang_job("idioms", IDIOMS_SCHEMA, "idioms"),
+        "verbs": lang_job("verbs", VERBS_SCHEMA, "verbs"),
+    }
+    friction_msgs = (
+        "<messages>"
+        + render(full_slice, fields=["id", "text", "langs"])
+        + "</messages>"
+    )
+    jobs["friction"] = (
+        _prompt("friction"),
+        "\n".join(
+            [
+                cfg_block,
+                "<learning_code>" + lang + "</learning_code>",
+                friction_msgs,
+                "<friction>" + render(dedup["friction"]) + "</friction>",
+                "<grammar>" + render(dedup["grammar"]) + "</grammar>",
+            ]
+        ),
+        FRICTION_SCHEMA,
+        SONNET,
+    )
+    return jobs
+
+
+def _fan_out(jobs, *, runner=None):
+    """Run the five specialists in parallel (one claude subprocess each; NO DB I/O
+    in the workers). Returns (findings_by_category, failed_categories): a category
+    whose call raises DebriefError lands in `failed`; the rest in `findings`. A
+    specialist returning {"findings": []} is a SUCCESS — the gate is about valid
+    JSON returned, not non-empty findings."""
+    findings, failed = {}, []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
+        futures = {
+            pool.submit(_run_claude, sp, data, schema, model, runner=runner): cat
+            for cat, (sp, data, schema, model) in jobs.items()
+        }
+        for fut in concurrent.futures.as_completed(futures):
+            cat = futures[fut]
+            try:
+                findings[cat] = fut.result()
+            except DebriefError:
+                failed.append(cat)
+    return findings, sorted(failed)
 
 
 class DebriefError(Exception):

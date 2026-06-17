@@ -270,5 +270,79 @@ class RunTriageTest(DebriefTestBase):
         self.assertIsNone(appdb.query("SELECT langs FROM messages")[0]["langs"])
 
 
+class BuildJobsTest(DebriefTestBase):
+    def _jobs(self):
+        cfg = core.load_config()
+        lang_slice = [{"id": 1, "text": "I has went", "langs": '["en"]'}]
+        full_slice = [
+            {"id": 1, "text": "I has went", "langs": '["en"]'},
+            {"id": 2, "text": "ну таке", "langs": '["uk"]'},
+        ]
+        dedup = {
+            k: [] for k in ("grammar", "rephrasing", "idioms", "verbs", "friction")
+        }
+        return debrief._build_jobs(cfg, "en", lang_slice, full_slice, dedup)
+
+    def test_has_all_five_specialists(self):
+        self.assertEqual(
+            set(self._jobs()),
+            {"grammar", "rephrasing", "idioms", "verbs", "friction"},
+        )
+
+    def test_grammar_job_carries_config_and_lang_slice_and_dedup(self):
+        _sp, data, _schema, model = self._jobs()["grammar"]
+        self.assertEqual(model, debrief.SONNET)
+        self.assertIn("<config>", data)
+        self.assertIn("I has went", data)
+        self.assertIn("<grammar>", data)
+
+    def test_friction_job_has_learning_code_and_full_timeline(self):
+        _sp, data, _schema, _model = self._jobs()["friction"]
+        self.assertIn("<learning_code>en</learning_code>", data)
+        self.assertIn("ну таке", data)  # native-language row from the full timeline
+        self.assertIn("<grammar>", data)  # cross-correlation dedup
+
+
+class FanOutTest(DebriefTestBase):
+    def _jobs(self):
+        return {
+            "grammar": ("sp", "d", debrief.GRAMMAR_SCHEMA, debrief.SONNET),
+            "rephrasing": ("sp", "d", debrief.REPHRASING_SCHEMA, debrief.SONNET),
+            "idioms": ("sp", "d", debrief.IDIOMS_SCHEMA, debrief.SONNET),
+            "verbs": ("sp", "d", debrief.VERBS_SCHEMA, debrief.SONNET),
+            "friction": ("sp", "d", debrief.FRICTION_SCHEMA, debrief.SONNET),
+        }
+
+    def test_all_succeed(self):
+        runner = runner_from(
+            {
+                "grammar": {"findings": []},
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {"findings": [], "loot": []},
+            }
+        )
+        findings, failed = debrief._fan_out(self._jobs(), runner=runner)
+        self.assertEqual(failed, [])
+        self.assertEqual(
+            set(findings), {"grammar", "rephrasing", "idioms", "verbs", "friction"}
+        )
+
+    def test_one_failure_is_reported(self):
+        runner = runner_from(
+            {
+                "grammar": "error_result",
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {"findings": [], "loot": []},
+            }
+        )
+        findings, failed = debrief._fan_out(self._jobs(), runner=runner)
+        self.assertEqual(failed, ["grammar"])
+        self.assertNotIn("grammar", findings)
+
+
 if __name__ == "__main__":
     unittest.main()
