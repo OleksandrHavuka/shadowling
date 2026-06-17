@@ -137,9 +137,9 @@ Claude reads tag-delimited fields natively.
 |---|---|
 | storage, migrations, exposure counting, graduation, scheduling | the inline glossing of words in replies |
 | frequency ranking, dedup by normalized key | the debrief specialists' linguistic analysis |
-| message capture, drill filtering (fixed similarity threshold) | deriving a learning language's ISO code from its name |
+| message capture, drill filtering (fixed similarity threshold) | the per-message language triage (which language(s) a message is written in) |
 | the read/write contract, file permissions | slug discipline / cross-category ownership calls |
-| the debrief per-session loop, all-OK gate, atomic persist, JSON-schema + lang-code validation (debrief.py) | (the analysis it drives — see the right column rows above) |
+| the debrief per-session loop, all-OK gate, atomic persist, JSON-schema + lang-code validation, learning-code lookup (debrief.py) | (the analysis it drives — see the right column rows above) |
 
 The README mirrors this split ("Deterministic (in the script)" vs "Instruction-based").
 Nothing that *can* be exact is left to the model.
@@ -153,7 +153,7 @@ Everything below is reproducible from `plugins/shadowling/`.
 **Full test suite (stdlib only):**
 
 ```bash
-python3 -m unittest                       # 313 tests, ~1s
+python3 -m unittest                       # 325 tests, ~1s
 # or: python3 -m unittest discover -p 'test_*.py' -v
 ```
 
