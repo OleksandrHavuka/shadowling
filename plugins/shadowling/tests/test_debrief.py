@@ -174,7 +174,7 @@ class RunClaudeTest(DebriefTestBase):
         )
 
     def test_missing_claude_binary_raises(self):
-        with mock.patch("debrief.shutil.which", return_value=None):
+        with mock.patch("debrief._resolve_claude", return_value=None):
             with self.assertRaises(debrief.DebriefError):
                 debrief._run_claude("r", "d", TRIVIAL_SCHEMA, "claude-haiku-4-5")
 
@@ -186,6 +186,31 @@ class RunClaudeTest(DebriefTestBase):
             debrief._run_claude(
                 "r", "d", TRIVIAL_SCHEMA, "claude-haiku-4-5", runner=boom
             )
+
+
+class ResolveClaudeTest(DebriefTestBase):
+    def test_prefers_claude_on_path(self):
+        with mock.patch("debrief.shutil.which", return_value="/usr/bin/claude"):
+            self.assertEqual(debrief._resolve_claude(), "/usr/bin/claude")
+
+    def test_falls_back_to_local_install_when_absent_from_path(self):
+        # `claude migrate-installer` exposes claude only as a shell alias, invisible
+        # to a subprocess's PATH; the resolver must still find ~/.claude/local/claude.
+        with (
+            mock.patch("debrief.shutil.which", return_value=None),
+            mock.patch("debrief.os.path.isfile", return_value=True),
+            mock.patch("debrief.os.access", return_value=True),
+        ):
+            got = debrief._resolve_claude()
+        expected = os.path.join(os.path.expanduser("~"), ".claude", "local", "claude")
+        self.assertEqual(got, expected)
+
+    def test_returns_none_when_nothing_found(self):
+        with (
+            mock.patch("debrief.shutil.which", return_value=None),
+            mock.patch("debrief.os.path.isfile", return_value=False),
+        ):
+            self.assertIsNone(debrief._resolve_claude())
 
 
 class PromptFilesTest(DebriefTestBase):

@@ -483,19 +483,37 @@ def _parse_result(stdout):
     return out
 
 
+def _resolve_claude():
+    """Locate the claude executable for the headless calls. Prefer PATH (npm and
+    native installs put a real `claude` there); then fall back to the local-
+    installer location. `claude migrate-installer` exposes claude ONLY as a shell
+    alias pointing at ~/.claude/local/claude, which a non-interactive subprocess's
+    PATH never sees — so check that path explicitly. Same location on macOS and
+    Linux. Returns an absolute path, or None if nothing usable is found."""
+    found = shutil.which("claude")
+    if found:
+        return found
+    local = os.path.join(os.path.expanduser("~"), ".claude", "local", "claude")
+    if os.path.isfile(local) and os.access(local, os.X_OK):
+        return local
+    return None
+
+
 def _run_claude(system_prompt, data, schema, model, *, runner=None):
     """Run one headless `claude -p` analysis call and return its validated
     structured_output. `data` (the bulk slice + dedup context) goes on STDIN; only
     the small static role goes in --system-prompt. `runner` is the injectable
-    subprocess seam: None in production (real subprocess.run after a shutil.which
-    pre-flight), a fake in tests. Raises DebriefError on a missing claude, a
-    timeout, or any unexpected output shape."""
+    subprocess seam: None in production (real subprocess.run after a
+    _resolve_claude() pre-flight), a fake in tests. Raises DebriefError on a
+    missing claude, a timeout, or any unexpected output shape."""
+    claude = "claude"
     if runner is None:
-        if shutil.which("claude") is None:
-            raise DebriefError("`claude` was not found on PATH")
+        claude = _resolve_claude()
+        if claude is None:
+            raise DebriefError("`claude` was not found on PATH or ~/.claude/local")
         runner = _subprocess_runner
     argv = [
-        "claude",
+        claude,
         "-p",
         "--safe-mode",
         "--system-prompt",
