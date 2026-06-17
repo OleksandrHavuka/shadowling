@@ -193,28 +193,14 @@ class PromptFilesTest(DebriefTestBase):
 
 class ResolveLearningCodeTest(DebriefTestBase):
     def test_resolves_name_to_code(self):
+        cfg = core.load_config()  # learning_language == "English"
+        self.assertEqual(debrief._resolve_learning_code(cfg), "en")
+
+    def test_unknown_language_raises(self):
         cfg = core.load_config()
-        runner = runner_from({"lang_code": {"code": "EN"}})
-        self.assertEqual(debrief._resolve_learning_code(cfg, runner=runner), "en")
-
-    def test_retries_then_succeeds(self):
-        calls = {"n": 0}
-
-        def runner(argv, data):
-            calls["n"] += 1
-            if calls["n"] == 1:
-                return _event_array({"code": "not-a-code-123"})
-            return _event_array({"code": "en"})
-
-        cfg = core.load_config()
-        self.assertEqual(debrief._resolve_learning_code(cfg, runner=runner), "en")
-        self.assertEqual(calls["n"], 2)
-
-    def test_gives_up_after_attempts(self):
-        cfg = core.load_config()
-        runner = runner_from({"lang_code": {"code": "garbage value"}})
+        cfg["learning_language"] = "Klingon"
         with self.assertRaises(debrief.DebriefError):
-            debrief._resolve_learning_code(cfg, runner=runner)
+            debrief._resolve_learning_code(cfg)
 
 
 class ValidateTriageTest(DebriefTestBase):
@@ -523,7 +509,6 @@ class RunSessionTest(DebriefTestBase):
 def _full_runner():
     return runner_from(
         {
-            "lang_code": {"code": "en"},
             "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
             "grammar": {
                 "findings": [
@@ -546,7 +531,7 @@ def _full_runner():
 
 class MainTest(DebriefTestBase):
     def test_no_sessions_exits_zero(self):
-        runner = runner_from({"lang_code": {"code": "en"}})
+        runner = runner_from({})
         self.assertEqual(debrief.main(runner=runner), 0)
 
     def test_unconfigured_exits_one(self):
@@ -566,7 +551,7 @@ class MainTest(DebriefTestBase):
         from models.messages import Messages
 
         self._seed("First normal english sentence here please", "sess-A")
-        runner = runner_from({"lang_code": {"code": "en"}, "triage": "error_result"})
+        runner = runner_from({"triage": "error_result"})
         code = debrief.main(runner=runner)
         self.assertEqual(code, 1)
         self.assertEqual(Messages.pending_count(), 1)

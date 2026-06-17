@@ -14,7 +14,6 @@ Python 3.9+; cron-safe by construction (no interactive input)."""
 import concurrent.futures
 import json
 import os
-import re
 import shutil
 import sqlite3
 import subprocess
@@ -32,34 +31,13 @@ from models.verbs import Verbs
 from models.vocab import Vocab
 from skillio import render
 
-# The spec-verified model ids (claude 2.1.178, 2026-06-16/17): haiku for triage +
-# the once-per-run language-code resolution, sonnet for the analytical specialists.
+# The spec-verified model ids (claude 2.1.178, 2026-06-16/17): haiku for triage,
+# sonnet for the analytical specialists.
 HAIKU = "claude-haiku-4-5"
 SONNET = "claude-sonnet-4-6"
 CLAUDE_TIMEOUT = 180  # seconds per headless call
 
-# ISO-style language code (the regex the old triage skill used); "und"
-# fits too. Used both for triage validation and the language-code resolution.
-LANG_CODE = re.compile(r"^[a-z]{2,3}$")
-
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
-
-# The language-code resolver's role is a one-liner (not rewritten from a SKILL.md
-# body), so it stays an inline constant rather than a prompts/*.txt file.
-LANG_CODE_PROMPT = (
-    "You map a natural-language NAME to its ISO 639 language code. The input is a "
-    "single <learning_language> tag holding a language name (e.g. English, "
-    "Ukrainian, German). Return the lowercase ISO 639-1 two-letter code when one "
-    "exists (English->en, German->de, Spanish->es, Ukrainian->uk), else the ISO "
-    "639-3 three-letter code. Answer ONLY by calling the StructuredOutput tool "
-    'once with {"code": "<code>"}.'
-)
-LANG_CODE_SCHEMA = {
-    "type": "object",
-    "additionalProperties": False,
-    "required": ["code"],
-    "properties": {"code": {"type": "string"}},
-}
 
 
 def _prompt(name):
@@ -68,27 +46,19 @@ def _prompt(name):
         return f.read()
 
 
-def _resolve_learning_code(cfg, *, runner=None, attempts=2):
+def _resolve_learning_code(cfg):
     """Map the configured learning-language NAME ('English') to its ISO 639 code
-    ('en') via a tiny haiku call. Deriving the code from the name stays model
-    judgment (per the ENGINEERING.md deterministic-boundary table), so the plugin
-    keeps no language->code table and stays language-agnostic. A couple of
-    internal retries; raises DebriefError if it still fails (the run then
-    processes nothing and a later run retries)."""
-    data = "<learning_language>" + cfg["learning_language"] + "</learning_language>"
-    last = DebriefError("language-code resolution never ran")
-    for _ in range(attempts):
-        try:
-            out = _run_claude(
-                LANG_CODE_PROMPT, data, LANG_CODE_SCHEMA, HAIKU, runner=runner
-            )
-            code = str(out.get("code", "")).strip().lower()
-            if LANG_CODE.match(code):
-                return code
-            last = DebriefError(f"resolved code {code!r} is not a valid ISO 639 code")
-        except DebriefError as e:
-            last = e
-    raise last
+    ('en') via the langcodes table — a pure, instant, deterministic lookup (no
+    LLM, so a transient model failure can't kill the whole run). Unknown name ->
+    DebriefError pointing at /setup; the run then processes nothing and a later
+    run retries once the config is fixed."""
+    code = langcodes.NAME_TO_CODE.get(cfg["learning_language"].strip().lower())
+    if code is None:
+        raise DebriefError(
+            f"no ISO code known for learning_language "
+            f"{cfg['learning_language']!r}; add it to langcodes.py or run /setup"
+        )
+    return code
 
 
 TRIAGE_BATCH = 200
@@ -439,7 +409,7 @@ def main(runner=None):
         print(cfg["notice"], file=sys.stderr)
         return 1
     try:
-        lang = _resolve_learning_code(cfg, runner=runner)
+        lang = _resolve_learning_code(cfg)
     except DebriefError as e:
         print(f"could not resolve the learning-language code: {e}", file=sys.stderr)
         return 1
