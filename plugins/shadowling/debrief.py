@@ -50,6 +50,16 @@ CLAUDE_TIMEOUT = 300  # 5 min per headless call — friction (the heaviest speci
 # can cross 3 min on a large session; 5 min keeps a slow-but-valid call from being
 # killed. A genuine hang is still bounded (timeout -> DebriefError -> session pending).
 
+# Tool lockdown for every headless call, alongside `--tools ""`. Per the CLI
+# reference a bare name in --disallowed-tools removes the tool from the model's
+# context: "*" = every (built-in) tool, "mcp__*" = every MCP tool. `--tools ""`
+# already drops built-ins but does NOT touch MCP tools, so this closes that gap as
+# a second barrier over --safe-mode (which already stops MCP servers loading). A
+# specialist is a pure stdin->structured-output extractor and must never reach a
+# tool. (Hallucinated tool-call TEXT is a separate concern, handled by each
+# prompt's "You have no tools" opening line, not by any flag.)
+DISALLOWED_TOOLS = "* mcp__*"
+
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
 
 
@@ -585,6 +595,8 @@ def _run_claude(system_prompt, data, schema, model, *, runner=None, effort=None)
         model,
         "--tools",
         "",
+        "--disallowed-tools",
+        DISALLOWED_TOOLS,
         "--output-format",
         "json",
         "--json-schema",
