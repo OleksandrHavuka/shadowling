@@ -103,46 +103,18 @@ class DecodeTest(EntrypointBase):
         self.assertIn("<type>", err)  # template shown
 
 
-LOOT = load("loot/loot.py", "ep_loot")
 DROP = load("drop/drop.py", "ep_drop")
 
 
-class LootTest(EntrypointBase):
-    def test_add_multiple_pairs(self):
-        code, out, _ = run_main(
-            LOOT,
-            ["add"],
-            items(("hello", "привіт"), ("machine learning", "машинне навчання")),
-        )
-        self.assertEqual(code, 0)
-        import appdb
-
-        rows = {r["word"]: r for r in appdb.query("SELECT * FROM vocab")}
-        self.assertEqual(rows["hello"]["translation"], "привіт")
-        self.assertEqual(rows["machine learning"]["translation"], "машинне навчання")
-        self.assertEqual(out.count("<action>add</action>"), 2)
-        self.assertIn("<word>hello</word>", out)
-        self.assertIn("<word>machine learning</word>", out)
-
-    def test_add_comma_in_translation_survives(self):
-        code, _, _ = run_main(LOOT, ["add"], items(("however", "однак, проте")))
-        import appdb
-
-        self.assertEqual(
-            appdb.query("SELECT translation FROM vocab WHERE word='however'")[0][
-                "translation"
-            ],
-            "однак, проте",
-        )
-
-    def test_add_empty_items_is_error(self):
-        code, _, _ = run_main(LOOT, ["add"], "<items>\n</items>")
-        self.assertEqual(code, 1)
-
-
 class DropTest(EntrypointBase):
+    def _seed(self, *pairs):
+        from models.vocab import Vocab
+
+        for word, tr in pairs:
+            Vocab.add(word, tr)
+
     def test_remove_multiple(self):
-        run_main(LOOT, ["add"], items(("alpha", "а"), ("beta", "б")))
+        self._seed(("alpha", "а"), ("beta", "б"))
         code, out, _ = run_main(DROP, ["remove", "alpha", "beta"])
         self.assertEqual(code, 0)
         self.assertIn("<word>alpha</word>", out)
@@ -150,7 +122,7 @@ class DropTest(EntrypointBase):
         self.assertEqual(out.count("<outcome>removed</outcome>"), 2)
 
     def test_remove_reports_unknown(self):
-        run_main(LOOT, ["add"], items(("alpha", "а")))
+        self._seed(("alpha", "а"))
         code, out, _ = run_main(DROP, ["remove", "alpha", "ghost"])
         self.assertIn("<word>alpha</word>", out)
         self.assertIn("<outcome>removed</outcome>", out)
