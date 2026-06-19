@@ -26,13 +26,18 @@ Steps:
    conversation where the term appeared (a short snippet, not a summary). If the
    term did not come from the conversation (an explicit ad-hoc add), use an empty
    string — the driver will generate a generic example.
-4. ONE call. Pipe a JSON object `{ "<term>": "<micro-context>", ... }` on stdin via
-   a quoted heredoc (zero shell expansion; nothing needs escaping). The body and
-   the closing `SL_IN` MUST start at column 0:
+4. ONE call. Pipe the words as an `<items>` block on stdin via a quoted heredoc
+   (zero shell expansion — nothing needs escaping, not even quotes in the context).
+   One word per line: the word, a single TAB, then its micro-context (leave the part
+   after the TAB empty for an ad-hoc add). The body and the closing `SL_IN` MUST
+   start at column 0:
 
    ```bash
    python3 "${CLAUDE_PLUGIN_ROOT}/loot.py" <<'SL_IN'
-   {"throughput": "We boosted throughput under load.", "idempotent": ""}
+   <items>
+   throughput	We boosted throughput under load.
+   idempotent	
+   </items>
    SL_IN
    ```
 5. Relay the driver's summary line verbatim (`N/M enriched; re-run /loot to retry …`

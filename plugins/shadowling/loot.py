@@ -9,7 +9,6 @@ old+new context merge; this driver carries no merge/ratchet logic. Stdlib only;
 cron-safe (no interactive input)."""
 
 import functools
-import json
 import os
 import sqlite3
 import sys
@@ -20,7 +19,7 @@ from config import config_block
 from headless import SONNET, HeadlessError, run_claude
 from models.vocab import Vocab
 from parallel import fan_out, log, with_retry
-from skillio import render
+from skillio import read_fields, render, rows
 
 CHUNK_SIZE = 8
 MAX_WORKERS = 6
@@ -204,19 +203,22 @@ def run(payload, cfg, *, runner=None):
 
 
 def main(runner=None):
-    """Read {word: context} JSON from stdin, gate on config, enrich, print a
-    summary. Exit 1 on a config/parse error or if any word stayed pending."""
+    """Read the <items> rows(word, context) block from stdin via skillio (a quoted
+    heredoc, so the LLM escapes nothing for the free-form context), gate on config,
+    enrich, print a summary. Exit 1 on a config/parse error or if any word stayed
+    pending."""
     cfg = core.load_config()
     if not core.config_ready(cfg):
         print(cfg["notice"], file=sys.stderr)
         return 1
     try:
-        payload = json.loads(sys.stdin.read())
-    except ValueError:
-        print("loot.py: stdin must be a JSON object {word: context}", file=sys.stderr)
+        fields = read_fields({"items": rows("word", "context")})
+    except ValueError as e:
+        print(str(e), file=sys.stderr)  # skillio's message names the exact fix
         return 1
-    if not isinstance(payload, dict) or not payload:
-        print("loot.py: empty or non-object payload", file=sys.stderr)
+    payload = {r["word"]: r["context"] for r in fields["items"]}
+    if not payload:
+        print("loot.py: no <items> rows on stdin", file=sys.stderr)
         return 1
     summary = run(payload, cfg, runner=runner)
     line = f"{summary['enriched']}/{summary['total']} enriched"
