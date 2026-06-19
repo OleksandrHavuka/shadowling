@@ -541,5 +541,49 @@ class WalSafeBackupTest(AppDbTestBase):
             bak_con.close()
 
 
+class Migration7Test(AppDbTestBase):
+    def test_fresh_db_has_enrichment_columns(self):
+        con = appdb.connect()
+        try:
+            self.assertEqual(
+                con.execute("PRAGMA user_version").fetchone()[0], len(appdb.MIGRATIONS)
+            )
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(vocab)")}
+            for c in ("definition", "source_context", "examples", "synonyms"):
+                self.assertIn(c, cols)
+        finally:
+            con.close()
+
+    def test_upgrade_preserves_existing_vocab_rows(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
+        for migration in appdb.MIGRATIONS[:6]:  # build a pre-7 (v6) database
+            migration(con)
+        con.execute("PRAGMA user_version = 6")
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status, created_at,"
+            " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
+        )
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays _migration_7
+        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
+        self.assertEqual(row["translation"], "переклад")
+        self.assertIsNone(row["examples"])  # added column backfills NULL
+
+    def test_examples_rejects_invalid_json(self):
+        appdb.connect().close()
+        con = sqlite3.connect(appdb.db_path())
+        try:
+            # the CHECK rejects at INSERT time (json_valid fails immediately)
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(
+                    "INSERT INTO vocab(word, translation, remaining, status,"
+                    " examples) VALUES ('w', 't', 10, 'active', 'not json')"
+                )
+        finally:
+            con.close()
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -221,6 +221,23 @@ def _migration_6(con):
     con.execute("DELETE FROM mastery WHERE item_kind != 'vocab'")
 
 
+def _migration_7(con):
+    """Fat /loot enrichment columns on vocab (append-only). Two scalar fields
+    (definition, source_context) plus two JSON-array fields (examples, synonyms)
+    guarded by json_valid. source_context non-NULL is the sole grounding signal
+    (no separate flag). Existing rows backfill NULL (not yet enriched)."""
+    statements = [
+        "ALTER TABLE vocab ADD COLUMN definition TEXT",
+        "ALTER TABLE vocab ADD COLUMN source_context TEXT",
+        "ALTER TABLE vocab ADD COLUMN examples TEXT"
+        " CHECK (examples IS NULL OR json_valid(examples))",
+        "ALTER TABLE vocab ADD COLUMN synonyms TEXT"
+        " CHECK (synonyms IS NULL OR json_valid(synonyms))",
+    ]
+    for stmt in statements:
+        con.execute(stmt)
+
+
 MIGRATIONS = [
     _migration_1,
     _migration_2,
@@ -228,6 +245,7 @@ MIGRATIONS = [
     _migration_4,
     _migration_5,
     _migration_6,
+    _migration_7,
 ]
 
 # --- views: derived code, never migrated --------------------------------------
