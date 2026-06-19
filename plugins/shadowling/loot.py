@@ -132,14 +132,16 @@ def _chunk_thunk(cfg, chunk, contexts, existing, runner):
 
 def _persist(enriched):
     """Dumb UPSERT each enriched word in its OWN transaction (partial-success: one
-    bad row rolls back only itself). Returns the count persisted."""
+    bad row rolls back only itself). Returns the SET of words actually written — a
+    no-op `untranslated` add (LLM echoed the term) or a row that fails to persist is
+    NOT included, so the caller can surface it as pending instead of losing it."""
     con = connect()
-    n = 0
+    done = set()
     try:
         for word, item in enriched.items():
             try:
                 with tx(con):
-                    Vocab.add(
+                    res = Vocab.add(
                         word,
                         item["translation"],
                         definition=item.get("definition"),
@@ -148,12 +150,15 @@ def _persist(enriched):
                         synonyms=item.get("synonyms"),
                         con=con,
                     )
-                n += 1
+                if res.get("action") == "untranslated":
+                    log(f"    ✗ persist {word} — untranslated (translation == word?)")
+                else:
+                    done.add(word)
             except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
                 log(f"    ✗ persist {word} — {e}")
     finally:
         con.close()
-    return n
+    return done
 
 
 def run(payload, cfg, *, runner=None):
@@ -184,9 +189,14 @@ def run(payload, cfg, *, runner=None):
         for got in ok.values():
             enriched.update(got)
         pending = set(words) - set(enriched) - failed  # missing/invalid -> retry
-    pending |= failed
+    # pending is derived from what was ACTUALLY written, so enriched + pending ==
+    # total always holds: a validated word that no-ops/fails to persist falls here.
     persisted = _persist(enriched)
-    return {"total": total, "enriched": persisted, "pending": sorted(pending)}
+    return {
+        "total": total,
+        "enriched": len(persisted),
+        "pending": sorted(set(words) - persisted),
+    }
 
 
 def main(runner=None):

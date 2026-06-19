@@ -144,6 +144,17 @@ class EnrichTest(LootDriverBase):
         self.assertIn("alpha", self.rows_by_word())
         self.assertNotIn("beta", self.rows_by_word())
 
+    def test_identity_translation_goes_pending_not_silently_lost(self):
+        # LLM echoed the term as its own translation -> _add_on no-ops (untranslated).
+        # The word must surface as pending, never vanish: enriched + pending == total.
+        cfg = core.load_config()
+        item = _item("throughput", translation="throughput")
+        runner = echo_runner({"throughput": item})
+        summary = loot.run({"throughput": "ctx"}, cfg, runner=runner)
+        self.assertEqual(summary["enriched"], 0)
+        self.assertEqual(summary["pending"], ["throughput"])
+        self.assertNotIn("throughput", self.rows_by_word())
+
     def test_reloot_overwrites_examples(self):
         from models.vocab import Vocab
 
