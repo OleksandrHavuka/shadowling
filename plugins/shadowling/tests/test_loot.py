@@ -144,6 +144,16 @@ class EnrichTest(LootDriverBase):
         self.assertIn("alpha", self.rows_by_word())
         self.assertNotIn("beta", self.rows_by_word())
 
+    def test_cloze_markup_in_example_is_invalid(self):
+        # examples are stored PLAIN; Spec 2 wraps {{c1::}} at push time. A cloze
+        # marker here would double-wrap downstream, so it must fail validation.
+        cfg = core.load_config()
+        item = _item("throughput", examples=["We boosted {{c1::throughput}} today."])
+        runner = echo_runner({"throughput": item})
+        summary = loot.run({"throughput": "ctx"}, cfg, runner=runner)
+        self.assertEqual(summary["enriched"], 0)
+        self.assertEqual(summary["pending"], ["throughput"])
+
     def test_identity_translation_goes_pending_not_silently_lost(self):
         # LLM echoed the term as its own translation -> _add_on no-ops (untranslated).
         # The word must surface as pending, never vanish: enriched + pending == total.

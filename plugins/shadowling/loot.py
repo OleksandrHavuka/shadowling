@@ -92,14 +92,18 @@ def _build_data(cfg, chunk, contexts, existing):
 
 
 def _valid(item, word):
-    """An item is valid if it has a non-empty translation and >=1 example, each
-    example containing the target word case-insensitively (plain, no cloze)."""
+    """An item is valid if it has a non-empty translation and >=1 example, each a
+    PLAIN string (no `{{` cloze markup — Spec 2 wraps at push) containing the target
+    word case-insensitively."""
     if not (item.get("translation") or "").strip():
         return False
     examples = item.get("examples")
     if not isinstance(examples, list) or not examples:
         return False
-    return all(isinstance(s, str) and word.lower() in s.lower() for s in examples)
+    return all(
+        isinstance(s, str) and "{{" not in s and word.lower() in s.lower()
+        for s in examples
+    )
 
 
 def _enrich_chunk(cfg, chunk, contexts, existing, *, runner):
