@@ -6,6 +6,7 @@ The vocab table is the one sanctioned mutable incident store: each word carries 
 pure matching helpers (no DB), kept module-level like models/base.norm_key.
 """
 
+import json
 import re
 
 import core
@@ -41,40 +42,72 @@ def word_in_text(word, text):
 
 class Vocab:
     @staticmethod
-    def _add_on(con, word, translation):
-        """The full add/refresh/relearn body on an ALREADY-OPEN connection —
-        opens no transaction of its own. Strips the pair, takes the untranslated
-        early return (touching no con), else does the existence read-then-write
-        and the final read-back, all on `con` so a caller's tx reads its own
-        write. Returns the same render-ready result dict as add()."""
+    def _add_on(
+        con,
+        word,
+        translation,
+        *,
+        definition=None,
+        source_context=None,
+        examples=None,
+        synonyms=None,
+    ):
+        """add/refresh/relearn on an ALREADY-OPEN connection (opens no tx of its
+        own). Writes ONLY the enrichment columns actually provided (not-None), so a
+        bare add(word, translation) never wipes a word's existing enrichment, while
+        the loot driver — which always passes the full bundle — overwrites it.
+        examples/synonyms are Python lists, stored as json_valid TEXT. Returns the
+        same render-ready result dict as add()."""
         word = word.strip().lower()
-        translation = translation.strip()
+        translation = (translation or "").strip()
         # Identity/empty translation = the LLM echoed the term back untranslated.
         # Never persist such a row; the untranslated result carries just the word.
         if not translation or _norm(translation) == _norm(word):
             return {"action": "untranslated", "word": word}
         now = core.now()
+        # only the provided (not-None) enrichment columns are written
+        enrich = {}
+        if definition is not None:
+            enrich["definition"] = definition
+        if source_context is not None:
+            enrich["source_context"] = source_context
+        if examples is not None:
+            enrich["examples"] = json.dumps(examples)
+        if synonyms is not None:
+            enrich["synonyms"] = json.dumps(synonyms)
         row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
         if row is None:
+            cols = [
+                "word",
+                "translation",
+                "remaining",
+                "status",
+                "created_at",
+                "updated_at",
+            ]
+            vals = [word, translation, START_REMAINING, "active", now, now]
+            for c, v in enrich.items():
+                cols.append(c)
+                vals.append(v)
+            placeholders = ", ".join("?" * len(cols))
             con.execute(
-                "INSERT INTO vocab(word, translation, remaining, status,"
-                " created_at, updated_at) VALUES (?, ?, ?, 'active', ?, ?)",
-                (word, translation, START_REMAINING, now, now),
+                f"INSERT INTO vocab({', '.join(cols)}) VALUES ({placeholders})", vals
             )
             action = "add"
-        elif row["status"] == "learned":
-            con.execute(
-                "UPDATE vocab SET translation = ?, remaining = ?,"
-                " status = 'active', updated_at = ? WHERE word = ?",
-                (translation, START_REMAINING, now, word),
-            )
-            action = "relearn"
         else:
-            con.execute(
-                "UPDATE vocab SET translation = ?, updated_at = ? WHERE word = ?",
-                (translation, now, word),
-            )
-            action = "refresh"
+            sets = ["translation = ?", "updated_at = ?"]
+            params = [translation, now]
+            if row["status"] in ("learned", "dropped"):
+                sets += ["remaining = ?", "status = 'active'"]
+                params.append(START_REMAINING)
+                action = "relearn"
+            else:
+                action = "refresh"
+            for c, v in enrich.items():
+                sets.append(f"{c} = ?")
+                params.append(v)
+            params.append(word)
+            con.execute(f"UPDATE vocab SET {', '.join(sets)} WHERE word = ?", params)
         new = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
         return {
             "action": action,
@@ -85,20 +118,52 @@ class Vocab:
         }
 
     @staticmethod
-    def add(word, translation, con=None):
-        """Add or refresh a vocab pair. Returns ONE render-ready result dict
-        ({action, word, translation, remaining, status} or {action:
-        'untranslated', word}). action is add | refresh | relearn | untranslated.
-        With con=None opens its own immediate transaction; given a caller's open
-        `con` (the debrief driver's per-session tx) the looted pair commits
-        atomically with the session's findings + processed-mark. Body is _add_on;
-        an untranslated pair writes nothing. Mirrors Vocab.relearn's con=."""
+    def add(
+        word,
+        translation=None,
+        *,
+        definition=None,
+        source_context=None,
+        examples=None,
+        synonyms=None,
+        con=None,
+    ):
+        """Add or refresh a vocab pair, optionally with enrichment columns. Returns
+        ONE render-ready result dict. With con=None opens its own immediate
+        transaction; given a caller's open `con` the write commits atomically with
+        the caller's. Only provided enrichment columns are written (see _add_on)."""
+        kw = {
+            "definition": definition,
+            "source_context": source_context,
+            "examples": examples,
+            "synonyms": synonyms,
+        }
         if con is not None:
-            return Vocab._add_on(con, word, translation)
+            return Vocab._add_on(con, word, translation, **kw)
         con = connect()
         try:
             with tx(con):  # BEGIN IMMEDIATE serializes the existence-read + write
-                return Vocab._add_on(con, word, translation)
+                return Vocab._add_on(con, word, translation, **kw)
+        finally:
+            con.close()
+
+    @staticmethod
+    def get_many(words):
+        """Return {word: dict(row)} for the given words that exist; absent words are
+        omitted. Words are normalized (strip().lower()) to match the PK. Used by the
+        loot driver's pre-read so the LLM can merge old context with new."""
+        norm = sorted({w.strip().lower() for w in words if w and w.strip()})
+        if not norm:
+            return {}
+        placeholders = ", ".join("?" * len(norm))
+        con = connect()
+        try:
+            return {
+                r["word"]: dict(r)
+                for r in con.execute(
+                    f"SELECT * FROM vocab WHERE word IN ({placeholders})", norm
+                )
+            }
         finally:
             con.close()
 

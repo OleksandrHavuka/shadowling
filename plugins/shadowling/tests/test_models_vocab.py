@@ -1,3 +1,4 @@
+import json
 import os
 import shutil
 import tempfile
@@ -262,6 +263,64 @@ class AddConTest(VocabRepoBase):
         self.assertEqual(r["action"], "relearn")
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
         self.assertEqual(self.rows_by_word()["throughput"]["status"], "active")
+
+
+class EnrichmentUpsertTest(VocabRepoBase):
+    def test_add_new_word_with_enrichment_round_trips_json(self):
+        Vocab.add(
+            "Throughput",
+            "пропускна здатність",
+            definition="rate of processing",
+            source_context="It improves throughput.",
+            examples=["Throughput is high.", "We measured throughput."],
+            synonyms=["rate", "bandwidth"],
+        )
+        r = self.rows_by_word()["throughput"]
+        self.assertEqual(r["definition"], "rate of processing")
+        self.assertEqual(r["source_context"], "It improves throughput.")
+        self.assertEqual(
+            json.loads(r["examples"]),
+            ["Throughput is high.", "We measured throughput."],
+        )
+        self.assertEqual(json.loads(r["synonyms"]), ["rate", "bandwidth"])
+
+    def test_enrichment_overwrites_only_provided_columns(self):
+        Vocab.add("w", "t", examples=["old one with w"], definition="old def")
+        Vocab.add("w", "t", examples=["new one with w"])  # synonyms/def NOT provided
+        r = self.rows_by_word()["w"]
+        self.assertEqual(json.loads(r["examples"]), ["new one with w"])
+        self.assertEqual(r["definition"], "old def")  # untouched — not provided
+
+    def test_bare_add_does_not_wipe_existing_enrichment(self):
+        # debrief's friction-loot path: Vocab.add(word, translation), no enrichment
+        Vocab.add("w", "t", examples=["grounded w example"], source_context="ctx")
+        Vocab.add("w", "t2")  # bare refresh
+        r = self.rows_by_word()["w"]
+        self.assertEqual(r["translation"], "t2")
+        self.assertEqual(json.loads(r["examples"]), ["grounded w example"])
+        self.assertEqual(r["source_context"], "ctx")  # preserved
+
+    def test_relearn_path_also_writes_provided_enrichment(self):
+        Vocab.add("w", "t")
+        self._set("w", remaining=0, status="learned")
+        r = Vocab.add("w", "t2", examples=["w again"])
+        self.assertEqual(r["action"], "relearn")
+        row = self.rows_by_word()["w"]
+        self.assertEqual(row["status"], "active")
+        self.assertEqual(row["remaining"], 10)
+        self.assertEqual(json.loads(row["examples"]), ["w again"])
+
+
+class GetManyTest(VocabRepoBase):
+    def test_returns_existing_rows_and_omits_absent(self):
+        Vocab.add("alpha", "а")
+        Vocab.add("beta", "б")
+        got = Vocab.get_many(["Alpha", "beta", "missing"])
+        self.assertEqual(set(got), {"alpha", "beta"})
+        self.assertEqual(got["alpha"]["translation"], "а")
+
+    def test_empty_input_returns_empty(self):
+        self.assertEqual(Vocab.get_many([]), {})
 
 
 if __name__ == "__main__":
