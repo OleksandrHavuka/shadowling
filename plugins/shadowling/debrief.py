@@ -11,13 +11,9 @@ whole session's findings + its processed-mark in ONE short per-session
 transaction, so a failure rolls back clean and a retry starts fresh. Stdlib only,
 Python 3.9+; cron-safe by construction (no interactive input)."""
 
-import concurrent.futures
 import functools
-import json
 import os
-import shutil
 import sqlite3
-import subprocess
 import sys
 import time
 import typing
@@ -26,6 +22,7 @@ import core
 import langcodes
 from appdb import connect, tx
 from config import config_block
+from headless import HAIKU, SONNET, HeadlessError, findings_schema, run_claude
 from models.base import Model
 from models.friction import Friction
 from models.grammar import Grammar
@@ -34,31 +31,18 @@ from models.messages import Messages
 from models.rephrasing import Rephrasing
 from models.verbs import Verbs
 from models.vocab import Vocab
+from parallel import fan_out, log
 from skillio import render
 
-# The spec-verified model ids (claude 2.1.178, 2026-06-16/17): haiku for triage,
-# sonnet for the analytical specialists.
-HAIKU = "claude-haiku-4-5"
-SONNET = "claude-sonnet-4-6"
+# debrief's historical exception name is now the shared engine error.
+DebriefError = HeadlessError
+
 # Sonnet 4.6's `--effort` knob controls thinking depth AND total token spend; the CLI
 # default is `high`, which makes each analytical call burn ~100-140s. The five
 # specialists are subagent-style structured-extraction tasks, so `medium` roughly
 # halves wall-time with negligible quality loss (measured: ~56s vs ~120s, 11 vs 10-12
 # findings). NOT passed to the haiku triage call — effort errors on Haiku 4.5.
 SPECIALIST_EFFORT = "medium"
-CLAUDE_TIMEOUT = 300  # 5 min per headless call — friction (the heaviest specialist)
-# can cross 3 min on a large session; 5 min keeps a slow-but-valid call from being
-# killed. A genuine hang is still bounded (timeout -> DebriefError -> session pending).
-
-# Tool lockdown for every headless call, alongside `--tools ""`. Per the CLI
-# reference a bare name in --disallowed-tools removes the tool from the model's
-# context: "*" = every (built-in) tool, "mcp__*" = every MCP tool. `--tools ""`
-# already drops built-ins but does NOT touch MCP tools, so this closes that gap as
-# a second barrier over --safe-mode (which already stops MCP servers loading). A
-# specialist is a pure stdin->structured-output extractor and must never reach a
-# tool. (Hallucinated tool-call TEXT is a separate concern, handled by each
-# prompt's "You have no tools" opening line, not by any flag.)
-DISALLOWED_TOOLS = "* mcp__*"
 
 PROMPTS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "prompts")
 
@@ -157,7 +141,7 @@ def _run_triage(session, cfg, *, runner=None):
         batch = Messages.list(session=session, untagged=True, limit=TRIAGE_BATCH)
         if not batch:
             return
-        _log(f"    → triage {len(batch)} msg(s)")
+        log(f"    → triage {len(batch)} msg(s)")
         t0 = time.monotonic()
         data = "\n".join(
             [
@@ -166,46 +150,16 @@ def _run_triage(session, cfg, *, runner=None):
             ]
         )
         try:
-            out = _run_claude(
+            out = run_claude(
                 _prompt("triage"), data, TRIAGE_SCHEMA, HAIKU, runner=runner
             )
             valid_ids = {row["id"] for row in batch}
             clean = _validate_triage(out.get("tags", []), valid_ids)
         except DebriefError as e:
-            _log(f"    ✗ triage ERROR {time.monotonic() - t0:.0f}s — {e}")
+            log(f"    ✗ triage ERROR {time.monotonic() - t0:.0f}s — {e}")
             raise
         Messages.tag(clean)
-        _log(f"    ✓ triage OK {time.monotonic() - t0:.0f}s ({len(clean)} tagged)")
-
-
-def _findings_schema(*cols, enums=None, extra=None):
-    """Build a {"findings": [ {col: string|enum, ...} ]} schema from a model's
-    column list, so the schema is GENERATED from insert_cols and can't drift from
-    it. `enums` ({col: iterable}) gives a column an `enum`; `extra` ({prop:
-    subschema}) adds top-level properties (friction's `loot`). all-required,
-    additionalProperties:false everywhere."""
-    enums = enums or {}
-    extra = extra or {}
-    props = {
-        c: (
-            {"type": "string", "enum": sorted(enums[c])}
-            if c in enums
-            else {"type": "string"}
-        )
-        for c in cols
-    }
-    item = {
-        "type": "object",
-        "additionalProperties": False,
-        "required": list(cols),
-        "properties": props,
-    }
-    return {
-        "type": "object",
-        "additionalProperties": False,
-        "required": ["findings", *extra],
-        "properties": {"findings": {"type": "array", "items": item}, **extra},
-    }
+        log(f"    ✓ triage OK {time.monotonic() - t0:.0f}s ({len(clean)} tagged)")
 
 
 # A {word, translation} pair array — friction's vocabulary loot.
@@ -238,13 +192,13 @@ class _Spec(typing.NamedTuple):
 # friction's schema adds its `type` enum (= Friction.enums) + a top-level `loot`
 # array; the other four are a plain findings array over their insert_cols.
 SPECS = {
-    "grammar": _Spec(Grammar, _findings_schema(*Grammar.insert_cols)),
-    "rephrasing": _Spec(Rephrasing, _findings_schema(*Rephrasing.insert_cols)),
-    "idioms": _Spec(Idioms, _findings_schema(*Idioms.insert_cols)),
-    "verbs": _Spec(Verbs, _findings_schema(*Verbs.insert_cols)),
+    "grammar": _Spec(Grammar, findings_schema(*Grammar.insert_cols)),
+    "rephrasing": _Spec(Rephrasing, findings_schema(*Rephrasing.insert_cols)),
+    "idioms": _Spec(Idioms, findings_schema(*Idioms.insert_cols)),
+    "verbs": _Spec(Verbs, findings_schema(*Verbs.insert_cols)),
     "friction": _Spec(
         Friction,
-        _findings_schema(
+        findings_schema(
             *Friction.insert_cols, enums=Friction.enums, extra={"loot": _PAIRS_SCHEMA}
         ),
     ),
@@ -294,55 +248,28 @@ def _build_jobs(cfg, lang, lang_slice, full_slice, dedup):
     return jobs
 
 
-def _log(msg):
-    """Emit a per-specialist progress line to STDERR (flushed). main streams the
-    per-session summary to STDOUT; the in-flight detail (which of the five
-    specialists is running, how long each took, which failed) goes to STDERR — so the
-    relayed STDOUT summary stays byte-identical while a 1-2 min fan-out is no longer a
-    dark, frozen line."""
-    print(msg, file=sys.stderr, flush=True)
+def _specialist_thunk(sp, data, schema, model, runner):
+    """A zero-arg thunk for one specialist call at SPECIALIST_EFFORT (all sonnet)."""
+    return lambda: run_claude(
+        sp, data, schema, model, runner=runner, effort=SPECIALIST_EFFORT
+    )
 
 
 def _fan_out(jobs, *, runner=None):
-    """Run the five specialists in parallel (one claude subprocess each; NO DB I/O
-    in the workers). Returns (findings_by_category, failed) where `failed` maps a
-    failed category -> the DebriefError reason; the rest land in `findings`. A
-    specialist returning {"findings": []} is a SUCCESS — the gate is valid JSON
-    returned, not non-empty findings. Each specialist's launch, duration, and
-    OK/ERROR streams to STDERR (see _log) so a slow fan-out is visible live instead of
-    a frozen per-session line. Specialists run at SPECIALIST_EFFORT (they are sonnet;
-    effort is NOT passed to the haiku triage call, which rejects it)."""
-    findings, failed = {}, {}
-    started = {}
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as pool:
-        futures = {}
-        for cat, (sp, data, schema, model) in jobs.items():
-            started[cat] = time.monotonic()
-            futures[
-                pool.submit(
-                    _run_claude,
-                    sp,
-                    data,
-                    schema,
-                    model,
-                    runner=runner,
-                    effort=SPECIALIST_EFFORT,
-                )
-            ] = cat
-            _log(f"    → {cat} running (effort={SPECIALIST_EFFORT})")
-        for fut in concurrent.futures.as_completed(futures):
-            cat = futures[fut]
-            dt = time.monotonic() - started[cat]
-            try:
-                findings[cat] = fut.result()
-                _log(
-                    f"    ✓ {cat} OK {dt:.0f}s "
-                    f"({len(findings[cat].get('findings', []))} finding(s))"
-                )
-            except DebriefError as e:
-                failed[cat] = str(e)
-                _log(f"    ✗ {cat} ERROR {dt:.0f}s — {e}")
-    return findings, failed
+    """Run the five specialists in parallel via parallel.fan_out. Returns
+    (findings_by_category, failed) where findings maps category -> structured_output
+    and failed maps a failed category -> the error reason string. A specialist
+    returning {"findings": []} is a SUCCESS — the gate is valid JSON returned, not
+    non-empty findings. parallel.fan_out streams each specialist's start/duration/
+    OK-ERROR to stderr so a slow fan-out is visible live. Specialists run at
+    SPECIALIST_EFFORT (they are sonnet; effort is NOT passed to the haiku triage
+    call, which rejects it)."""
+    thunks = {
+        cat: _specialist_thunk(sp, data, schema, model, runner)
+        for cat, (sp, data, schema, model) in jobs.items()
+    }
+    findings, failed = fan_out(thunks, max_workers=5)
+    return findings, {cat: str(e) for cat, e in failed.items()}
 
 
 def _result(session, *, ok, failed=(), empty=False, errors=None):
@@ -509,108 +436,6 @@ def main(runner=None):
             dedup = None
     print(_totals_line(results), flush=True)
     return 1 if any(not r["ok"] for r in results) else 0
-
-
-class DebriefError(Exception):
-    """Any failure in a headless call, its validation, or persistence. Caught per
-    session/run; the affected session stays pending and the summary reports it."""
-
-
-def _subprocess_runner(argv, data):
-    """Production seam: spawn claude, feed `data` (the bulk slice + dedup context)
-    on STDIN (ARG_MAX-safe), return stdout text. Raises subprocess.TimeoutExpired
-    on timeout (mapped to DebriefError by _run_claude)."""
-    proc = subprocess.run(
-        argv, input=data, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT
-    )
-    return proc.stdout
-
-
-def _parse_result(stdout):
-    """Parse claude's `--output-format json` stdout (a JSON array of event
-    objects). Take the LAST type=='result' event; require subtype=='success' and a
-    falsy is_error; return its structured_output dict. Relies on subtype/is_error,
-    NOT the exit code (the StructuredOutput tool turn can make the CLI exit
-    non-zero even on success). Any other shape -> DebriefError."""
-    try:
-        events = json.loads(stdout)
-    except (ValueError, TypeError) as e:
-        raise DebriefError("claude did not return JSON") from e
-    if not isinstance(events, list):
-        raise DebriefError("claude JSON was not an event array")
-    results = [e for e in events if isinstance(e, dict) and e.get("type") == "result"]
-    if not results:
-        raise DebriefError("no result event in claude output")
-    result = results[-1]
-    if result.get("subtype") != "success" or result.get("is_error"):
-        raise DebriefError(
-            f"claude result not success: subtype={result.get('subtype')!r}"
-            f" is_error={result.get('is_error')!r}"
-        )
-    out = result.get("structured_output")
-    if not isinstance(out, dict):
-        raise DebriefError("claude result is missing structured_output")
-    return out
-
-
-def _resolve_claude():
-    """Locate the claude executable for the headless calls. Prefer PATH (npm and
-    native installs put a real `claude` there); then fall back to the local-
-    installer location. `claude migrate-installer` exposes claude ONLY as a shell
-    alias pointing at ~/.claude/local/claude, which a non-interactive subprocess's
-    PATH never sees — so check that path explicitly. Same location on macOS and
-    Linux. Returns an absolute path, or None if nothing usable is found."""
-    found = shutil.which("claude")
-    if found:
-        return found
-    local = os.path.join(os.path.expanduser("~"), ".claude", "local", "claude")
-    if os.path.isfile(local) and os.access(local, os.X_OK):
-        return local
-    return None
-
-
-def _run_claude(system_prompt, data, schema, model, *, runner=None, effort=None):
-    """Run one headless `claude -p` analysis call and return its validated
-    structured_output. `data` (the bulk slice + dedup context) goes on STDIN; only
-    the small static role goes in --system-prompt. `effort` (when set) appends
-    `--effort <level>` to cap thinking depth + token spend — pass it for the sonnet
-    specialists (SPECIALIST_EFFORT), omit it for the haiku triage call (Haiku 4.5
-    rejects the flag). `runner` is the injectable subprocess seam: None in production
-    (real subprocess.run after a _resolve_claude() pre-flight), a fake in tests.
-    Raises DebriefError on a missing claude, a timeout, or any unexpected output
-    shape."""
-    claude = "claude"
-    if runner is None:
-        claude = _resolve_claude()
-        if claude is None:
-            raise DebriefError("`claude` was not found on PATH or ~/.claude/local")
-        runner = _subprocess_runner
-    argv = [
-        claude,
-        "-p",
-        "--safe-mode",
-        "--system-prompt",
-        system_prompt,
-        "--model",
-        model,
-        "--tools",
-        "",
-        "--disallowed-tools",
-        DISALLOWED_TOOLS,
-        "--output-format",
-        "json",
-        "--json-schema",
-        json.dumps(schema),
-        "--max-turns",
-        "4",
-    ]
-    if effort is not None:
-        argv += ["--effort", effort]
-    try:
-        stdout = runner(argv, data)
-    except subprocess.TimeoutExpired as e:
-        raise DebriefError(f"claude timed out after {CLAUDE_TIMEOUT}s") from e
-    return _parse_result(stdout)
 
 
 if __name__ == "__main__":
