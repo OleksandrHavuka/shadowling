@@ -31,6 +31,7 @@ self-correct and retry the call instead of guessing.
 """
 
 import sys
+import xml.etree.ElementTree as ET
 
 TEXT = object()  # sentinel marking a scalar prose field
 
@@ -214,3 +215,40 @@ def render(rows, fields=None):
                 out.append(f"  <{k}>{_xml('' if r[k] is None else str(r[k]))}</{k}>")
         out.append("</row>")
     return "\n".join(out)
+
+
+# --- inbound: the schema-driven XML reader (parse) ----------------------------
+
+
+def _parse_xml(text):
+    """Parse the heredoc body into an Element tree, wrapped in a synthetic <_> root
+    (a heredoc has several top-level tags; etree needs exactly one root). Raises
+    ValueError on malformed XML so the caller returns a self-correcting message."""
+    try:
+        return ET.fromstring("<_>" + text + "</_>")
+    except ET.ParseError as e:
+        raise ValueError(
+            f"input is not well-formed XML ({e}); escape <, &, > in values"
+        ) from e
+
+
+def _element_to_py(el):
+    """Map an Element to plain Python: a leaf (no child elements) -> its text (str);
+    a container whose children are all <row> -> a list (the <row>=list convention,
+    symmetric with render); any other container -> a dict {child_tag: value}, a
+    repeated tag becoming a list. The single owner of the XML->py shape decision."""
+    children = list(el)
+    if not children:
+        return el.text or ""
+    if all(c.tag == "row" for c in children):
+        return [_element_to_py(c) for c in children]
+    out: dict = {}
+    for c in children:
+        v = _element_to_py(c)
+        if c.tag in out:
+            if not isinstance(out[c.tag], list):
+                out[c.tag] = [out[c.tag]]
+            out[c.tag].append(v)
+        else:
+            out[c.tag] = v
+    return out

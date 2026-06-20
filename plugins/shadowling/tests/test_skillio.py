@@ -240,5 +240,39 @@ class RenderTest(unittest.TestCase):
         )
 
 
+class ToPyTest(unittest.TestCase):
+    def test_leaf_to_str(self):
+        self.assertEqual(
+            skillio._element_to_py(skillio._parse_xml("<a>x</a>")), {"a": "x"}
+        )
+
+    def test_empty_leaf_to_empty_string(self):
+        self.assertEqual(
+            skillio._element_to_py(skillio._parse_xml("<a></a>")), {"a": ""}
+        )
+
+    def test_row_container_to_list(self):
+        el = skillio._parse_xml("<items><row><w>a</w></row><row><w>b</w></row></items>")
+        self.assertEqual(
+            skillio._element_to_py(el), {"items": [{"w": "a"}, {"w": "b"}]}
+        )
+
+    def test_single_row_still_a_list(self):
+        el = skillio._parse_xml("<items><row><w>a</w></row></items>")
+        self.assertEqual(skillio._element_to_py(el), {"items": [{"w": "a"}]})
+
+    def test_non_row_container_to_dict(self):
+        el = skillio._parse_xml("<rec><word>x</word><ctx>y</ctx></rec>")
+        self.assertEqual(skillio._element_to_py(el), {"rec": {"word": "x", "ctx": "y"}})
+
+    def test_malformed_xml_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            skillio._parse_xml("<a>oops")
+
+    def test_unescaped_lt_is_malformed(self):
+        with self.assertRaises(ValueError):
+            skillio._parse_xml("<a>x < y</a>")
+
+
 if __name__ == "__main__":
     unittest.main()
