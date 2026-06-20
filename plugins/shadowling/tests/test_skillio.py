@@ -274,5 +274,49 @@ class ToPyTest(unittest.TestCase):
             skillio._parse_xml("<a>x < y</a>")
 
 
+class ParseTest(unittest.TestCase):
+    def test_loot_shape_end_to_end(self):
+        body = (
+            "<items>"
+            "<row><word>throughput</word><ctx>We boosted throughput.</ctx></row>"
+            "<row><word>idempotent</word><ctx></ctx></row>"
+            "</items>"
+        )
+        got = skillio.parse({"items": [{"word": TEXT, "ctx": TEXT}]}, body)
+        self.assertEqual(
+            got,
+            {
+                "items": [
+                    {"word": "throughput", "ctx": "We boosted throughput."},
+                    {"word": "idempotent", "ctx": ""},
+                ]
+            },
+        )
+
+    def test_escaped_metachars_round_trip(self):
+        self.assertEqual(
+            skillio.parse({"a": TEXT}, "<a>a &lt; b &amp; c &gt; d</a>"),
+            {"a": "a < b & c > d"},
+        )
+
+    def test_render_then_parse_round_trip(self):
+        body = "<items>" + skillio.render([{"word": "x", "ctx": "y"}]) + "</items>"
+        got = skillio.parse({"items": [{"word": TEXT, "ctx": TEXT}]}, body)
+        self.assertEqual(got, {"items": [{"word": "x", "ctx": "y"}]})
+
+    def test_malformed_xml_raises_value_error(self):
+        with self.assertRaises(ValueError):
+            skillio.parse({"a": TEXT}, "<a>oops")
+
+    def test_missing_tag_raises_schema_error(self):
+        from validator import SchemaError
+
+        with self.assertRaises(SchemaError):
+            skillio.parse(
+                {"items": [{"word": TEXT, "ctx": TEXT}]},
+                "<items><row><word>x</word></row></items>",
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,9 +1,17 @@
 #!/usr/bin/env python3
-"""skillio.py - the single skill<->script I/O boundary (stdlib, py3.9+).
+"""skillio.py - the skill<->script I/O boundary (stdlib, py3.9+).
 
-One responsibility: parse the invocation (heredoc free text + argv flags) and
-render the one output format. Pure stdlib; no project imports; imported only by
-entrypoints.
+PRIMARY (new): `parse(schema, text=None)` reads a tagged-XML heredoc and returns the
+Python structure `schema` declares (TEXT / {tag: sub} / [sub]; list element = <row>).
+It composes `_parse_xml` (etree) -> `_element_to_py` (Element -> plain py) ->
+`validator.validate` (shape check; the validator is a separate, pure, XML-agnostic
+module). `render` is the symmetric output serializer. The wire is well-formed XML
+(escape `< & >`); the quoted heredoc handles shell-level chars.
+
+LEGACY (deprecated, kept until decode/tutor migrate): `read_fields` + `rows` parse the
+old tolerant TSV/tag format. Do not use in new code; use `parse`.
+
+Imports only the `validator` module (otherwise stdlib); imported by entrypoints.
 
 Skills feed model-authored values through a heredoc with a quoted delimiter
 (`<<'SL_IN'`), so the shell does zero expansion and nothing needs escaping. This
@@ -33,7 +41,8 @@ self-correct and retry the call instead of guessing.
 import sys
 import xml.etree.ElementTree as ET
 
-TEXT = object()  # sentinel marking a scalar prose field
+from validator import TEXT as TEXT  # re-export: callers do `from skillio import TEXT`
+from validator import validate
 
 
 class _Rows:
@@ -44,7 +53,9 @@ class _Rows:
 
 
 def rows(*cols):
-    """Mark a field whose tag body is TSV -> list[dict] with these column keys."""
+    """DEPRECATED (express lists as `[sub]` in a `parse` schema; removed at full
+    replacement). Mark a field whose tag body is TSV -> list[dict] with these
+    column keys."""
     if not cols:
         raise ValueError("rows() needs at least one column name")
     return _Rows(cols)
@@ -119,7 +130,8 @@ def _parse_rows(name, body, cols, schema):
 
 
 def read_fields(schema, text=None):
-    """Parse the heredoc body (stdin, or `text`) against `schema`.
+    """DEPRECATED — use `parse` with a literal TEXT/{}/[] schema; removed at full
+    replacement. Parse the heredoc body (stdin, or `text`) against `schema`.
 
     schema: ordered dict {field_name: TEXT | rows(...)}. Returns {name: str} for
     TEXT fields and {name: list[dict]} for rows fields. Unknown tags in the input
@@ -252,3 +264,13 @@ def _element_to_py(el):
         else:
             out[c.tag] = v
     return out
+
+
+def parse(schema, text=None):
+    """Read a tagged heredoc (stdin, or `text`) and return the Python structure the
+    `schema` declares. Composes _parse_xml -> _element_to_py -> validator.validate.
+    Raises ValueError on malformed XML and SchemaError (a ValueError) on a shape
+    mismatch — both carry a self-correcting message the caller prints to stderr."""
+    if text is None:
+        text = sys.stdin.read()
+    return validate(_element_to_py(_parse_xml(text)), schema)
