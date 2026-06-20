@@ -180,11 +180,14 @@ class EnrichTest(LootDriverBase):
 
 
 class MainStdinTest(LootDriverBase):
-    def test_main_reads_items_rows_from_stdin(self):
-        # inbound is skillio rows(word, context) — a quoted-heredoc <items> block,
-        # NOT JSON: the LLM never has to escape the free-form context.
+    def test_main_reads_items_from_stdin(self):
+        # inbound is a tagged <items>/<row> heredoc parsed by skillio.parse
         runner = echo_runner({"throughput": _item("throughput")})
-        body = "<items>\nthroughput\tWe boosted throughput.\n</items>\n"
+        body = (
+            "<items>"
+            "<row><word>throughput</word><ctx>We boosted throughput.</ctx></row>"
+            "</items>"
+        )
         orig, sys.stdin = sys.stdin, io.StringIO(body)
         try:
             code = loot.main(runner=runner)
@@ -193,10 +196,10 @@ class MainStdinTest(LootDriverBase):
         self.assertEqual(code, 0)
         self.assertIn("throughput", self.rows_by_word())
 
-    def test_main_empty_context_column_is_allowed(self):
-        # an ad-hoc add: word, a TAB, empty context -> generic example downstream.
+    def test_main_empty_ctx_is_allowed(self):
+        # an ad-hoc add: empty <ctx></ctx> -> generic example downstream.
         runner = echo_runner({"idempotent": _item("idempotent")})
-        body = "<items>\nidempotent\t\n</items>\n"
+        body = "<items><row><word>idempotent</word><ctx></ctx></row></items>"
         orig, sys.stdin = sys.stdin, io.StringIO(body)
         try:
             code = loot.main(runner=runner)

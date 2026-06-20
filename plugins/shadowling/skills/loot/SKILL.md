@@ -26,17 +26,18 @@ Steps:
    conversation where the term appeared (a short snippet, not a summary). If the
    term did not come from the conversation (an explicit ad-hoc add), use an empty
    string — the driver will generate a generic example.
-4. ONE call. Pipe the words as an `<items>` block on stdin via a quoted heredoc
-   (zero shell expansion — nothing needs escaping, not even quotes in the context).
-   One word per line: the word, a single TAB, then its micro-context (leave the part
-   after the TAB empty for an ad-hoc add). The body and the closing `SL_IN` MUST
-   start at column 0:
+4. ONE call. Pipe the words as a tagged `<items>` block on stdin via a quoted
+   heredoc. One `<row>` per term: `<word>` is the term, `<ctx>` is its micro-context
+   (use `<ctx></ctx>` when the term is an ad-hoc add with no conversation context).
+   The body is **well-formed XML** — escape `&` as `&amp;`, `<` as `&lt;`, `>` as
+   `&gt;` inside values; the quoted `<<'SL_IN'` handles quotes/`$`/backticks. The
+   body and the closing `SL_IN` MUST start at column 0:
 
    ```bash
    python3 "${CLAUDE_PLUGIN_ROOT}/loot.py" <<'SL_IN'
    <items>
-   throughput	We boosted throughput under load.
-   idempotent	
+   <row><word>throughput</word><ctx>We boosted throughput under load.</ctx></row>
+   <row><word>idempotent</word><ctx></ctx></row>
    </items>
    SL_IN
    ```

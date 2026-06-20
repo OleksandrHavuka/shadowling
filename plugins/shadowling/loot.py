@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """loot.py - the deterministic headless driver for fat /loot enrichment.
 
-A peer of debrief.py at the plugin root. Reads a JSON {word: micro_context} map on
-stdin (harvested by the main-context /loot skill), pre-reads each word's existing
-vocab row, fans out chunked headless `claude -p` enrichment calls (with_retry per
-chunk), validates each item, and dumb-UPSERTs the result. The LLM does the
-old+new context merge; this driver carries no merge/ratchet logic. Stdlib only;
-cron-safe (no interactive input)."""
+A peer of debrief.py at the plugin root. Reads a tagged <items>/<row> block on
+stdin via skillio.parse — each <row> a {word, ctx} record (harvested by the
+main-context /loot skill) — pre-reads each word's existing vocab row, fans out
+chunked headless `claude -p` enrichment calls (with_retry per chunk), validates
+each item, and dumb-UPSERTs the result. The LLM does the old+new context merge;
+this driver carries no merge/ratchet logic. Stdlib only; cron-safe (no
+interactive input)."""
 
 import functools
 import os
@@ -19,7 +20,7 @@ from config import config_block
 from headless import SONNET, HeadlessError, run_claude
 from models.vocab import Vocab
 from parallel import fan_out, log, with_retry
-from skillio import read_fields, render, rows
+from skillio import TEXT, parse, render
 
 CHUNK_SIZE = 8
 MAX_WORKERS = 6
@@ -203,20 +204,20 @@ def run(payload, cfg, *, runner=None):
 
 
 def main(runner=None):
-    """Read the <items> rows(word, context) block from stdin via skillio (a quoted
-    heredoc, so the LLM escapes nothing for the free-form context), gate on config,
-    enrich, print a summary. Exit 1 on a config/parse error or if any word stayed
-    pending."""
+    """Read the tagged <items>/<row> block from stdin via skillio.parse (a quoted
+    heredoc carrying well-formed XML — the LLM escapes < & > in values), gate on
+    config, enrich, print a summary. Exit 1 on a config/parse error or if any word
+    stayed pending."""
     cfg = core.load_config()
     if not core.config_ready(cfg):
         print(cfg["notice"], file=sys.stderr)
         return 1
     try:
-        fields = read_fields({"items": rows("word", "context")})
+        data = parse({"items": [{"word": TEXT, "ctx": TEXT}]})
     except ValueError as e:
-        print(str(e), file=sys.stderr)  # skillio's message names the exact fix
+        print(str(e), file=sys.stderr)  # malformed XML / shape error names the fix
         return 1
-    payload = {r["word"]: r["context"] for r in fields["items"]}
+    payload = {r["word"]: r["ctx"] for r in data["items"]}
     if not payload:
         print("loot.py: no <items> rows on stdin", file=sys.stderr)
         return 1
