@@ -2,7 +2,6 @@
 name: loot
 description: "Add words/terms you're learning, enriched (translation, examples, synonyms, definition) into your native/learning languages. Comma-separated for several at once. Usage: /loot <word>[, <word2>, ...]"
 agent: claude
-model: sonnet
 allowed-tools: Bash(python3 */config.py*) Bash(python3 */loot.py*)
 ---
 

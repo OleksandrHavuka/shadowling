@@ -18,11 +18,13 @@ SONNET = "claude-sonnet-4-6"
 
 DEFAULT_TIMEOUT = 300  # seconds per headless call
 
-# Tool lockdown for every headless call, alongside `--tools ""`. A bare name in
-# --disallowed-tools removes the tool from the model's context: "*" = every
-# built-in tool, "mcp__*" = every MCP tool. `--tools ""` drops built-ins but not
-# MCP; this closes that gap as a second barrier over --safe-mode.
-DISALLOWED_TOOLS = "* mcp__*"
+# Tool lockdown for every headless call, alongside `--tools ""`. `--tools ""`
+# drops the built-in tools but NOT MCP tools; "mcp__*" closes that gap as a
+# second barrier over --safe-mode. NEVER add a bare "*" here: it would also
+# remove the implicit StructuredOutput tool that `--json-schema` needs to emit
+# the result, so the model can never finish and the call dies with
+# error_max_turns. Scope the disallow to MCP only.
+DISALLOWED_TOOLS = "mcp__*"
 
 
 class HeadlessError(Exception):

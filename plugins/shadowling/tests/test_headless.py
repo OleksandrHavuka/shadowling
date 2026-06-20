@@ -89,7 +89,12 @@ class RunClaudeTest(unittest.TestCase):
         self.assertEqual(argv[0], "claude")
         self.assertIn("--safe-mode", argv)
         self.assertEqual(argv[argv.index("--tools") + 1], "")
-        self.assertEqual(argv[argv.index("--disallowed-tools") + 1], "* mcp__*")
+        disallowed = argv[argv.index("--disallowed-tools") + 1]
+        self.assertEqual(disallowed, "mcp__*")
+        # a bare "*" token must NEVER appear: it also removes the implicit
+        # StructuredOutput tool that --json-schema needs to emit the result, so the
+        # model can never finish and the call dies with error_max_turns.
+        self.assertNotIn("*", disallowed.split())
         self.assertEqual(argv[argv.index("--output-format") + 1], "json")
         self.assertEqual(argv[argv.index("--max-turns") + 1], "4")
         self.assertEqual(argv[argv.index("--model") + 1], headless.HAIKU)
