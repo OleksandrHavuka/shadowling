@@ -10,9 +10,10 @@ so Vocab.relearn and AnkiLink.upsert commit together.
 """
 
 import json
-import re
 import urllib.error
 import urllib.request
+
+from models.vocab import cloze_pattern
 
 ANKI_URL = "http://127.0.0.1:8765"
 ANKI_VERSION = 6  # AnkiConnect API version
@@ -60,19 +61,19 @@ def _invoke(action, **params):
     return body["result"]
 
 
-def _wrap_cloze(sentence, word):
-    """Wrap EVERY whole-word, case-insensitive occurrence of `word` as a c1 cloze
-    deletion, preserving the matched casing. All occurrences share c1, so they
-    hide/reveal together as one blank. Word boundaries (\\b) keep the deletion from
-    splitting an unrelated word (clozing the 'w' inside 'two'); loot's containment
-    guarantee still holds — if /loot accepted the example the target word appears,
-    so push produces a cloze."""
-    return re.sub(
-        r"\b" + re.escape(word) + r"\b",
-        lambda m: "{{c1::" + m.group(0) + "}}",
-        sentence,
-        flags=re.IGNORECASE,
+def _wrap_cloze(sentence, word, forms):
+    """Wrap every {word}∪forms match in `sentence` as one shared c1 deletion,
+    preserving matched casing — all occurrences hide/reveal together as one blank.
+    Matching is word-boundary + case-insensitive over {word} and the LLM-supplied
+    surface `forms` (the shared, language-agnostic matcher in models.vocab), so an
+    inflection in the example clozes even when `word` is the lemma. Returns the
+    clozed sentence, or None when nothing matched (zero coverage) so the caller
+    skips + reports the word instead of pushing a cloze-less, addNote-failing
+    note."""
+    clozed, n = cloze_pattern(word, forms).subn(
+        lambda m: "{{c1::" + m.group(0) + "}}", sentence
     )
+    return clozed if n else None
 
 
 def _json_list(value):
@@ -82,13 +83,21 @@ def _json_list(value):
 
 def _build_fields(row):
     """Map a vocab row (dict from Vocab.list()) to the Shadowling Cloze note
-    fields. Examples become c1-clozed segments joined by '|'; JSON-array columns
-    render comma-joined; empty enrichment renders as '' (never None). Word and
-    Translation are always present."""
-    segments = [_wrap_cloze(s, row["word"]) for s in _json_list(row.get("examples"))]
+    fields, or None when the row has examples but NONE of them cloze (zero coverage
+    — an un-re-looted or hand-inserted row). Each example is wrapped via the shared
+    {word}∪forms matcher; un-clozable segments are dropped. Returning None lets push
+    skip the row and name it in the sync summary instead of pushing a cloze-less,
+    addNote-failing note. JSON-array columns render comma-joined; empty enrichment
+    renders '' (never None). Word and Translation are always present."""
+    examples = _json_list(row.get("examples"))
+    forms = _json_list(row.get("forms"))
+    segments = (_wrap_cloze(s, row["word"], forms) for s in examples)
+    covered = [c for c in segments if c is not None]
+    if examples and not covered:
+        return None  # zero cloze coverage — caller skips + reports "re-loot <word>"
     return {
         "Word": row["word"],
-        "Examples": "|".join(segments),
+        "Examples": "|".join(covered),
         "Translation": row["translation"],
         "AltTranslations": ", ".join(_json_list(row.get("alt_translations"))),
         "Synonyms": ", ".join(_json_list(row.get("synonyms"))),

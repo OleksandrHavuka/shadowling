@@ -72,12 +72,28 @@ class InvokeTest(unittest.TestCase):
 class WrapClozeTest(unittest.TestCase):
     def test_wraps_case_insensitively_preserving_casing(self):
         self.assertEqual(
-            anki._wrap_cloze("Throughput rose as throughput improved.", "throughput"),
+            anki._wrap_cloze(
+                "Throughput rose as throughput improved.", "throughput", []
+            ),
             "{{c1::Throughput}} rose as {{c1::throughput}} improved.",
         )
 
-    def test_no_occurrence_returns_unchanged(self):
-        self.assertEqual(anki._wrap_cloze("nothing here", "absent"), "nothing here")
+    def test_wraps_a_listed_form(self):
+        self.assertEqual(
+            anki._wrap_cloze(
+                "The wind scattered the leaves.", "scatter", ["scattered"]
+            ),
+            "The wind {{c1::scattered}} the leaves.",
+        )
+
+    def test_word_and_form_both_share_c1(self):
+        self.assertEqual(
+            anki._wrap_cloze("scatter then scattered", "scatter", ["scattered"]),
+            "{{c1::scatter}} then {{c1::scattered}}",
+        )
+
+    def test_no_coverage_returns_none(self):
+        self.assertIsNone(anki._wrap_cloze("nothing here", "absent", []))
 
 
 class BuildFieldsTest(unittest.TestCase):
@@ -128,6 +144,54 @@ class BuildFieldsTest(unittest.TestCase):
         }
         self.assertEqual(
             anki._build_fields(row)["Examples"], "one {{c1::w}}|two {{c1::w}}"
+        )
+
+    def test_form_in_example_is_clozed(self):
+        row = {
+            "word": "scatter",
+            "translation": "розкидати",
+            "examples": json.dumps(["The wind scattered the leaves."]),
+            "forms": json.dumps(["scattered"]),
+            "alt_translations": None,
+            "synonyms": None,
+            "definition": None,
+            "ctx": None,
+        }
+        self.assertEqual(
+            anki._build_fields(row)["Examples"],
+            "The wind {{c1::scattered}} the leaves.",
+        )
+
+    def test_zero_coverage_row_returns_none(self):
+        # examples present but no form covers the inflection -> uncovered -> None
+        row = {
+            "word": "scatter",
+            "translation": "розкидати",
+            "examples": json.dumps(["The wind scattered the leaves."]),
+            "forms": None,  # un-re-looted: forms backfilled NULL
+            "alt_translations": None,
+            "synonyms": None,
+            "definition": None,
+            "ctx": None,
+        }
+        self.assertIsNone(anki._build_fields(row))
+
+    def test_partial_coverage_drops_uncovered_segment(self):
+        # one example clozes (base form), one doesn't -> covered one survives, row kept
+        row = {
+            "word": "scatter",
+            "translation": "розкидати",
+            "examples": json.dumps(
+                ["Particles scatter widely.", "The wind scattered the leaves."]
+            ),
+            "forms": None,
+            "alt_translations": None,
+            "synonyms": None,
+            "definition": None,
+            "ctx": None,
+        }
+        self.assertEqual(
+            anki._build_fields(row)["Examples"], "Particles {{c1::scatter}} widely."
         )
 
 
