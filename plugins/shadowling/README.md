@@ -71,6 +71,7 @@ The plugin ships two hooks (added automatically — your own hooks are untouched
 | `/debrief` | Review your captured messages into per-category frequency datasets (grammar / rephrasings / idioms / verbs / friction). |
 | `/tutor [size]` | Drill your recorded pains (friction phrasings, grammar, irregular verbs, learned vocab) with spaced repetition; ~8 cards by default. |
 | `/aha <phrase> [+ your hunch]` | Explain an expression in the language you're learning that you can't read literally — verdict (memorize vs learnable rule) + how to read it, saved to the decode dataset. |
+| `/anki-sync` | Push your enriched vocabulary to Anki Desktop as cloze flashcards and pull review progress back (lapses re-enter glossing). Requires Anki + AnkiConnect — see [docs/ANKI.md](docs/ANKI.md). |
 | `/vipe` | Dev: wipe the six category datasets for a clean test run (keeps config, vocab, message store). |
 
 ---
@@ -214,6 +215,19 @@ queue. Your answers during a session are NOT collected as writing material.
 
 Requires Claude Code ≥ 2.1.163 for that last guarantee (older versions:
 tutoring works, but drill answers may reach `/debrief` analysis).
+
+---
+
+## Flashcards (`/anki-sync`)
+
+If you'd also like to drill your vocabulary in a dedicated spaced-repetition app,
+`/anki-sync` mirrors your enriched words into **Anki** as randomized-cloze cards
+and pulls FSRS review progress back into shadowling — a word whose lapses grew
+re-enters glossing. Vocabulary stays the source of truth; Anki is the review engine.
+
+The one-time setup — install Anki, the AnkiConnect add-on, and (optionally) phone
+sync — is in **[docs/ANKI.md](docs/ANKI.md)**. After that it's just `/anki-sync`
+whenever you want to push new words and pull progress; re-running is idempotent.
 
 ---
 
