@@ -91,3 +91,7 @@ depends_on = [
     "models.grammar", "models.rephrasing", "models.idioms",
     "models.verbs", "models.friction", "models.vocab", "models.messages",
 ]
+
+[[modules]]
+path = "anki"
+depends_on = []
