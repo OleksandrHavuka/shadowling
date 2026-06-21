@@ -94,4 +94,4 @@ depends_on = [
 
 [[modules]]
 path = "anki"
-depends_on = ["appdb", "core", "models.vocab", "models.anki_link"]
+depends_on = ["appdb", "core", "langcodes", "models.vocab", "models.anki_link"]

@@ -100,6 +100,24 @@ class WrapClozeTest(unittest.TestCase):
         )
 
 
+class TtsLangTest(unittest.TestCase):
+    def test_english_maps_to_en_US(self):
+        self.assertEqual(anki._tts_lang({"learning_language": "English"}), "en_US")
+
+    def test_german_maps_to_de_DE(self):
+        self.assertEqual(anki._tts_lang({"learning_language": "German"}), "de_DE")
+
+    def test_known_code_without_locale_uses_bare_code(self):
+        # Welsh -> "cy" is in langcodes but not in _TTS_LOCALE -> bare code.
+        self.assertEqual(anki._tts_lang({"learning_language": "Welsh"}), "cy")
+
+    def test_unknown_language_falls_back_to_en_US(self):
+        self.assertEqual(anki._tts_lang({"learning_language": "Klingon"}), "en_US")
+
+    def test_missing_key_does_not_raise(self):
+        self.assertEqual(anki._tts_lang({}), "en_US")
+
+
 class BuildFieldsTest(unittest.TestCase):
     def test_full_row_maps_every_field(self):
         row = {

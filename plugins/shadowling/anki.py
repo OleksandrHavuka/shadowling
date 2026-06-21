@@ -15,6 +15,7 @@ import urllib.error
 import urllib.request
 
 import core
+import langcodes
 from appdb import connect, tx
 from models.anki_link import AnkiLink
 from models.vocab import Vocab, cloze_pattern
@@ -102,6 +103,47 @@ def _build_fields(row):
         "Definition": row.get("definition") or "",
         "Context": row.get("ctx") or "",
     }
+
+
+# learning_language NAME -> a concrete TTS locale. langcodes gives the ISO-639-1
+# code ("English" -> "en"); this map upgrades the common ones to a region locale a
+# platform voice is likely to match ("en" -> "en_US"). Codes absent here fall back
+# to the bare two-letter code (a valid BCP-47 language subtag), and an entirely
+# unknown name falls back to en_US. {{tts}} is silent when no voice matches, so a
+# wrong/loose tag is harmless, never fatal.
+_TTS_LOCALE = {
+    "en": "en_US",
+    "uk": "uk_UA",
+    "es": "es_ES",
+    "de": "de_DE",
+    "fr": "fr_FR",
+    "it": "it_IT",
+    "pt": "pt_PT",
+    "nl": "nl_NL",
+    "pl": "pl_PL",
+    "cs": "cs_CZ",
+    "sv": "sv_SE",
+    "da": "da_DK",
+    "fi": "fi_FI",
+    "el": "el_GR",
+    "tr": "tr_TR",
+    "ja": "ja_JP",
+    "ko": "ko_KR",
+    "zh": "zh_CN",
+    "ar": "ar_SA",
+    "hi": "hi_IN",
+}
+
+
+def _tts_lang(cfg):
+    """Map the configured learning_language NAME to a TTS locale for {{tts}}.
+    Never raises: unknown language -> en_US (the most commonly installed voice).
+    Pure lookup over the langcodes table — no LLM, no network."""
+    name = ((cfg or {}).get("learning_language") or "").strip().lower()
+    code = langcodes.NAME_TO_CODE.get(name)
+    if not code:
+        return "en_US"
+    return _TTS_LOCALE.get(code, code)
 
 
 def _deck_name(cfg):
