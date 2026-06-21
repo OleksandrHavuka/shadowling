@@ -99,9 +99,6 @@ class WrapClozeTest(unittest.TestCase):
             "{{c1::scatter}} then {{c1::scattered}}",
         )
 
-    def test_no_coverage_returns_none(self):
-        self.assertIsNone(anki._wrap_cloze("nothing here", "absent", []))
-
 
 class BuildFieldsTest(unittest.TestCase):
     def test_full_row_maps_every_field(self):
@@ -167,38 +164,6 @@ class BuildFieldsTest(unittest.TestCase):
         self.assertEqual(
             anki._build_fields(row)["Examples"],
             "The wind {{c1::scattered}} the leaves.",
-        )
-
-    def test_zero_coverage_row_returns_none(self):
-        # examples present but no form covers the inflection -> uncovered -> None
-        row = {
-            "word": "scatter",
-            "translation": "розкидати",
-            "examples": json.dumps(["The wind scattered the leaves."]),
-            "forms": None,  # un-re-looted: forms backfilled NULL
-            "alt_translations": None,
-            "synonyms": None,
-            "definition": None,
-            "ctx": None,
-        }
-        self.assertIsNone(anki._build_fields(row))
-
-    def test_partial_coverage_drops_uncovered_segment(self):
-        # one example clozes (base form), one doesn't -> covered one survives, row kept
-        row = {
-            "word": "scatter",
-            "translation": "розкидати",
-            "examples": json.dumps(
-                ["Particles scatter widely.", "The wind scattered the leaves."]
-            ),
-            "forms": None,
-            "alt_translations": None,
-            "synonyms": None,
-            "definition": None,
-            "ctx": None,
-        }
-        self.assertEqual(
-            anki._build_fields(row)["Examples"], "Particles {{c1::scatter}} widely."
         )
 
 
@@ -267,15 +232,6 @@ class PushRowTest(AnkiDbBase):
         self.assertIn("updateNoteFields", fake.actions())
         self.assertNotIn("addNote", fake.actions())
 
-    def test_uncovered_row_returns_none_and_pushes_nothing(self):
-        # un-re-looted row: example shows only an inflection, forms NULL -> no cloze
-        row = self._row(
-            examples=json.dumps(["The wind scattered the leaves."]), word="scatter"
-        )
-        fake = FakeAnki({"addNote": lambda p: 111})
-        self.assertIsNone(anki._push_row(row, "shadowling::English", fake))
-        self.assertNotIn("addNote", fake.actions())
-
 
 class SuspendDroppedTest(AnkiDbBase):
     def test_suspends_when_card_known(self):
@@ -323,14 +279,14 @@ class SyncAllTest(AnkiDbBase):
         self.assertEqual(s["skipped"], 1)
         self.assertNotIn("addNote", fake.actions())
 
-    def test_word_with_examples_but_no_coverage_is_uncovered(self):
-        # examples present but no form covers the inflection -> uncovered, not pushed
-        Vocab.add("scatter", "розкидати", examples=["The wind scattered the leaves."])
-        fake = self._no_notes_invoke()
+    def test_push_error_collected_not_fatal(self):
+        # a per-word addNote failure (e.g. a cloze-less hand-inserted row Anki
+        # rejects) is collected, not fatal: the sync finishes and reports it.
+        Vocab.add("throughput", "t", examples=["a throughput line"])
+        fake = self._no_notes_invoke({"addNote": anki.AnkiError("no cloze deletions")})
         s = anki.sync_all(core.load_config(), invoke=fake)
         self.assertEqual(s["added"], 0)
-        self.assertEqual(s["uncovered"], ["scatter"])
-        self.assertNotIn("addNote", fake.actions())
+        self.assertEqual([e["word"] for e in s["errors"]], ["throughput"])
 
     def test_dropped_word_suspended(self):
         Vocab.add("throughput", "t", examples=["a throughput line"])

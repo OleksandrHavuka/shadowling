@@ -70,14 +70,12 @@ def _wrap_cloze(sentence, word, forms):
     preserving matched casing — all occurrences hide/reveal together as one blank.
     Matching is word-boundary + case-insensitive over {word} and the LLM-supplied
     surface `forms` (the shared, language-agnostic matcher in models.vocab), so an
-    inflection in the example clozes even when `word` is the lemma. Returns the
-    clozed sentence, or None when nothing matched (zero coverage) so the caller
-    skips + reports the word instead of pushing a cloze-less, addNote-failing
-    note."""
-    clozed, n = cloze_pattern(word, forms).subn(
+    inflection in the example clozes even when `word` is the lemma. Loot's _valid
+    uses the SAME matcher to gate every stored example, so a looted example always
+    yields ≥1 deletion here."""
+    return cloze_pattern(word, forms).sub(
         lambda m: "{{c1::" + m.group(0) + "}}", sentence
     )
-    return clozed if n else None
 
 
 def _json_list(value):
@@ -87,21 +85,17 @@ def _json_list(value):
 
 def _build_fields(row):
     """Map a vocab row (dict from Vocab.list()) to the Shadowling Cloze note
-    fields, or None when the row has examples but NONE of them cloze (zero coverage
-    — an un-re-looted or hand-inserted row). Each example is wrapped via the shared
-    {word}∪forms matcher; un-clozable segments are dropped. Returning None lets push
-    skip the row and name it in the sync summary instead of pushing a cloze-less,
-    addNote-failing note. JSON-array columns render comma-joined; empty enrichment
-    renders '' (never None). Word and Translation are always present."""
-    examples = _json_list(row.get("examples"))
+    fields. Each example is wrapped via the shared {word}∪forms matcher (loot's
+    _valid guarantees every stored example clozes). JSON-array columns render
+    comma-joined; empty enrichment renders '' (never None). Word and Translation
+    are always present."""
     forms = _json_list(row.get("forms"))
-    segments = (_wrap_cloze(s, row["word"], forms) for s in examples)
-    covered = [c for c in segments if c is not None]
-    if examples and not covered:
-        return None  # zero cloze coverage — caller skips + reports "re-loot <word>"
+    examples = [
+        _wrap_cloze(s, row["word"], forms) for s in _json_list(row.get("examples"))
+    ]
     return {
         "Word": row["word"],
-        "Examples": "|".join(covered),
+        "Examples": "|".join(examples),
         "Translation": row["translation"],
         "AltTranslations": ", ".join(_json_list(row.get("alt_translations"))),
         "Synonyms": ", ".join(_json_list(row.get("synonyms"))),
@@ -187,13 +181,8 @@ def suspend(card_id, invoke=_invoke):
 
 def _push_row(row, deck, invoke):
     """Push one enriched vocab row: update if it already has a note, else add and
-    store the new note_id/card_id in anki_link. Returns 'updated' or 'added', or
-    None when the row has examples but NONE of them cloze (_build_fields returned
-    None — an un-re-looted/hand-inserted row); the caller records the word for
-    re-loot instead of pushing a cloze-less, addNote-failing note."""
+    store the new note_id/card_id in anki_link. Returns 'updated' or 'added'."""
     fields = _build_fields(row)
-    if fields is None:
-        return None  # zero cloze coverage — caller adds word to "uncovered"
     word = row["word"]
     link = AnkiLink.get(word)
     if link and link.get("note_id"):
@@ -285,14 +274,12 @@ def pull_progress(invoke=_invoke):
 def sync_all(cfg, *, invoke=_invoke):
     """The /anki-sync logic: reachability check, ensure model + deck, push/suspend
     in one pass over Vocab.list(), then pull progress. Per-word push errors are
-    collected, not fatal. A row with examples but no cloze coverage is added to
-    `uncovered` (re-loot to fix), never pushed. Returns a summary dict."""
+    collected, not fatal. Returns a summary dict."""
     invoke("version")  # reachability; AnkiError aborts BEFORE any write
     ensure_model(invoke=invoke)
     deck = _deck_name(cfg)
     invoke("createDeck", deck=deck)
     counts = {"added": 0, "updated": 0, "suspended": 0, "skipped": 0}
-    uncovered = []
     errors = []
     for row in Vocab.list():
         try:
@@ -300,9 +287,6 @@ def sync_all(cfg, *, invoke=_invoke):
                 action = _suspend_dropped(row, invoke)
             elif _json_list(row.get("examples")):
                 action = _push_row(row, deck, invoke)
-                if action is None:  # examples present but none cloze → re-loot
-                    uncovered.append(row["word"])
-                    continue
             else:
                 action = "skipped"  # active/learned but not yet enriched
             counts[action] += 1
@@ -311,7 +295,6 @@ def sync_all(cfg, *, invoke=_invoke):
     pulled, relearned = pull_progress(invoke=invoke)
     return {
         **counts,
-        "uncovered": uncovered,
         "errors": errors,
         "pulled": pulled,
         "relearned": relearned,
@@ -334,16 +317,10 @@ def main(invoke=None):
     print(
         f"anki-sync: +{s['added']} added, {s['updated']} updated, "
         f"{s['suspended']} suspended, {s['skipped']} skipped (not enriched), "
-        f"{len(s['uncovered'])} uncovered, "
         f"{s['pulled']} pulled, {len(s['relearned'])} relearned, "
         f"{len(s['errors'])} errors",
         flush=True,
     )
-    if s["uncovered"]:
-        print(
-            "  no cloze coverage — re-loot: " + ", ".join(s["uncovered"]),
-            flush=True,
-        )
     return 1 if s["errors"] else 0
 
 
