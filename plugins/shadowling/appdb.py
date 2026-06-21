@@ -272,6 +272,22 @@ def _migration_10(con):
     )
 
 
+def _migration_11(con):
+    """Add vocab.forms and vocab.lemma for language-agnostic Anki cloze matching.
+    `forms` is a JSON array of the OTHER learning_language surface forms of the same
+    lexeme that may appear in examples (the lemma's surface if it differs from
+    `word`; `[]` for invariant words) — read only by the Anki push's cloze matcher,
+    guarded by json_valid like the sibling enrichment columns. `lemma` is the
+    canonical base form (plain TEXT), stored for future grouping/search (no consumer
+    yet). Both mirror the alt_translations plumbing (migration 9); existing rows
+    backfill NULL (not yet re-looted)."""
+    con.execute(
+        "ALTER TABLE vocab ADD COLUMN forms TEXT"
+        " CHECK (forms IS NULL OR json_valid(forms))"
+    )
+    con.execute("ALTER TABLE vocab ADD COLUMN lemma TEXT")
+
+
 MIGRATIONS = [
     _migration_1,
     _migration_2,
@@ -283,6 +299,7 @@ MIGRATIONS = [
     _migration_8,
     _migration_9,
     _migration_10,
+    _migration_11,
 ]
 
 # --- views: derived code, never migrated --------------------------------------

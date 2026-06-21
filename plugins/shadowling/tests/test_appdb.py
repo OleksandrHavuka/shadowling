@@ -551,8 +551,16 @@ class Migration7Test(AppDbTestBase):
             cols = {r["name"] for r in con.execute("PRAGMA table_info(vocab)")}
             # source_context is renamed to ctx by migration 8; a fresh db is the
             # full chain, so it carries the post-rename name. alt_translations is
-            # added by migration 9.
-            for c in ("definition", "ctx", "examples", "synonyms", "alt_translations"):
+            # added by migration 9; forms/lemma by migration 11.
+            for c in (
+                "definition",
+                "ctx",
+                "examples",
+                "synonyms",
+                "alt_translations",
+                "forms",
+                "lemma",
+            ):
                 self.assertIn(c, cols)
         finally:
             con.close()
@@ -702,6 +710,48 @@ class Migration10Test(AppDbTestBase):
         row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
         self.assertEqual(row["translation"], "переклад")  # row preserved
         self.assertEqual(appdb.query("SELECT * FROM anki_link"), [])  # new, empty
+
+
+class Migration11Test(AppDbTestBase):
+    def test_fresh_db_has_forms_and_lemma(self):
+        con = appdb.connect()
+        try:
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(vocab)")}
+            self.assertIn("forms", cols)
+            self.assertIn("lemma", cols)
+        finally:
+            con.close()
+
+    def test_upgrade_preserves_rows_and_backfills_null(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
+        for migration in appdb.MIGRATIONS[:10]:  # build a pre-11 (v10) database
+            migration(con)
+        con.execute("PRAGMA user_version = 10")
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status, created_at,"
+            " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
+        )
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays _migration_11
+        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
+        self.assertEqual(row["translation"], "переклад")  # row preserved
+        self.assertIsNone(row["forms"])  # added column backfills NULL
+        self.assertIsNone(row["lemma"])  # added column backfills NULL
+
+    def test_forms_rejects_invalid_json(self):
+        appdb.connect().close()
+        con = sqlite3.connect(appdb.db_path())
+        try:
+            # the CHECK rejects at INSERT time (json_valid fails immediately)
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(
+                    "INSERT INTO vocab(word, translation, remaining, status,"
+                    " forms) VALUES ('w', 't', 10, 'active', 'not json')"
+                )
+        finally:
+            con.close()
 
 
 if __name__ == "__main__":
