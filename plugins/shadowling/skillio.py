@@ -41,6 +41,7 @@ self-correct and retry the call instead of guessing.
 import sys
 import xml.etree.ElementTree as ET
 
+from validator import OPTIONAL as OPTIONAL  # re-export, like TEXT
 from validator import TEXT as TEXT  # re-export: callers do `from skillio import TEXT`
 from validator import validate
 

@@ -48,16 +48,17 @@ class Vocab:
         translation,
         *,
         definition=None,
-        source_context=None,
+        ctx=None,
         examples=None,
         synonyms=None,
+        alt_translations=None,
     ):
         """add/refresh/relearn on an ALREADY-OPEN connection (opens no tx of its
         own). Writes ONLY the enrichment columns actually provided (not-None), so a
         bare add(word, translation) never wipes a word's existing enrichment, while
         the loot driver — which always passes the full bundle — overwrites it.
-        examples/synonyms are Python lists, stored as json_valid TEXT. Returns the
-        same render-ready result dict as add()."""
+        examples/synonyms/alt_translations are Python lists, stored as json_valid
+        TEXT. Returns the same render-ready result dict as add()."""
         word = word.strip().lower()
         translation = (translation or "").strip()
         # Identity/empty translation = the LLM echoed the term back untranslated.
@@ -69,12 +70,18 @@ class Vocab:
         enrich = {}
         if definition is not None:
             enrich["definition"] = definition
-        if source_context is not None:
-            enrich["source_context"] = source_context
+        if ctx is not None:
+            enrich["ctx"] = ctx
+        # ensure_ascii=False so first_language (often non-Latin) data is stored as
+        # readable UTF-8, not \uXXXX escapes — json.loads round-trips either form.
         if examples is not None:
-            enrich["examples"] = json.dumps(examples)
+            enrich["examples"] = json.dumps(examples, ensure_ascii=False)
         if synonyms is not None:
-            enrich["synonyms"] = json.dumps(synonyms)
+            enrich["synonyms"] = json.dumps(synonyms, ensure_ascii=False)
+        if alt_translations is not None:
+            enrich["alt_translations"] = json.dumps(
+                alt_translations, ensure_ascii=False
+            )
         row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
         if row is None:
             cols = [
@@ -123,9 +130,10 @@ class Vocab:
         translation=None,
         *,
         definition=None,
-        source_context=None,
+        ctx=None,
         examples=None,
         synonyms=None,
+        alt_translations=None,
         con=None,
     ):
         """Add or refresh a vocab pair, optionally with enrichment columns. Returns
@@ -134,9 +142,10 @@ class Vocab:
         the caller's. Only provided enrichment columns are written (see _add_on)."""
         kw = {
             "definition": definition,
-            "source_context": source_context,
+            "ctx": ctx,
             "examples": examples,
             "synonyms": synonyms,
+            "alt_translations": alt_translations,
         }
         if con is not None:
             return Vocab._add_on(con, word, translation, **kw)

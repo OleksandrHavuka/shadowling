@@ -271,18 +271,32 @@ class EnrichmentUpsertTest(VocabRepoBase):
             "Throughput",
             "пропускна здатність",
             definition="rate of processing",
-            source_context="It improves throughput.",
+            ctx="It improves throughput.",
             examples=["Throughput is high.", "We measured throughput."],
             synonyms=["rate", "bandwidth"],
+            alt_translations=["продуктивність", "пропускна спроможність"],
         )
         r = self.rows_by_word()["throughput"]
         self.assertEqual(r["definition"], "rate of processing")
-        self.assertEqual(r["source_context"], "It improves throughput.")
+        self.assertEqual(r["ctx"], "It improves throughput.")
         self.assertEqual(
             json.loads(r["examples"]),
             ["Throughput is high.", "We measured throughput."],
         )
         self.assertEqual(json.loads(r["synonyms"]), ["rate", "bandwidth"])
+        self.assertEqual(
+            json.loads(r["alt_translations"]),
+            ["продуктивність", "пропускна спроможність"],
+        )
+
+    def test_non_latin_json_stored_readable_not_escaped(self):
+        # first_language data must land as readable UTF-8, not \uXXXX escapes
+        Vocab.add("server", "сервер", alt_translations=["хост"], synonyms=["вузол"])
+        r = self.rows_by_word()["server"]
+        self.assertEqual(r["alt_translations"], '["хост"]')
+        self.assertEqual(r["synonyms"], '["вузол"]')
+        # still valid JSON that decodes back to the list
+        self.assertEqual(json.loads(r["alt_translations"]), ["хост"])
 
     def test_enrichment_overwrites_only_provided_columns(self):
         Vocab.add("w", "t", examples=["old one with w"], definition="old def")
@@ -293,12 +307,15 @@ class EnrichmentUpsertTest(VocabRepoBase):
 
     def test_bare_add_does_not_wipe_existing_enrichment(self):
         # debrief's friction-loot path: Vocab.add(word, translation), no enrichment
-        Vocab.add("w", "t", examples=["grounded w example"], source_context="ctx")
+        Vocab.add(
+            "w", "t", examples=["grounded w example"], ctx="ctx", alt_translations=["в"]
+        )
         Vocab.add("w", "t2")  # bare refresh
         r = self.rows_by_word()["w"]
         self.assertEqual(r["translation"], "t2")
         self.assertEqual(json.loads(r["examples"]), ["grounded w example"])
-        self.assertEqual(r["source_context"], "ctx")  # preserved
+        self.assertEqual(r["ctx"], "ctx")  # preserved
+        self.assertEqual(json.loads(r["alt_translations"]), ["в"])  # preserved
 
     def test_relearn_path_also_writes_provided_enrichment(self):
         Vocab.add("w", "t")

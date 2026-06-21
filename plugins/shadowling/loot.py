@@ -20,7 +20,7 @@ from config import config_block
 from headless import SONNET, HeadlessError, run_claude
 from models.vocab import Vocab
 from parallel import fan_out, log, with_retry
-from skillio import TEXT, parse, render
+from skillio import OPTIONAL, TEXT, parse, render
 
 CHUNK_SIZE = 8
 MAX_WORKERS = 6
@@ -44,18 +44,20 @@ LOOT_SCHEMA = {
                 "required": [
                     "word",
                     "translation",
+                    "alt_translations",
                     "examples",
                     "synonyms",
                     "definition",
-                    "source_context",
+                    "ctx",
                 ],
                 "properties": {
                     "word": {"type": "string"},
                     "translation": {"type": "string"},
+                    "alt_translations": {"type": "array", "items": {"type": "string"}},
                     "examples": {"type": "array", "items": {"type": "string"}},
                     "synonyms": {"type": "array", "items": {"type": "string"}},
                     "definition": {"type": "string"},
-                    "source_context": {"type": "string"},
+                    "ctx": {"type": "string"},
                 },
             },
         }
@@ -82,10 +84,11 @@ def _build_data(cfg, chunk, contexts, existing):
         rows.append(
             {
                 "word": w,
-                "context": contexts.get(w, ""),
+                "ctx": contexts.get(w, ""),
                 "known_translation": rec.get("translation") or "",
+                "known_alt_translations": rec.get("alt_translations") or "",
                 "known_examples": rec.get("examples") or "",
-                "known_source_context": rec.get("source_context") or "",
+                "known_ctx": rec.get("ctx") or "",
             }
         )
     return "\n".join([config_block(cfg), "<words>" + render(rows) + "</words>"])
@@ -149,9 +152,10 @@ def _persist(enriched):
                         word,
                         item["translation"],
                         definition=item.get("definition"),
-                        source_context=item.get("source_context"),
+                        ctx=item.get("ctx"),
                         examples=item.get("examples"),
                         synonyms=item.get("synonyms"),
+                        alt_translations=item.get("alt_translations"),
                         con=con,
                     )
                 if res.get("action") == "untranslated":
@@ -213,11 +217,11 @@ def main(runner=None):
         print(cfg["notice"], file=sys.stderr)
         return 1
     try:
-        data = parse({"items": [{"word": TEXT, "ctx": TEXT}]})
+        data = parse({"items": [{"word": TEXT, "ctx": OPTIONAL(TEXT)}]})
     except ValueError as e:
         print(str(e), file=sys.stderr)  # malformed XML / shape error names the fix
         return 1
-    payload = {r["word"]: r["ctx"] for r in data["items"]}
+    payload = {r["word"]: r.get("ctx", "") for r in data["items"]}
     if not payload:
         print("loot.py: no <items> rows on stdin", file=sys.stderr)
         return 1

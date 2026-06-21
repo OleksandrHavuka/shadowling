@@ -549,7 +549,10 @@ class Migration7Test(AppDbTestBase):
                 con.execute("PRAGMA user_version").fetchone()[0], len(appdb.MIGRATIONS)
             )
             cols = {r["name"] for r in con.execute("PRAGMA table_info(vocab)")}
-            for c in ("definition", "source_context", "examples", "synonyms"):
+            # source_context is renamed to ctx by migration 8; a fresh db is the
+            # full chain, so it carries the post-rename name. alt_translations is
+            # added by migration 9.
+            for c in ("definition", "ctx", "examples", "synonyms", "alt_translations"):
                 self.assertIn(c, cols)
         finally:
             con.close()
@@ -580,6 +583,75 @@ class Migration7Test(AppDbTestBase):
                 con.execute(
                     "INSERT INTO vocab(word, translation, remaining, status,"
                     " examples) VALUES ('w', 't', 10, 'active', 'not json')"
+                )
+        finally:
+            con.close()
+
+
+class Migration8Test(AppDbTestBase):
+    def test_fresh_db_has_ctx_not_source_context(self):
+        con = appdb.connect()
+        try:
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(vocab)")}
+            self.assertIn("ctx", cols)
+            self.assertNotIn("source_context", cols)
+        finally:
+            con.close()
+
+    def test_upgrade_renames_source_context_keeps_value(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
+        for migration in appdb.MIGRATIONS[:7]:  # build a pre-8 (v7) database
+            migration(con)
+        con.execute("PRAGMA user_version = 7")
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status, created_at,"
+            " updated_at, source_context) VALUES"
+            " ('kept', 'переклад', 5, 'active', 'c', 'u', 'grounding line')"
+        )
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays _migration_8
+        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
+        self.assertEqual(row["ctx"], "grounding line")  # value carried over
+        self.assertNotIn("source_context", row.keys())  # old name gone
+
+
+class Migration9Test(AppDbTestBase):
+    def test_fresh_db_has_alt_translations(self):
+        con = appdb.connect()
+        try:
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(vocab)")}
+            self.assertIn("alt_translations", cols)
+        finally:
+            con.close()
+
+    def test_upgrade_preserves_rows_and_backfills_null(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
+        for migration in appdb.MIGRATIONS[:8]:  # build a pre-9 (v8) database
+            migration(con)
+        con.execute("PRAGMA user_version = 8")
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status, created_at,"
+            " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
+        )
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays _migration_9
+        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
+        self.assertEqual(row["translation"], "переклад")  # row preserved
+        self.assertIsNone(row["alt_translations"])  # added column backfills NULL
+
+    def test_alt_translations_rejects_invalid_json(self):
+        appdb.connect().close()
+        con = sqlite3.connect(appdb.db_path())
+        try:
+            # the CHECK rejects at INSERT time (json_valid fails immediately)
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(
+                    "INSERT INTO vocab(word, translation, remaining, status,"
+                    " alt_translations) VALUES ('w', 't', 10, 'active', 'not json')"
                 )
         finally:
             con.close()

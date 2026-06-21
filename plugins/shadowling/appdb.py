@@ -238,6 +238,26 @@ def _migration_7(con):
         con.execute(stmt)
 
 
+def _migration_8(con):
+    """Rename vocab.source_context -> ctx so ONE name carries the field end-to-end:
+    the /loot heredoc <ctx>, the enrichment <ctx>/<known_ctx> wire, and this column
+    all read `ctx` (traceable parse -> table -> render). No view references it, so
+    none is dropped first; rows are preserved (RENAME keeps data)."""
+    con.execute("ALTER TABLE vocab RENAME COLUMN source_context TO ctx")
+
+
+def _migration_9(con):
+    """Add vocab.alt_translations: a JSON array of alternative first_language
+    renderings of the SAME primary sense as `translation` (0-N), parallel to the
+    examples/synonyms JSON columns and guarded by json_valid. A different axis from
+    `synonyms` (learning_language synonyms). Write-only storage for now (no gloss/
+    tutor read); existing rows backfill NULL (not yet enriched)."""
+    con.execute(
+        "ALTER TABLE vocab ADD COLUMN alt_translations TEXT"
+        " CHECK (alt_translations IS NULL OR json_valid(alt_translations))"
+    )
+
+
 MIGRATIONS = [
     _migration_1,
     _migration_2,
@@ -246,6 +266,8 @@ MIGRATIONS = [
     _migration_5,
     _migration_6,
     _migration_7,
+    _migration_8,
+    _migration_9,
 ]
 
 # --- views: derived code, never migrated --------------------------------------

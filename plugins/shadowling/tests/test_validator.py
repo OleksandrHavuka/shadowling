@@ -1,6 +1,6 @@
 import unittest
 
-from validator import TEXT, SchemaError, validate
+from validator import OPTIONAL, TEXT, SchemaError, validate
 
 
 class TextLeafTest(unittest.TestCase):
@@ -65,6 +65,49 @@ class NestedTest(unittest.TestCase):
         }
         schema = {"items": [{"word": TEXT, "ctx": TEXT}]}
         self.assertEqual(validate(data, schema), data)
+
+
+class OptionalTest(unittest.TestCase):
+    SCHEMA = {"word": TEXT, "ctx": OPTIONAL(TEXT)}
+
+    def test_present_optional_is_validated(self):
+        self.assertEqual(
+            validate({"word": "w", "ctx": "c"}, self.SCHEMA),
+            {"word": "w", "ctx": "c"},
+        )
+
+    def test_absent_optional_is_omitted_not_defaulted(self):
+        # the key is simply absent from the shaped output (no synthetic default)
+        self.assertEqual(validate({"word": "w"}, self.SCHEMA), {"word": "w"})
+
+    def test_present_but_empty_optional_is_kept(self):
+        self.assertEqual(
+            validate({"word": "w", "ctx": ""}, self.SCHEMA),
+            {"word": "w", "ctx": ""},
+        )
+
+    def test_present_optional_with_wrong_type_still_raises(self):
+        with self.assertRaises(SchemaError):
+            validate({"word": "w", "ctx": ["x"]}, self.SCHEMA)
+
+    def test_required_sibling_is_still_enforced(self):
+        with self.assertRaises(SchemaError) as cm:
+            validate({"ctx": "c"}, self.SCHEMA)
+        self.assertIn("word", str(cm.exception))
+
+    def test_optional_list_absent_is_omitted(self):
+        self.assertEqual(validate({}, {"items": OPTIONAL([TEXT])}), {})
+
+    def test_optional_list_present_is_validated(self):
+        self.assertEqual(
+            validate({"items": ["a", "b"]}, {"items": OPTIONAL([TEXT])}),
+            {"items": ["a", "b"]},
+        )
+
+    def test_template_marks_optional_key_with_question_mark(self):
+        with self.assertRaises(SchemaError) as cm:
+            validate({"ctx": "c"}, self.SCHEMA)  # missing required 'word'
+        self.assertIn("ctx?", str(cm.exception))  # optional rendered as `ctx?`
 
 
 class ErrorMessageTest(unittest.TestCase):

@@ -32,7 +32,8 @@ def _item(word, **over):
         "examples": [f"A sentence using {word} here."],
         "synonyms": ["syn"],
         "definition": "a definition",
-        "source_context": f"context for {word}",
+        "ctx": f"context for {word}",
+        "alt_translations": ["alt-" + word],
     }
     base.update(over)
     return base
@@ -90,7 +91,8 @@ class EnrichTest(LootDriverBase):
             json.loads(r["examples"]), ["A sentence using throughput here."]
         )
         self.assertEqual(r["definition"], "a definition")
-        self.assertEqual(r["source_context"], "context for throughput")
+        self.assertEqual(r["ctx"], "context for throughput")
+        self.assertEqual(json.loads(r["alt_translations"]), ["alt-throughput"])
 
     def test_example_must_contain_word_else_word_pending(self):
         cfg = core.load_config()
@@ -115,7 +117,7 @@ class EnrichTest(LootDriverBase):
             "throughput",
             "old",
             examples=["old grounded throughput line"],
-            source_context="old ctx",
+            ctx="old ctx",
         )
         cfg = core.load_config()
         captured = []
@@ -124,6 +126,19 @@ class EnrichTest(LootDriverBase):
         self.assertTrue(captured)
         # the stored known_examples is forwarded to the model
         self.assertIn("old grounded throughput line", captured[0])
+
+    def test_pre_read_forwards_known_alt_translations(self):
+        from models.vocab import Vocab
+
+        Vocab.add("throughput", "old", alt_translations=["old alt rendering"])
+        cfg = core.load_config()
+        captured = []
+        runner = echo_runner({"throughput": _item("throughput")}, capture=captured)
+        loot.run({"throughput": ""}, cfg, runner=runner)
+        self.assertTrue(captured)
+        # the stored alt_translations is forwarded as known_alt_translations
+        self.assertIn("known_alt_translations", captured[0])
+        self.assertIn("old alt rendering", captured[0])
 
     def test_chunk_failure_leaves_words_pending(self):
         cfg = core.load_config()
@@ -200,6 +215,19 @@ class MainStdinTest(LootDriverBase):
         # an ad-hoc add: empty <ctx></ctx> -> generic example downstream.
         runner = echo_runner({"idempotent": _item("idempotent")})
         body = "<items><row><word>idempotent</word><ctx></ctx></row></items>"
+        orig, sys.stdin = sys.stdin, io.StringIO(body)
+        try:
+            code = loot.main(runner=runner)
+        finally:
+            sys.stdin = orig
+        self.assertEqual(code, 0)
+        self.assertIn("idempotent", self.rows_by_word())
+
+    def test_main_omitted_ctx_tag_is_allowed(self):
+        # ctx is OPTIONAL: an ad-hoc add may drop the <ctx> tag entirely (no empty
+        # placeholder) and still enrich with a generic example downstream.
+        runner = echo_runner({"idempotent": _item("idempotent")})
+        body = "<items><row><word>idempotent</word></row></items>"
         orig, sys.stdin = sys.stdin, io.StringIO(body)
         try:
             code = loot.main(runner=runner)

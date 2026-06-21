@@ -1,7 +1,7 @@
 import unittest
 
 import skillio
-from skillio import TEXT, read_fields, rows
+from skillio import OPTIONAL, TEXT, read_fields, rows
 
 
 class ScalarTest(unittest.TestCase):
@@ -292,6 +292,13 @@ class ParseTest(unittest.TestCase):
                 ]
             },
         )
+
+    def test_optional_tag_may_be_omitted(self):
+        # an OPTIONAL key whose <row> drops the tag entirely is valid; the key is
+        # simply absent from the result (no empty-string placeholder needed).
+        body = "<items><row><word>idempotent</word></row></items>"
+        got = skillio.parse({"items": [{"word": TEXT, "ctx": OPTIONAL(TEXT)}]}, body)
+        self.assertEqual(got, {"items": [{"word": "idempotent"}]})
 
     def test_escaped_metachars_round_trip(self):
         self.assertEqual(
