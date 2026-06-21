@@ -53,6 +53,10 @@ path = "models.vocab"
 depends_on = ["appdb", "core"]
 
 [[modules]]
+path = "models.anki_link"
+depends_on = ["appdb", "core"]
+
+[[modules]]
 path = "models.messages"
 depends_on = ["appdb", "core"]
 
