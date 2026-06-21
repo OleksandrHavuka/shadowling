@@ -317,20 +317,42 @@ _MODEL_CSS = """.card {
 .sl-err { background:#3a1c1c; color:#ff9a92; }"""
 
 
-def ensure_model(invoke=_invoke):
-    """Create the Shadowling Cloze note type if absent (idempotent)."""
-    if MODEL_NAME in invoke("modelNames"):
+def update_model(invoke=_invoke, cfg=None):
+    """Bring the Shadowling Cloze note type up to date — idempotent and
+    additive-only. Creates it if absent; otherwise adds any missing fields and
+    rewrites templates/CSS only when the current value differs (a no-op when
+    already current). NEVER removes, renames, reorders fields or deletes a card
+    template — scheduling lives on the card, so additive changes never touch review
+    history. shadowling OWNS the templates/CSS (manual edits are overwritten next
+    sync; documented in docs/ANKI.md)."""
+    front = _FRONT_TEMPLATE
+    back = _back_template(cfg)
+    if MODEL_NAME not in invoke("modelNames"):
+        invoke(
+            "createModel",
+            modelName=MODEL_NAME,
+            inOrderFields=FIELDS,
+            isCloze=True,
+            css=_MODEL_CSS,
+            cardTemplates=[{"Name": "Cloze", "Front": front, "Back": back}],
+        )
         return
-    invoke(
-        "createModel",
-        modelName=MODEL_NAME,
-        inOrderFields=FIELDS,
-        isCloze=True,
-        css=_MODEL_CSS,
-        cardTemplates=[
-            {"Name": "Cloze", "Front": _FRONT_TEMPLATE, "Back": _BACK_TEMPLATE}
-        ],
-    )
+    have = invoke("modelFieldNames", modelName=MODEL_NAME) or []
+    for field in FIELDS:
+        if field not in have:
+            invoke("modelFieldAdd", modelName=MODEL_NAME, fieldName=field)
+    current = (invoke("modelTemplates", modelName=MODEL_NAME) or {}).get("Cloze") or {}
+    if current.get("Front") != front or current.get("Back") != back:
+        invoke(
+            "updateModelTemplates",
+            model={
+                "name": MODEL_NAME,
+                "templates": {"Cloze": {"Front": front, "Back": back}},
+            },
+        )
+    css = (invoke("modelStyling", modelName=MODEL_NAME) or {}).get("css")
+    if css != _MODEL_CSS:
+        invoke("updateModelStyling", model={"name": MODEL_NAME, "css": _MODEL_CSS})
 
 
 def suspend(card_id, invoke=_invoke):
@@ -435,7 +457,7 @@ def sync_all(cfg, *, invoke=_invoke):
     in one pass over Vocab.list(), then pull progress. Per-word push errors are
     collected, not fatal. Returns a summary dict."""
     invoke("version")  # reachability; AnkiError aborts BEFORE any write
-    ensure_model(invoke=invoke)
+    update_model(invoke=invoke, cfg=cfg)
     deck = _deck_name(cfg)
     invoke("createDeck", deck=deck)
     counts = {"added": 0, "updated": 0, "suspended": 0, "skipped": 0}

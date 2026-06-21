@@ -274,20 +274,110 @@ class TemplateTest(unittest.TestCase):
         self.assertIn(".mobile .sl-type", anki._MODEL_CSS)
 
 
-class EnsureModelTest(unittest.TestCase):
+class UpdateModelTest(unittest.TestCase):
+    CFG = {"learning_language": "English"}
+
+    def _desired(self):
+        return (
+            anki._FRONT_TEMPLATE,
+            anki._back_template(self.CFG),
+            anki._MODEL_CSS,
+        )
+
     def test_creates_model_when_absent(self):
         fake = FakeAnki({"modelNames": ["Basic"], "createModel": None})
-        anki.ensure_model(invoke=fake)
+        anki.update_model(invoke=fake, cfg=self.CFG)
         self.assertIn("createModel", fake.actions())
-        params = fake.params_for("createModel")[0]
-        self.assertEqual(params["modelName"], anki.MODEL_NAME)
-        self.assertTrue(params["isCloze"])
-        self.assertEqual(params["inOrderFields"], anki.FIELDS)
+        p = fake.params_for("createModel")[0]
+        self.assertEqual(p["modelName"], anki.MODEL_NAME)
+        self.assertTrue(p["isCloze"])
+        self.assertEqual(p["inOrderFields"], anki.FIELDS)
+        tmpl = p["cardTemplates"][0]
+        self.assertEqual(tmpl["Name"], "Cloze")
+        self.assertIn("{{tts en_US:Word}}", tmpl["Back"])
 
-    def test_noop_when_model_present(self):
-        fake = FakeAnki({"modelNames": ["Basic", anki.MODEL_NAME]})
-        anki.ensure_model(invoke=fake)
-        self.assertNotIn("createModel", fake.actions())
+    def test_adds_only_missing_fields(self):
+        front, back, css = self._desired()
+        old_fields = [
+            "Word",
+            "Examples",
+            "Translation",
+            "AltTranslations",
+            "Synonyms",
+            "Definition",
+            "Context",
+        ]
+        fake = FakeAnki(
+            {
+                "modelNames": [anki.MODEL_NAME],
+                "modelFieldNames": old_fields,
+                "modelTemplates": {"Cloze": {"Front": front, "Back": back}},
+                "modelStyling": {"css": css},
+            }
+        )
+        anki.update_model(invoke=fake, cfg=self.CFG)
+        added = [p["fieldName"] for p in fake.params_for("modelFieldAdd")]
+        self.assertEqual(added, ["Forms", "Lemma", "Typed"])
+
+    def test_rewrites_templates_and_styling_when_different(self):
+        fake = FakeAnki(
+            {
+                "modelNames": [anki.MODEL_NAME],
+                "modelFieldNames": anki.FIELDS,
+                "modelTemplates": {"Cloze": {"Front": "old", "Back": "old"}},
+                "modelStyling": {"css": "old"},
+                "updateModelTemplates": None,
+                "updateModelStyling": None,
+            }
+        )
+        anki.update_model(invoke=fake, cfg=self.CFG)
+        self.assertIn("updateModelTemplates", fake.actions())
+        self.assertIn("updateModelStyling", fake.actions())
+
+    def test_noop_when_current(self):
+        front, back, css = self._desired()
+        fake = FakeAnki(
+            {
+                "modelNames": [anki.MODEL_NAME],
+                "modelFieldNames": anki.FIELDS,
+                "modelTemplates": {"Cloze": {"Front": front, "Back": back}},
+                "modelStyling": {"css": css},
+            }
+        )
+        anki.update_model(invoke=fake, cfg=self.CFG)
+        self.assertNotIn("modelFieldAdd", fake.actions())
+        self.assertNotIn("updateModelTemplates", fake.actions())
+        self.assertNotIn("updateModelStyling", fake.actions())
+
+    def test_never_issues_a_destructive_action(self):
+        # Worst case: model exists, stale fields + stale templates/css -> every
+        # additive path fires. Assert the issued actions are a subset of the
+        # additive-only allow-list (no remove/rename/reorder/delete).
+        allowed = {
+            "modelNames",
+            "modelFieldNames",
+            "modelTemplates",
+            "modelStyling",
+            "createModel",
+            "modelFieldAdd",
+            "updateModelTemplates",
+            "updateModelStyling",
+        }
+        fake = FakeAnki(
+            {
+                "modelNames": [anki.MODEL_NAME],
+                "modelFieldNames": ["Word", "Examples"],
+                "modelTemplates": {"Cloze": {"Front": "old", "Back": "old"}},
+                "modelStyling": {"css": "old"},
+                "updateModelTemplates": None,
+                "updateModelStyling": None,
+            }
+        )
+        anki.update_model(invoke=fake, cfg=self.CFG)
+        self.assertTrue(
+            set(fake.actions()) <= allowed,
+            f"unexpected actions: {set(fake.actions()) - allowed}",
+        )
 
 
 class AnkiDbBase(unittest.TestCase):
@@ -360,6 +450,11 @@ class SyncAllTest(AnkiDbBase):
         results = {
             "version": 6,
             "modelNames": [anki.MODEL_NAME],
+            "modelFieldNames": anki.FIELDS,
+            "modelTemplates": {"Cloze": {"Front": "x", "Back": "y"}},
+            "modelStyling": {"css": "x"},
+            "updateModelTemplates": None,
+            "updateModelStyling": None,
             "createDeck": None,
             "addNote": lambda p: 111,
             "findCards": lambda p: [222],
