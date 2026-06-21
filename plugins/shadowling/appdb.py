@@ -258,6 +258,20 @@ def _migration_9(con):
     )
 
 
+def _migration_10(con):
+    """Create anki_link: a flat mirror of Anki's per-word review progress inside
+    shadowling.db (Spec 2 / Variant B). `word` is a logical ref to vocab.word —
+    always present (words are soft-deleted, never removed), so the row is never
+    orphaned and needs no FK. The progress columns are a known, finite set, so no
+    JSON. Fresh installs replay this same step."""
+    con.execute(
+        "CREATE TABLE IF NOT EXISTS anki_link("
+        " word TEXT PRIMARY KEY, note_id INTEGER, card_id INTEGER,"
+        " deck TEXT, due INTEGER, interval INTEGER, reps INTEGER,"
+        " lapses INTEGER, synced_at TEXT)"
+    )
+
+
 MIGRATIONS = [
     _migration_1,
     _migration_2,
@@ -268,6 +282,7 @@ MIGRATIONS = [
     _migration_7,
     _migration_8,
     _migration_9,
+    _migration_10,
 ]
 
 # --- views: derived code, never migrated --------------------------------------

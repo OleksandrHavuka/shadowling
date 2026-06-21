@@ -657,5 +657,52 @@ class Migration9Test(AppDbTestBase):
             con.close()
 
 
+class Migration10Test(AppDbTestBase):
+    def test_fresh_db_has_anki_link_table(self):
+        con = appdb.connect()
+        try:
+            tables = {
+                r["name"]
+                for r in con.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                )
+            }
+            self.assertIn("anki_link", tables)
+            cols = {r["name"] for r in con.execute("PRAGMA table_info(anki_link)")}
+            self.assertEqual(
+                cols,
+                {
+                    "word",
+                    "note_id",
+                    "card_id",
+                    "deck",
+                    "due",
+                    "interval",
+                    "reps",
+                    "lapses",
+                    "synced_at",
+                },
+            )
+        finally:
+            con.close()
+
+    def test_upgrade_preserves_existing_vocab_rows(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
+        for migration in appdb.MIGRATIONS[:9]:  # build a pre-10 (v9) database
+            migration(con)
+        con.execute("PRAGMA user_version = 9")
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status, created_at,"
+            " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
+        )
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays _migration_10
+        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
+        self.assertEqual(row["translation"], "переклад")  # row preserved
+        self.assertEqual(appdb.query("SELECT * FROM anki_link"), [])  # new, empty
+
+
 if __name__ == "__main__":
     unittest.main()
