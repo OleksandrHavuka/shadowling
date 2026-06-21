@@ -178,16 +178,36 @@ class Vocab:
 
     @staticmethod
     def remove(word):
+        """Soft-delete: mark the word 'dropped' (the row stays, so its anki_link
+        mirror is never orphaned and a re-loot can un-drop it via _add_on). Still
+        clears the word's mastery row — that's scheduling state, not vocabulary.
+        Returns True if a vocab row matched."""
         word = word.strip().lower()
+        now = core.now()
         con = connect()
         try:
-            with tx(con):  # vocab delete + orphan-mastery cleanup, atomic
-                cur = con.execute("DELETE FROM vocab WHERE word = ?", (word,))
+            with tx(con):  # status flip + mastery cleanup, atomic
+                cur = con.execute(
+                    "UPDATE vocab SET status = 'dropped', updated_at = ?"
+                    " WHERE word = ?",
+                    (now, word),
+                )
                 con.execute(
                     "DELETE FROM mastery WHERE item_kind = 'vocab' AND item_key = ?",
                     (word,),
                 )
             return cur.rowcount > 0
+        finally:
+            con.close()
+
+    @staticmethod
+    def list():
+        """Every vocab row, ALL statuses (active/learned/dropped). The Anki push
+        needs the full set: push the live ones, suspend the dropped ones.
+        list_active() stays the glossing-specific reader."""
+        con = connect()
+        try:
+            return [dict(r) for r in con.execute("SELECT * FROM vocab ORDER BY rowid")]
         finally:
             con.close()
 

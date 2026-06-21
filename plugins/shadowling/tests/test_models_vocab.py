@@ -82,15 +82,16 @@ class AddTest(VocabRepoBase):
 
 
 class RemoveTest(VocabRepoBase):
-    def test_remove_existing_returns_true_and_deletes(self):
+    def test_remove_existing_returns_true_and_soft_deletes(self):
         Vocab.add("throughput", "t")
         self.assertTrue(Vocab.remove("Throughput"))
-        self.assertNotIn("throughput", self.rows_by_word())
+        row = self.rows_by_word()["throughput"]  # row STAYS (soft-delete)
+        self.assertEqual(row["status"], "dropped")
 
     def test_remove_unknown_returns_false(self):
         self.assertFalse(Vocab.remove("nonexistent"))
 
-    def test_remove_cascades_orphaned_mastery_row(self):
+    def test_remove_clears_orphaned_mastery_row(self):
         Vocab.add("throughput", "t")
         con = appdb.connect()
         try:
@@ -126,6 +127,22 @@ class RemoveTest(VocabRepoBase):
             "SELECT * FROM mastery WHERE item_kind='grammar' AND item_key='throughput'"
         )
         self.assertEqual(len(kept), 1)
+
+    def test_dropped_word_excluded_from_list_active(self):
+        Vocab.add("throughput", "t")
+        Vocab.remove("throughput")
+        self.assertEqual(Vocab.list_active(), [])
+
+
+class ListAllTest(VocabRepoBase):
+    def test_list_returns_all_statuses(self):
+        Vocab.add("alpha", "а")
+        Vocab.add("beta", "б")
+        Vocab.remove("beta")
+        rows = {r["word"]: r for r in Vocab.list()}
+        self.assertEqual(set(rows), {"alpha", "beta"})
+        self.assertEqual(rows["beta"]["status"], "dropped")
+        self.assertEqual(rows["alpha"]["status"], "active")
 
 
 class RelearnTest(VocabRepoBase):
