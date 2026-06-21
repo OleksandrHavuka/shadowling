@@ -6,7 +6,7 @@ import unittest
 from unittest import mock
 
 import appdb
-from models.vocab import Vocab, word_in_text
+from models.vocab import Vocab, cloze_pattern, word_in_text
 
 
 class VocabRepoBase(unittest.TestCase):
@@ -343,6 +343,57 @@ class EnrichmentUpsertTest(VocabRepoBase):
         self.assertEqual(row["status"], "active")
         self.assertEqual(row["remaining"], 10)
         self.assertEqual(json.loads(row["examples"]), ["w again"])
+
+    def test_forms_and_lemma_round_trip(self):
+        Vocab.add(
+            "scattered",
+            "розкидав",
+            forms=["scatter", "scatters", "scattering"],
+            lemma="scatter",
+        )
+        r = self.rows_by_word()["scattered"]
+        self.assertEqual(json.loads(r["forms"]), ["scatter", "scatters", "scattering"])
+        self.assertEqual(r["lemma"], "scatter")
+        # learning_language forms with accents store as readable UTF-8, not \uXXXX
+        Vocab.add("comer", "їсти", forms=["comí", "comió"], lemma="comer")
+        self.assertEqual(self.rows_by_word()["comer"]["forms"], '["comí", "comió"]')
+
+    def test_bare_add_does_not_wipe_forms_or_lemma(self):
+        Vocab.add("scatter", "розкидати", forms=["scattered"], lemma="scatter")
+        Vocab.add("scatter", "розкидати")  # bare refresh, no enrichment kwargs
+        r = self.rows_by_word()["scatter"]
+        self.assertEqual(json.loads(r["forms"]), ["scattered"])  # preserved
+        self.assertEqual(r["lemma"], "scatter")  # preserved
+
+
+class ClozePatternTest(unittest.TestCase):
+    """The shared matcher used by both loot validation and the Anki push."""
+
+    def test_boundary_does_not_match_inside_a_word(self):
+        pat = cloze_pattern("rid", [])
+        self.assertIsNone(pat.search("the bridge held"))
+        self.assertIsNotNone(pat.search("get rid of it"))
+
+    def test_matches_a_listed_form(self):
+        pat = cloze_pattern("scatter", ["scattered", "scatters"])
+        self.assertIsNotNone(pat.search("he scattered the seeds"))
+
+    def test_longest_variant_wins_overlap(self):
+        pat = cloze_pattern("scatter", ["scattered"])
+        m = pat.search("the leaves scattered everywhere")
+        self.assertEqual(m.group(0), "scattered")
+
+    def test_case_insensitive(self):
+        pat = cloze_pattern("scatter", [])
+        self.assertIsNotNone(pat.search("Scatter the ashes"))
+
+    def test_non_english_form(self):
+        pat = cloze_pattern("comer", ["comí", "comió"])
+        self.assertIsNotNone(pat.search("ayer comí una manzana"))
+
+    def test_multiword_phrase_matched_whole(self):
+        pat = cloze_pattern("lean toward", [])
+        self.assertIsNotNone(pat.search("I lean toward the second option"))
 
 
 class GetManyTest(VocabRepoBase):

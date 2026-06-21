@@ -40,6 +40,19 @@ def word_in_text(word, text):
     return build_pattern(word).search(text) is not None
 
 
+def cloze_pattern(word, forms):
+    """Compiled regex matching `word` or any surface `form` at a word boundary,
+    case-insensitive, longest-variant-first so the longest form wins an overlap.
+    Language-agnostic: word boundaries are universal, the inflection knowledge
+    lives in `forms`. Shared by loot's `_valid` (a looted example must match) and
+    anki's `_wrap_cloze` (push wraps every match as one c1), so validation and
+    delivery can never drift apart. Unlike build_pattern (English-suffix guessing
+    for scan_decrement), this carries no language assumptions."""
+    variants = sorted({word, *forms}, key=len, reverse=True)
+    alt = "|".join(re.escape(v) for v in variants)
+    return re.compile(r"(?<!\w)(?:" + alt + r")(?!\w)", re.IGNORECASE)
+
+
 class Vocab:
     @staticmethod
     def _add_on(
@@ -52,13 +65,16 @@ class Vocab:
         examples=None,
         synonyms=None,
         alt_translations=None,
+        forms=None,
+        lemma=None,
     ):
         """add/refresh/relearn on an ALREADY-OPEN connection (opens no tx of its
         own). Writes ONLY the enrichment columns actually provided (not-None), so a
         bare add(word, translation) never wipes a word's existing enrichment, while
         the loot driver — which always passes the full bundle — overwrites it.
-        examples/synonyms/alt_translations are Python lists, stored as json_valid
-        TEXT. Returns the same render-ready result dict as add()."""
+        examples/synonyms/alt_translations/forms are Python lists, stored as
+        json_valid TEXT; lemma is plain TEXT. Returns the same render-ready result
+        dict as add()."""
         word = word.strip().lower()
         translation = (translation or "").strip()
         # Identity/empty translation = the LLM echoed the term back untranslated.
@@ -82,6 +98,10 @@ class Vocab:
             enrich["alt_translations"] = json.dumps(
                 alt_translations, ensure_ascii=False
             )
+        if forms is not None:
+            enrich["forms"] = json.dumps(forms, ensure_ascii=False)
+        if lemma is not None:
+            enrich["lemma"] = lemma
         row = con.execute("SELECT * FROM vocab WHERE word = ?", (word,)).fetchone()
         if row is None:
             cols = [
@@ -134,6 +154,8 @@ class Vocab:
         examples=None,
         synonyms=None,
         alt_translations=None,
+        forms=None,
+        lemma=None,
         con=None,
     ):
         """Add or refresh a vocab pair, optionally with enrichment columns. Returns
@@ -146,6 +168,8 @@ class Vocab:
             "examples": examples,
             "synonyms": synonyms,
             "alt_translations": alt_translations,
+            "forms": forms,
+            "lemma": lemma,
         }
         if con is not None:
             return Vocab._add_on(con, word, translation, **kw)
