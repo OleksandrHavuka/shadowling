@@ -1,9 +1,16 @@
 import json
+import os
+import shutil
+import tempfile
 import unittest
 import urllib.error
 from unittest import mock
 
 import anki
+import appdb
+import core
+from models.anki_link import AnkiLink
+from models.vocab import Vocab
 
 
 class _FakeResp:
@@ -209,6 +216,182 @@ class EnsureModelTest(unittest.TestCase):
         fake = FakeAnki({"modelNames": ["Basic", anki.MODEL_NAME]})
         anki.ensure_model(invoke=fake)
         self.assertNotIn("createModel", fake.actions())
+
+
+class AnkiDbBase(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp()
+        os.environ["SHADOWLING_HOME"] = self.home
+        core.save_config(
+            {
+                "first_language": "Ukrainian",
+                "learning_language": "English",
+                "explanation_language": "English",
+            }
+        )
+
+    def tearDown(self):
+        os.environ.pop("SHADOWLING_HOME", None)
+        shutil.rmtree(self.home, ignore_errors=True)
+
+
+class PushRowTest(AnkiDbBase):
+    def _row(self, **over):
+        row = {
+            "word": "throughput",
+            "translation": "пропускна здатність",
+            "examples": json.dumps(["We boosted throughput today."]),
+            "alt_translations": None,
+            "synonyms": None,
+            "definition": None,
+            "ctx": None,
+            "status": "active",
+        }
+        row.update(over)
+        return row
+
+    def test_add_new_note_stores_ids(self):
+        fake = FakeAnki({"addNote": lambda p: 111, "findCards": lambda p: [222]})
+        action = anki._push_row(self._row(), "shadowling::English", fake)
+        self.assertEqual(action, "added")
+        self.assertIn("addNote", fake.actions())
+        link = AnkiLink.get("throughput")
+        self.assertEqual(link["note_id"], 111)
+        self.assertEqual(link["card_id"], 222)
+
+    def test_existing_link_updates_fields(self):
+        AnkiLink.upsert("throughput", note_id=111, card_id=222, deck="d")
+        fake = FakeAnki({"updateNoteFields": None})
+        action = anki._push_row(self._row(), "shadowling::English", fake)
+        self.assertEqual(action, "updated")
+        self.assertIn("updateNoteFields", fake.actions())
+        self.assertNotIn("addNote", fake.actions())
+
+    def test_uncovered_row_returns_none_and_pushes_nothing(self):
+        # un-re-looted row: example shows only an inflection, forms NULL -> no cloze
+        row = self._row(
+            examples=json.dumps(["The wind scattered the leaves."]), word="scatter"
+        )
+        fake = FakeAnki({"addNote": lambda p: 111})
+        self.assertIsNone(anki._push_row(row, "shadowling::English", fake))
+        self.assertNotIn("addNote", fake.actions())
+
+
+class SuspendDroppedTest(AnkiDbBase):
+    def test_suspends_when_card_known(self):
+        AnkiLink.upsert("gone", note_id=1, card_id=9)
+        fake = FakeAnki({"suspend": None})
+        self.assertEqual(anki._suspend_dropped({"word": "gone"}, fake), "suspended")
+        self.assertEqual(fake.params_for("suspend")[0], {"cards": [9]})
+
+    def test_skips_when_no_card(self):
+        fake = FakeAnki()
+        self.assertEqual(
+            anki._suspend_dropped({"word": "never-synced"}, fake), "skipped"
+        )
+        self.assertNotIn("suspend", fake.actions())
+
+
+class SyncAllTest(AnkiDbBase):
+    def _no_notes_invoke(self, extra=None):
+        results = {
+            "version": 6,
+            "modelNames": [anki.MODEL_NAME],
+            "createDeck": None,
+            "addNote": lambda p: 111,
+            "findCards": lambda p: [222],
+            "updateNoteFields": None,
+            "suspend": None,
+            "findNotes": [],  # empty pull
+        }
+        results.update(extra or {})
+        return FakeAnki(results)
+
+    def test_enriched_word_added_and_counted(self):
+        Vocab.add("throughput", "t", examples=["We boosted throughput."])
+        fake = self._no_notes_invoke()
+        s = anki.sync_all(core.load_config(), invoke=fake)
+        self.assertEqual(s["added"], 1)
+        self.assertEqual(s["skipped"], 0)
+        self.assertIn("createDeck", fake.actions())
+
+    def test_unenriched_word_skipped_not_pushed(self):
+        Vocab.add("bare", "t")  # no examples
+        fake = self._no_notes_invoke()
+        s = anki.sync_all(core.load_config(), invoke=fake)
+        self.assertEqual(s["added"], 0)
+        self.assertEqual(s["skipped"], 1)
+        self.assertNotIn("addNote", fake.actions())
+
+    def test_word_with_examples_but_no_coverage_is_uncovered(self):
+        # examples present but no form covers the inflection -> uncovered, not pushed
+        Vocab.add("scatter", "розкидати", examples=["The wind scattered the leaves."])
+        fake = self._no_notes_invoke()
+        s = anki.sync_all(core.load_config(), invoke=fake)
+        self.assertEqual(s["added"], 0)
+        self.assertEqual(s["uncovered"], ["scatter"])
+        self.assertNotIn("addNote", fake.actions())
+
+    def test_dropped_word_suspended(self):
+        Vocab.add("throughput", "t", examples=["a throughput line"])
+        AnkiLink.upsert("throughput", note_id=1, card_id=9)
+        Vocab.remove("throughput")  # status -> dropped
+        fake = self._no_notes_invoke()
+        s = anki.sync_all(core.load_config(), invoke=fake)
+        self.assertEqual(s["suspended"], 1)
+        self.assertEqual(fake.params_for("suspend")[0], {"cards": [9]})
+
+    def test_anki_down_aborts_before_writes(self):
+        Vocab.add("throughput", "t", examples=["a throughput line"])
+        fake = FakeAnki({"version": anki.AnkiError("down")})
+        with self.assertRaises(anki.AnkiError):
+            anki.sync_all(core.load_config(), invoke=fake)
+        self.assertIsNone(AnkiLink.get("throughput"))  # nothing written
+
+    def test_pull_lapse_increase_relearns(self):
+        Vocab.add("throughput", "t", examples=["a throughput line"])
+        self._make_learned("throughput")
+        AnkiLink.upsert("throughput", note_id=111, card_id=222, lapses=0)
+        fake = self._no_notes_invoke(
+            {
+                "updateNoteFields": None,
+                "findNotes": [111],
+                "notesInfo": lambda p: [
+                    {
+                        "noteId": 111,
+                        "fields": {"Word": {"value": "throughput"}},
+                        "cards": [222],
+                    }
+                ],
+                "cardsInfo": lambda p: [
+                    {
+                        "cardId": 222,
+                        "deck": "shadowling::English",
+                        "due": 5,
+                        "interval": 3,
+                        "reps": 4,
+                        "lapses": 1,  # increased from stored 0
+                    }
+                ],
+            }
+        )
+        s = anki.sync_all(core.load_config(), invoke=fake)
+        self.assertEqual(s["pulled"], 1)
+        self.assertEqual(s["relearned"], ["throughput"])
+        row = {r["word"]: r for r in Vocab.list()}["throughput"]
+        self.assertEqual(row["status"], "active")  # re-entered glossing
+        self.assertEqual(AnkiLink.get("throughput")["lapses"], 1)
+
+    def _make_learned(self, word):
+        con = appdb.connect()
+        try:
+            with con:
+                con.execute(
+                    "UPDATE vocab SET status='learned', remaining=0 WHERE word=?",
+                    (word,),
+                )
+        finally:
+            con.close()
 
 
 if __name__ == "__main__":

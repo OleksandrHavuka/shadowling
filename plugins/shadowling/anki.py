@@ -10,10 +10,14 @@ so Vocab.relearn and AnkiLink.upsert commit together.
 """
 
 import json
+import sys
 import urllib.error
 import urllib.request
 
-from models.vocab import cloze_pattern
+import core
+from appdb import connect, tx
+from models.anki_link import AnkiLink
+from models.vocab import Vocab, cloze_pattern
 
 ANKI_URL = "http://127.0.0.1:8765"
 ANKI_VERSION = 6  # AnkiConnect API version
@@ -174,3 +178,174 @@ def ensure_model(invoke=_invoke):
             {"Name": "Cloze", "Front": _FRONT_TEMPLATE, "Back": _BACK_TEMPLATE}
         ],
     )
+
+
+def suspend(card_id, invoke=_invoke):
+    """Suspend one card (a dropped word's card stops being scheduled)."""
+    invoke("suspend", cards=[card_id])
+
+
+def _push_row(row, deck, invoke):
+    """Push one enriched vocab row: update if it already has a note, else add and
+    store the new note_id/card_id in anki_link. Returns 'updated' or 'added', or
+    None when the row has examples but NONE of them cloze (_build_fields returned
+    None — an un-re-looted/hand-inserted row); the caller records the word for
+    re-loot instead of pushing a cloze-less, addNote-failing note."""
+    fields = _build_fields(row)
+    if fields is None:
+        return None  # zero cloze coverage — caller adds word to "uncovered"
+    word = row["word"]
+    link = AnkiLink.get(word)
+    if link and link.get("note_id"):
+        invoke("updateNoteFields", note={"id": link["note_id"], "fields": fields})
+        return "updated"
+    note_id = invoke(
+        "addNote",
+        note={
+            "deckName": deck,
+            "modelName": MODEL_NAME,
+            "fields": fields,
+            "tags": [TAG],
+            "options": {"allowDuplicate": False},
+        },
+    )
+    cards = invoke("findCards", query=f"nid:{note_id}")
+    AnkiLink.upsert(
+        word, note_id=note_id, card_id=cards[0] if cards else None, deck=deck
+    )
+    return "added"
+
+
+def _suspend_dropped(row, invoke):
+    """A dropped word: suspend its card if we know one, else nothing to do."""
+    link = AnkiLink.get(row["word"])
+    if link and link.get("card_id"):
+        suspend(link["card_id"], invoke=invoke)
+        return "suspended"
+    return "skipped"
+
+
+def pull_progress(invoke=_invoke):
+    """Read review progress for all shadowling notes back into anki_link. A word
+    whose lapses increased re-enters glossing (Vocab.relearn) atomically with its
+    anki_link upsert (shared transaction). Returns (pulled_count, relearned_words)."""
+    note_ids = invoke("findNotes", query=f"tag:{TAG}")
+    if not note_ids:
+        return 0, []
+    infos = invoke("notesInfo", notes=note_ids)
+    word_by_note, card_by_note, card_ids = {}, {}, []
+    for info in infos:
+        nid = info.get("noteId")
+        word = (
+            (info.get("fields", {}).get("Word", {}).get("value") or "").strip().lower()
+        )
+        cards = info.get("cards") or []
+        if not word or not cards:
+            continue
+        word_by_note[nid] = word
+        card_by_note[nid] = cards[0]
+        card_ids.append(cards[0])
+    cinfos = (
+        {c["cardId"]: c for c in invoke("cardsInfo", cards=card_ids)}
+        if card_ids
+        else {}
+    )
+    pulled, relearned = 0, []
+    con = connect()
+    try:
+        for nid, word in word_by_note.items():
+            c = cinfos.get(card_by_note[nid])
+            if not c:
+                continue
+            prev = AnkiLink.get(word)
+            prev_lapses = (prev or {}).get("lapses") or 0
+            lapses = c.get("lapses") or 0
+            with tx(con):  # relearn + upsert commit together
+                if lapses > prev_lapses:
+                    Vocab.relearn(word, con=con)
+                    relearned.append(word)
+                AnkiLink.upsert(
+                    word,
+                    con=con,
+                    note_id=nid,
+                    card_id=card_by_note[nid],
+                    deck=c.get("deck"),
+                    due=c.get("due"),
+                    interval=c.get("interval"),
+                    reps=c.get("reps"),
+                    lapses=lapses,
+                    synced_at=core.now(),
+                )
+            pulled += 1
+    finally:
+        con.close()
+    return pulled, relearned
+
+
+def sync_all(cfg, *, invoke=_invoke):
+    """The /anki-sync logic: reachability check, ensure model + deck, push/suspend
+    in one pass over Vocab.list(), then pull progress. Per-word push errors are
+    collected, not fatal. A row with examples but no cloze coverage is added to
+    `uncovered` (re-loot to fix), never pushed. Returns a summary dict."""
+    invoke("version")  # reachability; AnkiError aborts BEFORE any write
+    ensure_model(invoke=invoke)
+    deck = _deck_name(cfg)
+    invoke("createDeck", deck=deck)
+    counts = {"added": 0, "updated": 0, "suspended": 0, "skipped": 0}
+    uncovered = []
+    errors = []
+    for row in Vocab.list():
+        try:
+            if row["status"] == "dropped":
+                action = _suspend_dropped(row, invoke)
+            elif _json_list(row.get("examples")):
+                action = _push_row(row, deck, invoke)
+                if action is None:  # examples present but none cloze → re-loot
+                    uncovered.append(row["word"])
+                    continue
+            else:
+                action = "skipped"  # active/learned but not yet enriched
+            counts[action] += 1
+        except AnkiError as e:
+            errors.append({"word": row["word"], "error": str(e)})
+    pulled, relearned = pull_progress(invoke=invoke)
+    return {
+        **counts,
+        "uncovered": uncovered,
+        "errors": errors,
+        "pulled": pulled,
+        "relearned": relearned,
+    }
+
+
+def main(invoke=None):
+    """Config-gate, sync, print a one-line summary. Exit 1 on a config error, an
+    Anki-unreachable abort, or any per-word push error."""
+    cfg = core.load_config()
+    if not core.config_ready(cfg):
+        print(cfg["notice"], file=sys.stderr)
+        return 1
+    kw = {} if invoke is None else {"invoke": invoke}
+    try:
+        s = sync_all(cfg, **kw)
+    except AnkiError as e:
+        print(f"anki-sync: {e}", file=sys.stderr)
+        return 1
+    print(
+        f"anki-sync: +{s['added']} added, {s['updated']} updated, "
+        f"{s['suspended']} suspended, {s['skipped']} skipped (not enriched), "
+        f"{len(s['uncovered'])} uncovered, "
+        f"{s['pulled']} pulled, {len(s['relearned'])} relearned, "
+        f"{len(s['errors'])} errors",
+        flush=True,
+    )
+    if s["uncovered"]:
+        print(
+            "  no cloze coverage — re-loot: " + ", ".join(s["uncovered"]),
+            flush=True,
+        )
+    return 1 if s["errors"] else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
