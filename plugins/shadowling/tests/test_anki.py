@@ -185,6 +185,53 @@ class BuildFieldsTest(unittest.TestCase):
         )
 
 
+class BuildFieldsEnrichmentTest(unittest.TestCase):
+    def _row(self, **over):
+        row = {
+            "word": "ran",
+            "translation": "біг",
+            "examples": json.dumps(["He ran fast."]),
+            "alt_translations": json.dumps(["a", "b"]),
+            "synonyms": json.dumps(["x", "y"]),
+            "definition": None,
+            "ctx": None,
+            "forms": json.dumps(["running", "runs"]),
+            "lemma": "run",
+        }
+        row.update(over)
+        return row
+
+    def test_forms_joined_with_middot(self):
+        self.assertEqual(anki._build_fields(self._row())["Forms"], "running · runs")
+
+    def test_alt_and_syn_joined_with_middot(self):
+        f = anki._build_fields(self._row())
+        self.assertEqual(f["AltTranslations"], "a · b")
+        self.assertEqual(f["Synonyms"], "x · y")
+
+    def test_lemma_shown_when_it_differs_from_word(self):
+        self.assertEqual(anki._build_fields(self._row())["Lemma"], "run")
+
+    def test_lemma_blank_when_equal_to_word(self):
+        self.assertEqual(anki._build_fields(self._row(lemma="ran"))["Lemma"], "")
+
+    def test_lemma_compare_is_case_insensitive(self):
+        self.assertEqual(anki._build_fields(self._row(lemma="RAN"))["Lemma"], "")
+
+    def test_typed_off_by_default(self):
+        self.assertEqual(anki._build_fields(self._row())["Typed"], "")
+
+    def test_typed_on_when_flag_true(self):
+        self.assertEqual(anki._build_fields(self._row(), typed=True)["Typed"], "1")
+
+    def test_missing_forms_and_lemma_render_blank(self):
+        row = {"word": "w", "translation": "т", "examples": json.dumps(["a w here"])}
+        f = anki._build_fields(row)
+        self.assertEqual(f["Forms"], "")
+        self.assertEqual(f["Lemma"], "")
+        self.assertEqual(f["Typed"], "")
+
+
 class EnsureModelTest(unittest.TestCase):
     def test_creates_model_when_absent(self):
         fake = FakeAnki({"modelNames": ["Basic"], "createModel": None})

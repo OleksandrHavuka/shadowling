@@ -34,6 +34,9 @@ FIELDS = [
     "Synonyms",
     "Definition",
     "Context",
+    "Forms",
+    "Lemma",
+    "Typed",
 ]
 
 
@@ -84,24 +87,30 @@ def _json_list(value):
     return json.loads(value) if value else []
 
 
-def _build_fields(row):
+def _build_fields(row, typed=False):
     """Map a vocab row (dict from Vocab.list()) to the Shadowling Cloze note
     fields. Each example is wrapped via the shared {word}∪forms matcher (loot's
-    _valid guarantees every stored example clozes). JSON-array columns render
-    comma-joined; empty enrichment renders '' (never None). Word and Translation
-    are always present."""
+    _valid guarantees every stored example clozes). List columns render `·`-joined;
+    empty enrichment renders '' (never None). `Lemma` shows only when it differs
+    from `Word` (case-insensitive); `Typed` is the gate field for the optional
+    typed-answer ("1" on, "" off). Word and Translation are always present."""
     forms = _json_list(row.get("forms"))
     examples = [
         _wrap_cloze(s, row["word"], forms) for s in _json_list(row.get("examples"))
     ]
+    lemma = (row.get("lemma") or "").strip()
+    show_lemma = lemma if lemma and lemma.lower() != row["word"].strip().lower() else ""
     return {
         "Word": row["word"],
         "Examples": "|".join(examples),
         "Translation": row["translation"],
-        "AltTranslations": ", ".join(_json_list(row.get("alt_translations"))),
-        "Synonyms": ", ".join(_json_list(row.get("synonyms"))),
+        "AltTranslations": " · ".join(_json_list(row.get("alt_translations"))),
+        "Synonyms": " · ".join(_json_list(row.get("synonyms"))),
         "Definition": row.get("definition") or "",
         "Context": row.get("ctx") or "",
+        "Forms": " · ".join(forms),
+        "Lemma": show_lemma,
+        "Typed": "1" if typed else "",
     }
 
 
