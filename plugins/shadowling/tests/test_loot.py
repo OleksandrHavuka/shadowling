@@ -34,6 +34,8 @@ def _item(word, **over):
         "definition": "a definition",
         "ctx": f"context for {word}",
         "alt_translations": ["alt-" + word],
+        "forms": [],
+        "lemma": word,
     }
     base.update(over)
     return base
@@ -192,6 +194,64 @@ class EnrichTest(LootDriverBase):
         loot.run({"throughput": "new ctx"}, cfg, runner=runner)
         r = self.rows_by_word()["throughput"]
         self.assertEqual(json.loads(r["examples"]), ["fresh throughput line"])
+
+    def test_forms_and_lemma_persisted(self):
+        cfg = core.load_config()
+        item = _item(
+            "scatter",
+            forms=["scattered", "scatters"],
+            lemma="scatter",
+            examples=["Particles scatter widely."],
+        )
+        runner = echo_runner({"scatter": item})
+        summary = loot.run({"scatter": "ctx"}, cfg, runner=runner)
+        self.assertEqual(summary["enriched"], 1)
+        r = self.rows_by_word()["scatter"]
+        self.assertEqual(json.loads(r["forms"]), ["scattered", "scatters"])
+        self.assertEqual(r["lemma"], "scatter")
+
+    def test_valid_accepts_inflection_covered_by_a_form(self):
+        # word is the lemma; the example shows only an inflection that's in forms
+        cfg = core.load_config()
+        item = _item(
+            "scatter",
+            forms=["scattered"],
+            lemma="scatter",
+            examples=["The wind scattered the leaves."],
+        )
+        runner = echo_runner({"scatter": item})
+        summary = loot.run({"scatter": "ctx"}, cfg, runner=runner)
+        self.assertEqual(summary["enriched"], 1)
+        self.assertIn("scatter", self.rows_by_word())
+
+    def test_valid_rejects_example_with_no_boundary_coverage(self):
+        # the example shows an inflection NOT in forms -> 0 boundary matches -> pending
+        cfg = core.load_config()
+        item = _item(
+            "scatter",
+            forms=[],  # no inflections supplied
+            lemma="scatter",
+            examples=["The wind scattered the leaves."],  # only the inflection
+        )
+        runner = echo_runner({"scatter": item})
+        summary = loot.run({"scatter": "ctx"}, cfg, runner=runner)
+        self.assertEqual(summary["enriched"], 0)
+        self.assertEqual(summary["pending"], ["scatter"])
+        self.assertNotIn("scatter", self.rows_by_word())
+
+    def test_pre_read_forwards_known_forms_and_lemma(self):
+        from models.vocab import Vocab
+
+        Vocab.add("scatter", "old", forms=["scattered"], lemma="scatter")
+        cfg = core.load_config()
+        captured = []
+        runner = echo_runner({"scatter": _item("scatter")}, capture=captured)
+        loot.run({"scatter": ""}, cfg, runner=runner)
+        self.assertTrue(captured)
+        # stored forms/lemma are forwarded as known_forms / known_lemma
+        self.assertIn("known_forms", captured[0])
+        self.assertIn("scattered", captured[0])
+        self.assertIn("known_lemma", captured[0])
 
 
 class MainStdinTest(LootDriverBase):

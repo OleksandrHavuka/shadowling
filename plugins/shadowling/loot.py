@@ -18,7 +18,7 @@ import core
 from appdb import connect, tx
 from config import config_block
 from headless import SONNET, HeadlessError, run_claude
-from models.vocab import Vocab
+from models.vocab import Vocab, cloze_pattern
 from parallel import fan_out, log, with_retry
 from skillio import OPTIONAL, TEXT, parse, render
 
@@ -45,6 +45,8 @@ LOOT_SCHEMA = {
                     "word",
                     "translation",
                     "alt_translations",
+                    "forms",
+                    "lemma",
                     "examples",
                     "synonyms",
                     "definition",
@@ -54,6 +56,8 @@ LOOT_SCHEMA = {
                     "word": {"type": "string"},
                     "translation": {"type": "string"},
                     "alt_translations": {"type": "array", "items": {"type": "string"}},
+                    "forms": {"type": "array", "items": {"type": "string"}},
+                    "lemma": {"type": "string"},
                     "examples": {"type": "array", "items": {"type": "string"}},
                     "synonyms": {"type": "array", "items": {"type": "string"}},
                     "definition": {"type": "string"},
@@ -87,6 +91,8 @@ def _build_data(cfg, chunk, contexts, existing):
                 "ctx": contexts.get(w, ""),
                 "known_translation": rec.get("translation") or "",
                 "known_alt_translations": rec.get("alt_translations") or "",
+                "known_forms": rec.get("forms") or "",
+                "known_lemma": rec.get("lemma") or "",
                 "known_examples": rec.get("examples") or "",
                 "known_ctx": rec.get("ctx") or "",
             }
@@ -96,15 +102,21 @@ def _build_data(cfg, chunk, contexts, existing):
 
 def _valid(item, word):
     """An item is valid if it has a non-empty translation and >=1 example, each a
-    PLAIN string (no `{{` cloze markup — Spec 2 wraps at push) containing the target
-    word case-insensitively."""
+    PLAIN string (no `{{` cloze markup — Spec 2 wraps at push) that yields >=1
+    word-boundary match over {word}∪forms via the shared cloze_pattern. This is the
+    SAME matcher anki's _wrap_cloze uses at push, so a looted example is guaranteed
+    to cloze. `lemma` is not validated (write-for-later, like alt_translations)."""
     if not (item.get("translation") or "").strip():
         return False
     examples = item.get("examples")
     if not isinstance(examples, list) or not examples:
         return False
+    forms = item.get("forms")
+    if not isinstance(forms, list):
+        forms = []
+    pat = cloze_pattern(word, forms)
     return all(
-        isinstance(s, str) and "{{" not in s and word.lower() in s.lower()
+        isinstance(s, str) and "{{" not in s and pat.search(s) is not None
         for s in examples
     )
 
@@ -156,6 +168,8 @@ def _persist(enriched):
                         examples=item.get("examples"),
                         synonyms=item.get("synonyms"),
                         alt_translations=item.get("alt_translations"),
+                        forms=item.get("forms"),
+                        lemma=item.get("lemma"),
                         con=con,
                     )
                 if res.get("action") == "untranslated":

@@ -5,22 +5,24 @@ Your input (the user turn) contains:
 - <words>: the words to enrich, as <row> entries. Each row has:
   - <word>: the term to enrich (lowercased).
   - <ctx>: the real sentence the learner met this word in — MAY BE EMPTY.
-  - <known_translation>, <known_alt_translations>, <known_examples>, <known_ctx>: what is ALREADY stored for this word from a previous loot — MAY BE EMPTY for a new word.
+  - <known_translation>, <known_alt_translations>, <known_forms>, <known_lemma>, <known_examples>, <known_ctx>: what is ALREADY stored for this word from a previous loot — MAY BE EMPTY for a new word.
 
 SENSE PREFERENCE: these words are gathered while working in a technical/coding setting, so a mild technical lean is a fair tiebreaker — nothing stronger. <ctx>/<known_*> guide the sense without overfitting the entry; absent those, take the word's most natural everyday primary, and let a technical sense lead only when it is genuinely the more salient reading.
 
 For EACH input word, return one enrichment object with:
 - word: echo the input word verbatim (lowercased).
+- lemma: the canonical dictionary base form of the word in learning_language (the infinitive / singular / uninflected form). Equal to the word itself when the word is already a base form. One clean term, learning_language only.
 - translation: ONE short, natural primary rendering INTO first_language — a single word or phrase, target language only, never a transliteration, and different from the source word. Commit to one sense rather than packing several in: the one <ctx>/<known_*> indicate, or the most natural primary when nothing disambiguates.
 - alt_translations: the word's other first_language renderings beyond `translation` — its other senses and near-synonyms, each a single clean term, one per entry (no slashes, parentheses, or notes).
-- examples: 1-3 PLAIN example sentences in learning_language. NO cloze markup, NO blanks. Each example MUST contain the word itself (any capitalization is fine).
+- examples: 1-3 PLAIN example sentences in learning_language. NO cloze markup, NO blanks. Each example MUST contain the word OR one of its `forms` (any capitalization is fine).
+- forms: the OTHER learning_language surface forms of this SAME word that may appear in examples — its inflections/conjugations, plus the base/lemma form if it differs from the given word. Include EVERY surface form you actually used in `examples` (other than the word itself), so every example contains the word or one of its forms. Use [] for invariant words (adverbs, acronyms, already-uninflected terms) — an empty list is correct, not a gap.
 - synonyms: 0-4 learning_language synonyms of that SAME primary sense (may be empty) — do NOT mix in synonyms of other senses.
 - definition: a brief dictionary-style gloss in explanation_language — one sentence on the word's core meaning, true across its normal uses; if polysemous, add a short clause for its other real senses, including a technical/computing one if the word genuinely has it. It's the word's stable entry — the same with or without <ctx>; don't narrow it to the encounter or invent senses it lacks. Keep it compact — it feeds flashcards.
 - ctx: the grounding sentence the examples are based on, or "" if none.
 
 MERGE RULE (this is the only stateful behavior — the specific encounter lives in examples + ctx; definition stays general regardless):
 - If <ctx> is non-empty, ground the examples in THAT sense and lean the translation toward it, and set ctx to that sentence.
-- If <ctx> is empty but <known_ctx>/<known_examples> are non-empty, KEEP/refine the existing grounded enrichment — do NOT replace good context-grounded examples with generic invented ones. You may improve or merge them; carry ctx and known_alt_translations forward (you may add new alternatives, but don't drop good existing ones).
+- If <ctx> is empty but <known_ctx>/<known_examples> are non-empty, KEEP/refine the existing grounded enrichment — do NOT replace good context-grounded examples with generic invented ones. You may improve or merge them; carry ctx, known_alt_translations, known_forms, and known_lemma forward (you may add new alternatives/forms, but don't drop good existing ones, and keep forms covering every example).
 - Only when there is NO context anywhere (empty <ctx> AND empty <known_ctx>) may you invent a neutral, generally-true example. Set ctx to "".
 - NEVER downgrade a context-grounded word to a generic example.
 
