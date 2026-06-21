@@ -232,6 +232,48 @@ class BuildFieldsEnrichmentTest(unittest.TestCase):
         self.assertEqual(f["Typed"], "")
 
 
+class TemplateTest(unittest.TestCase):
+    def test_front_has_hint_typed_gate_and_no_tts(self):
+        f = anki._FRONT_TEMPLATE
+        self.assertIn("{{hint:Translation}}", f)
+        self.assertIn("{{#Typed}}", f)
+        self.assertIn("{{type:Word}}", f)
+        self.assertIn("{{/Typed}}", f)
+        self.assertNotIn("tts", f)  # TTS must never speak on the front
+        self.assertIn('id="sl-ex"', f)  # random-segment picker preserved
+
+    def test_back_interpolates_tts_locale(self):
+        b = anki._back_template({"learning_language": "English"})
+        self.assertIn("{{tts en_US:Word}}", b)
+        self.assertNotIn("__TTS_LANG__", b)
+
+    def test_back_interpolates_other_locale(self):
+        b = anki._back_template({"learning_language": "German"})
+        self.assertIn("{{tts de_DE:Word}}", b)
+
+    def test_back_has_all_sections_and_banner(self):
+        b = anki._back_template({"learning_language": "English"})
+        for cond in (
+            "{{#Definition}}",
+            "{{#AltTranslations}}",
+            "{{#Synonyms}}",
+            "{{#Forms}}",
+            "{{#Lemma}}",
+            "{{#Context}}",
+        ):
+            self.assertIn(cond, b)
+        self.assertIn("base form", b)  # Lemma label
+        self.assertIn('id="sl-status"', b)  # banner mount
+        self.assertIn("typeGood", b)  # banner reads Anki's diff spans
+        self.assertIn("{{#Typed}}", b)  # comparison gated by Typed
+        self.assertIn('id="sl-ex"', b)  # segment picker preserved
+
+    def test_css_is_the_dark_theme(self):
+        self.assertIn(".sl-ok", anki._MODEL_CSS)
+        self.assertIn(".sl-err", anki._MODEL_CSS)
+        self.assertIn(".mobile .sl-type", anki._MODEL_CSS)
+
+
 class EnsureModelTest(unittest.TestCase):
     def test_creates_model_when_absent(self):
         fake = FakeAnki({"modelNames": ["Basic"], "createModel": None})

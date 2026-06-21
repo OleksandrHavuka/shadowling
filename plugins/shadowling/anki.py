@@ -166,7 +166,11 @@ def _deck_name(cfg):
 # (now revealed). One note = one card = one FSRS schedule. No add-ons; the JS runs
 # in AnkiDroid's webview too.
 
-_FRONT_TEMPLATE = """<div id="sl-ex">{{cloze:Examples}}</div>
+_FRONT_TEMPLATE = """<div class="sl-card sl-front">
+  <div id="sl-ex" class="sl-example">{{cloze:Examples}}</div>
+  {{#Typed}}<div class="sl-type">{{type:Word}}</div>{{/Typed}}
+  <div class="sl-hint">{{hint:Translation}}</div>
+</div>
 <script>
 (function () {
   var box = document.getElementById('sl-ex');
@@ -178,35 +182,139 @@ _FRONT_TEMPLATE = """<div id="sl-ex">{{cloze:Examples}}</div>
 })();
 </script>"""
 
-_BACK_TEMPLATE = """<div id="sl-ex">{{cloze:Examples}}</div>
-<script>
-(function () {
-  var box = document.getElementById('sl-ex');
-  if (!box) return;
-  var parts = box.innerHTML.split('|');
-  var i = 0;
-  try { i = parseInt(sessionStorage.getItem('slIdx'), 10) || 0; } catch (e) {}
-  if (i < 0 || i >= parts.length) i = 0;
-  box.innerHTML = parts[i];
-})();
-</script>
-<hr id="answer">
-<div class="sl-translation">{{Translation}}</div>
-{{#AltTranslations}}
-<div class="sl-alt">also: {{AltTranslations}}</div>
-{{/AltTranslations}}
-{{#Synonyms}}<div class="sl-syn">syn: {{Synonyms}}</div>{{/Synonyms}}
-{{#Definition}}<div class="sl-def">{{Definition}}</div>{{/Definition}}
-{{#Context}}<div class="sl-ctx">seen in: {{Context}}</div>{{/Context}}"""
+_BACK_TEMPLATE = """<div class="sl-card sl-back">
+  <div id="sl-status"></div>
+  {{#Typed}}
+  <div class="sl-type-cmp">{{type:Word}}</div>
+  <span id="sl-answer">{{Word}}</span>
+  {{/Typed}}
+  <div id="sl-ex" class="sl-context">{{cloze:Examples}}</div>
+
+  <div class="sl-hero">
+    <div class="sl-word">
+      {{Word}} <span class="sl-tts">{{tts __TTS_LANG__:Word}}</span>
+    </div>
+    <div class="sl-translation">{{Translation}}</div>
+  </div>
+
+  {{#Definition}}<div class="sl-sec">
+    <div class="sl-label">meaning</div>
+    <div class="sl-body">{{Definition}}</div>
+  </div>{{/Definition}}
+  {{#AltTranslations}}<div class="sl-sec">
+    <div class="sl-label">also</div>
+    <div class="sl-body">{{AltTranslations}}</div>
+  </div>{{/AltTranslations}}
+  {{#Synonyms}}<div class="sl-sec">
+    <div class="sl-label">synonyms</div>
+    <div class="sl-body">{{Synonyms}}</div>
+  </div>{{/Synonyms}}
+  {{#Forms}}<div class="sl-sec">
+    <div class="sl-label">forms</div>
+    <div class="sl-body">{{Forms}}</div>
+  </div>{{/Forms}}
+  {{#Lemma}}<div class="sl-sec">
+    <div class="sl-label">base form</div>
+    <div class="sl-body">{{Lemma}}</div>
+  </div>{{/Lemma}}
+  {{#Context}}<div class="sl-sec">
+    <div class="sl-label">seen in</div>
+    <div class="sl-body sl-ctx">{{Context}}</div>
+  </div>{{/Context}}
+  <script>
+  (function () {
+    var box = document.getElementById('sl-ex');
+    if (!box) return;
+    var parts = box.innerHTML.split('|');
+    var i = 0;
+    try { i = parseInt(sessionStorage.getItem('slIdx'), 10) || 0; } catch (e) {}
+    if (i < 0 || i >= parts.length) i = 0;
+    box.innerHTML = parts[i];
+  })();
+  </script>
+  <script>
+  (function () {
+    var ta = document.getElementById('typeans');
+    var st = document.getElementById('sl-status');
+    var ansEl = document.getElementById('sl-answer');
+    if (!ta || !st || !ansEl) return;
+    var firstLine = ta.innerHTML.split(/<br\\s*\\/?>/i)[0];
+    var tmp = document.createElement('div');
+    tmp.innerHTML = firstLine;
+    var spans = tmp.querySelectorAll('.typeGood, .typeBad');
+    var typed = '';
+    for (var i = 0; i < spans.length; i++) typed += spans[i].textContent;
+    typed = typed.trim();
+    if (!typed) return;
+    var ok = typed.toLowerCase() === ansEl.textContent.trim().toLowerCase();
+    st.textContent = ok ? '✓  correct' : '✕  try again';
+    st.className = 'sl-status ' + (ok ? 'sl-ok' : 'sl-err');
+  })();
+  </script>
+</div>"""
+
+
+def _back_template(cfg):
+    """The back template with the TTS locale resolved from cfg (Task 1). The
+    template is otherwise static; only the {{tts}} locale depends on config."""
+    return _BACK_TEMPLATE.replace("__TTS_LANG__", _tts_lang(cfg))
+
 
 _MODEL_CSS = """.card {
-  font-family: -apple-system, system-ui, sans-serif;
-  font-size: 20px; text-align: center; color: #111; background: #fff;
+  background:#0b0b0d; color:#e9e9ec;
+  font-family:-apple-system, system-ui, Roboto, sans-serif;
 }
-.cloze { font-weight: bold; color: #1565c0; }
-#answer { margin: 12px 0; }
-.sl-translation { font-size: 22px; font-weight: bold; }
-.sl-alt, .sl-syn, .sl-def, .sl-ctx { font-size: 16px; color: #555; margin-top: 6px; }"""
+.sl-card {
+  padding:22px 22px 28px; box-sizing:border-box;
+  max-width:680px; margin:0 auto;
+}
+.sl-front {
+  min-height:86vh; display:flex; flex-direction:column;
+  justify-content:center; align-items:center; text-align:center; gap:30px;
+}
+.sl-example { font-size:27px; line-height:1.55; font-weight:500; }
+.cloze { color:#7db1ff; font-weight:700; }
+.hint {
+  display:inline-block; color:#9aa0aa; background:#15161a;
+  border:1px solid #2c2f36; border-radius:999px; padding:8px 18px;
+  font-size:15px; text-decoration:none;
+}
+.hint::before { content:"\\01F4A1  "; }
+#typeans {
+  font-size:20px; padding:12px 16px; border-radius:12px;
+  border:1px solid #2c2f36; background:#15161a; color:#e9e9ec;
+  text-align:center; width:80%; max-width:420px; outline:none;
+}
+#typeans:focus { border-color:#7db1ff; }
+.sl-type-cmp { display:none; }
+#sl-answer { display:none; }
+.mobile .sl-type { display:none; }
+.sl-context {
+  font-size:16px; color:#7c818c; line-height:1.45;
+  text-align:center; margin-bottom:18px;
+}
+.sl-context .cloze { color:#7db1ff; }
+.sl-hero {
+  text-align:center; background:#15161a; border:1px solid #23252b;
+  border-radius:16px; padding:20px 16px; margin-bottom:8px;
+}
+.sl-word { font-size:32px; font-weight:800; color:#f3f4f6; }
+.sl-tts { font-size:20px; vertical-align:middle; }
+.sl-translation { font-size:23px; font-weight:700; color:#7db1ff; margin-top:8px; }
+.sl-sec { margin:18px 4px 0; }
+.sl-label {
+  font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+  color:#6e7480; margin-bottom:5px;
+}
+.sl-body { font-size:18px; line-height:1.5; color:#c7ccd4; }
+.sl-ctx { font-style:italic; color:#9aa0aa; }
+.sl-status {
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  font-size:15px; font-weight:700; letter-spacing:.02em;
+  padding:9px 14px; border-radius:10px; margin:0 0 14px;
+}
+.sl-ok  { background:#13301c; color:#7ee787; }
+.sl-err { background:#3a1c1c; color:#ff9a92; }"""
 
 
 def ensure_model(invoke=_invoke):
