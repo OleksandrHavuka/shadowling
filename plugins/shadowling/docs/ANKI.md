@@ -106,9 +106,9 @@ self-paced difficulty:
 
 - **Front:** one of the word's example sentences with the word (or an inflected
   form) blanked out — `She [...] great satisfaction from solving complex problems.`
-  — vertically centered and large. Below it a tap-to-reveal **hint chip** shows the
-  translation only if you ask for it (tap when stuck, grade honestly; stop tapping
-  as the word solidifies).
+  — vertically centered and large. Below it a **typed-answer box** (see below) and
+  a tap-to-reveal **hint chip** that shows the translation only if you ask for it
+  (tap when stuck, grade honestly; stop tapping as the word solidifies).
 - **Back:** a dimmed, revealed context line; a **hero** block with the word, a
   **🔊 tap-to-replay pronunciation** (on-device TTS — no audio files), and the
   translation in accent; then labeled sections, each shown only when it has content:
@@ -120,26 +120,17 @@ the modern algorithm).
 
 If a word has several examples, the front shows **one at random** each review.
 
-### Typed answer (optional)
+### Typing your answer
 
-By default there is no typing — recall is mental. If you want **active recall by
-typing** (which can help fix spelling), enable it once: open
-`~/.shadowling/config.json` and add a fourth key:
+Every card has a **typed-answer** input for active recall (typing helps fix
+spelling). On desktop it's a text box on the front; on AnkiDroid/AnkiMobile the
+native keyboard **pops automatically** and **Enter** flips the card. Typing is
+never required — just press "Show answer" (or Enter on an empty box) to flip
+without typing.
 
-```json
-{
-  "first_language": "Ukrainian",
-  "learning_language": "English",
-  "explanation_language": "English",
-  "anki_typed": true
-}
-```
-
-Re-run `/anki-sync`. Each card then shows a native input on the front; the keyboard
-pops automatically and **Enter** flips the card. The back shows a clean green
-`✓ correct` / red `✕ try again` banner (case- and trailing-space-insensitive), and
-only when you actually typed something — "Show answer" alone shows no banner. To
-turn it off again, set `"anki_typed": false` (or remove the key) and re-sync.
+When you do type, the back shows a clean green `✓ correct` / red `✕ try again`
+banner (case- and trailing-space-insensitive); it appears only when you actually
+typed something, so a mental-recall flip shows no banner.
 
 > **shadowling owns the card templates and styling.** Every `/anki-sync` rewrites
 > the `Shadowling Cloze` note type's templates and CSS to the current shadowling

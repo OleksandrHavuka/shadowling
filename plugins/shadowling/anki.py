@@ -36,18 +36,7 @@ FIELDS = [
     "Context",
     "Forms",
     "Lemma",
-    "Typed",
 ]
-
-
-def _truthy(value):
-    """Coerce a config value to a bool. config.json values written via the CLI are
-    strings, but a hand-edited file may hold a real JSON bool — accept both. Only an
-    explicit affirmative ("1"/"true"/"yes"/"on") is True; blank/absent/anything else
-    is False (so the typed-answer stays opt-in)."""
-    if isinstance(value, str):
-        return value.strip().lower() in ("1", "true", "yes", "on")
-    return bool(value)
 
 
 class AnkiError(Exception):
@@ -97,13 +86,12 @@ def _json_list(value):
     return json.loads(value) if value else []
 
 
-def _build_fields(row, typed=False):
+def _build_fields(row):
     """Map a vocab row (dict from Vocab.list()) to the Shadowling Cloze note
     fields. Each example is wrapped via the shared {word}∪forms matcher (loot's
     _valid guarantees every stored example clozes). List columns render `·`-joined;
     empty enrichment renders '' (never None). `Lemma` shows only when it differs
-    from `Word` (case-insensitive); `Typed` is the gate field for the optional
-    typed-answer ("1" on, "" off). Word and Translation are always present."""
+    from `Word` (case-insensitive). Word and Translation are always present."""
     forms = _json_list(row.get("forms"))
     examples = [
         _wrap_cloze(s, row["word"], forms) for s in _json_list(row.get("examples"))
@@ -120,7 +108,6 @@ def _build_fields(row, typed=False):
         "Context": row.get("ctx") or "",
         "Forms": " · ".join(forms),
         "Lemma": show_lemma,
-        "Typed": "1" if typed else "",
     }
 
 
@@ -178,7 +165,7 @@ def _deck_name(cfg):
 
 _FRONT_TEMPLATE = """<div class="sl-card sl-front">
   <div id="sl-ex" class="sl-example">{{cloze:Examples}}</div>
-  {{#Typed}}<div class="sl-type">{{type:Word}}</div>{{/Typed}}
+  <div class="sl-type">{{type:Word}}</div>
   <div class="sl-hint">{{hint:Translation}}</div>
 </div>
 <script>
@@ -194,10 +181,8 @@ _FRONT_TEMPLATE = """<div class="sl-card sl-front">
 
 _BACK_TEMPLATE = """<div class="sl-card sl-back">
   <div id="sl-status"></div>
-  {{#Typed}}
   <div class="sl-type-cmp">{{type:Word}}</div>
   <span id="sl-answer">{{Word}}</span>
-  {{/Typed}}
   <div id="sl-ex" class="sl-context">{{cloze:Examples}}</div>
 
   <div class="sl-hero">
@@ -370,10 +355,10 @@ def suspend(card_id, invoke=_invoke):
     invoke("suspend", cards=[card_id])
 
 
-def _push_row(row, deck, invoke, typed=False):
+def _push_row(row, deck, invoke):
     """Push one enriched vocab row: update if it already has a note, else add and
     store the new note_id/card_id in anki_link. Returns 'updated' or 'added'."""
-    fields = _build_fields(row, typed)
+    fields = _build_fields(row)
     word = row["word"]
     link = AnkiLink.get(word)
     if link and link.get("note_id"):
@@ -470,7 +455,6 @@ def sync_all(cfg, *, invoke=_invoke):
     update_model(invoke=invoke, cfg=cfg)
     deck = _deck_name(cfg)
     invoke("createDeck", deck=deck)
-    typed = _truthy(core.raw_config().get("anki_typed"))
     counts = {"added": 0, "updated": 0, "suspended": 0, "skipped": 0}
     errors = []
     for row in Vocab.list():
@@ -478,7 +462,7 @@ def sync_all(cfg, *, invoke=_invoke):
             if row["status"] == "dropped":
                 action = _suspend_dropped(row, invoke)
             elif _json_list(row.get("examples")):
-                action = _push_row(row, deck, invoke, typed)
+                action = _push_row(row, deck, invoke)
             else:
                 action = "skipped"  # active/learned but not yet enriched
             counts[action] += 1

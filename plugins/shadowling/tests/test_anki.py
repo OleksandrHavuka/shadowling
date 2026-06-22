@@ -118,16 +118,6 @@ class TtsLangTest(unittest.TestCase):
         self.assertEqual(anki._tts_lang({}), "en_US")
 
 
-class TruthyTest(unittest.TestCase):
-    def test_true_values(self):
-        for v in (True, "1", "true", "TRUE", " yes ", "on"):
-            self.assertTrue(anki._truthy(v), v)
-
-    def test_false_values(self):
-        for v in (False, None, "", "0", "false", "no", "off", "nope"):
-            self.assertFalse(anki._truthy(v), v)
-
-
 class BuildFieldsTest(unittest.TestCase):
     def test_full_row_maps_every_field(self):
         row = {
@@ -228,27 +218,19 @@ class BuildFieldsEnrichmentTest(unittest.TestCase):
     def test_lemma_compare_is_case_insensitive(self):
         self.assertEqual(anki._build_fields(self._row(lemma="RAN"))["Lemma"], "")
 
-    def test_typed_off_by_default(self):
-        self.assertEqual(anki._build_fields(self._row())["Typed"], "")
-
-    def test_typed_on_when_flag_true(self):
-        self.assertEqual(anki._build_fields(self._row(), typed=True)["Typed"], "1")
-
     def test_missing_forms_and_lemma_render_blank(self):
         row = {"word": "w", "translation": "т", "examples": json.dumps(["a w here"])}
         f = anki._build_fields(row)
         self.assertEqual(f["Forms"], "")
         self.assertEqual(f["Lemma"], "")
-        self.assertEqual(f["Typed"], "")
 
 
 class TemplateTest(unittest.TestCase):
-    def test_front_has_hint_typed_gate_and_no_tts(self):
+    def test_front_has_hint_ungated_input_and_no_tts(self):
         f = anki._FRONT_TEMPLATE
         self.assertIn("{{hint:Translation}}", f)
-        self.assertIn("{{#Typed}}", f)
-        self.assertIn("{{type:Word}}", f)
-        self.assertIn("{{/Typed}}", f)
+        self.assertIn("{{type:Word}}", f)  # typed input is always present
+        self.assertNotIn("{{#Typed}}", f)  # never gated on a config flag
         self.assertNotIn("tts", f)  # TTS must never speak on the front
         self.assertIn('id="sl-ex"', f)  # random-segment picker preserved
 
@@ -275,7 +257,8 @@ class TemplateTest(unittest.TestCase):
         self.assertIn("base form", b)  # Lemma label
         self.assertIn('id="sl-status"', b)  # banner mount
         self.assertIn("typeGood", b)  # banner reads Anki's diff spans
-        self.assertIn("{{#Typed}}", b)  # comparison gated by Typed
+        self.assertIn('id="sl-answer"', b)  # the answer the banner compares against
+        self.assertNotIn("{{#Typed}}", b)  # never gated on a config flag
         self.assertIn('id="sl-ex"', b)  # segment picker preserved
 
     def test_css_is_the_dark_theme(self):
@@ -327,7 +310,7 @@ class UpdateModelTest(unittest.TestCase):
         )
         anki.update_model(invoke=fake, cfg=self.CFG)
         added = [p["fieldName"] for p in fake.params_for("modelFieldAdd")]
-        self.assertEqual(added, ["Forms", "Lemma", "Typed"])
+        self.assertEqual(added, ["Forms", "Lemma"])
 
     def test_rewrites_templates_and_styling_when_different(self):
         fake = FakeAnki(
@@ -549,21 +532,6 @@ class SyncAllTest(AnkiDbBase):
         row = {r["word"]: r for r in Vocab.list()}["throughput"]
         self.assertEqual(row["status"], "active")  # re-entered glossing
         self.assertEqual(AnkiLink.get("throughput")["lapses"], 1)
-
-    def test_typed_off_by_default_pushes_blank_typed(self):
-        Vocab.add("throughput", "t", examples=["We boosted throughput."])
-        fake = self._no_notes_invoke()
-        anki.sync_all(core.load_config(), invoke=fake)
-        note = fake.params_for("addNote")[0]["note"]
-        self.assertEqual(note["fields"]["Typed"], "")
-
-    def test_typed_on_when_config_flag_set(self):
-        core.save_config({"anki_typed": "true"})  # merges into the base config
-        Vocab.add("throughput", "t", examples=["We boosted throughput."])
-        fake = self._no_notes_invoke()
-        anki.sync_all(core.load_config(), invoke=fake)
-        note = fake.params_for("addNote")[0]["note"]
-        self.assertEqual(note["fields"]["Typed"], "1")
 
     def _make_learned(self, word):
         con = appdb.connect()
