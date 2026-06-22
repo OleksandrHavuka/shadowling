@@ -374,7 +374,7 @@ class PersistTest(DebriefTestBase):
 
         Messages.tag([{"id": "1", "langs": "en"}])
 
-    def test_persists_all_categories_loot_and_mark_in_one_tx(self):
+    def test_persists_all_categories_and_mark_in_one_tx(self):
         findings = _findings(
             grammar=[
                 {
@@ -396,9 +396,7 @@ class PersistTest(DebriefTestBase):
                 }
             ],
         )
-        debrief._persist(
-            "sess-A", findings, [{"word": "hello", "translation": "привіт"}]
-        )
+        debrief._persist("sess-A", findings)
         self.assertEqual(len(appdb.query("SELECT * FROM grammar")), 1)
         self.assertEqual(len(appdb.query("SELECT * FROM friction")), 1)
         # every persisted finding carries the run's session as provenance
@@ -408,12 +406,8 @@ class PersistTest(DebriefTestBase):
         self.assertEqual(
             appdb.query("SELECT session_id FROM friction")[0]["session_id"], "sess-A"
         )
-        self.assertEqual(
-            appdb.query("SELECT translation FROM vocab WHERE word='hello'")[0][
-                "translation"
-            ],
-            "привіт",
-        )
+        # _persist no longer writes vocab — enrichment is loot.run's job now
+        self.assertEqual(appdb.query("SELECT * FROM vocab"), [])
         self.assertIsNotNone(
             appdb.query("SELECT processed_at FROM messages WHERE id=1")[0][
                 "processed_at"
@@ -443,7 +437,7 @@ class PersistTest(DebriefTestBase):
             ],
         )
         with self.assertRaises(ValueError):
-            debrief._persist("sess-A", findings, [])
+            debrief._persist("sess-A", findings)
         self.assertEqual(appdb.query("SELECT * FROM grammar"), [])
         self.assertIsNone(
             appdb.query("SELECT processed_at FROM messages WHERE id=1")[0][
@@ -532,6 +526,28 @@ class RunSessionTest(DebriefTestBase):
         self.assertEqual(result["failed"], ["triage"])
         self.assertIn("triage", result["errors"])
         self.assertEqual(Messages.pending_count(), 1)
+
+    def test_run_session_returns_loot_words_without_writing_vocab(self):
+        self._seed("First normal english sentence here please", "sess-A")
+        cfg = core.load_config()
+        runner = runner_from(
+            {
+                "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
+                "grammar": {"findings": []},
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {
+                    "findings": [],
+                    "loot": [{"word": "Deadline", "translation": "дедлайн"}],
+                },
+            }
+        )
+        result = debrief._run_session("sess-A", cfg, "en", self._dedup(), runner=runner)
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["loot"], ["deadline"])  # lowercased + de-duped
+        # enrich-only: _run_session does NOT write vocab (main does, via loot.run)
+        self.assertEqual(appdb.query("SELECT * FROM vocab"), [])
 
 
 class MalformedResultTest(DebriefTestBase):

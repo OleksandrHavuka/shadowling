@@ -30,7 +30,6 @@ from models.idioms import Idioms
 from models.messages import Messages
 from models.rephrasing import Rephrasing
 from models.verbs import Verbs
-from models.vocab import Vocab
 from parallel import fan_out, log
 from skillio import render
 
@@ -272,37 +271,36 @@ def _fan_out(jobs, *, runner=None):
     return findings, {cat: str(e) for cat, e in failed.items()}
 
 
-def _result(session, *, ok, failed=(), empty=False, errors=None):
+def _result(session, *, ok, failed=(), empty=False, errors=None, loot=()):
     """One per-session result row for the run summary. `failed` is the list of
     failed stage/category names; `errors` maps each to its reason (rendered by
-    _session_status)."""
+    _session_status); `loot` is the session's friction-loot words for main to
+    enrich (empty on every non-OK and empty-language result)."""
     return {
         "session": session,
         "ok": ok,
         "failed": list(failed),
         "empty": empty,
         "errors": dict(errors or {}),
+        "loot": list(loot),
     }
 
 
-def _persist(session, findings, loot):
+def _persist(session, findings):
     """Write a whole session in ONE per-session transaction: all five categories'
-    findings + friction's loot + the processed-mark. Opened only AFTER all the
-    slow LLM work, so it does not block other writers across the analysis; tx()
-    (BEGIN IMMEDIATE) makes a concurrent capture-hook writer wait rather than
-    interleave. Any failure (a ValueError from a finding's key/enum check, or a
-    SQLite error) rolls the WHOLE session back — no partial write — and the next
-    /debrief re-lists and re-runs it cleanly."""
+    findings + the processed-mark. Opened only AFTER all the slow LLM work, so it
+    does not block other writers across the analysis; tx() (BEGIN IMMEDIATE) makes a
+    concurrent capture-hook writer wait rather than interleave. Any failure (a
+    ValueError from a finding's key/enum check, or a SQLite error) rolls the WHOLE
+    session back — no partial write — and the next /debrief re-lists and re-runs it
+    cleanly. Vocab is NOT written here: friction-loot words are enriched separately,
+    best-effort, by main via loot.run."""
     con = connect()  # fresh connection (cheap re-check; not the read-phase one)
     try:
         with tx(con):
             for cat, spec in SPECS.items():
                 for item in findings[cat]:
                     spec.model.insert(item, con=con, session=session)
-            for pair in loot:
-                Vocab.add(
-                    pair["word"], pair["translation"], con=con
-                )  # vocab: no session
             Messages.mark_processed(session, con=con)
     finally:
         con.close()
@@ -326,7 +324,7 @@ def _run_session(session, cfg, lang, dedup, *, runner=None):
         # code-switching analysis have anything. Persist just the processed-mark
         # (the tagged rows must not stay pending) and return OK.
         try:
-            _persist(session, {c: [] for c in CATEGORIES}, [])
+            _persist(session, {c: [] for c in CATEGORIES})
         except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
             return _result(
                 session, ok=False, failed=["persist"], errors={"persist": str(e)}
@@ -343,13 +341,19 @@ def _run_session(session, cfg, lang, dedup, *, runner=None):
 
     try:
         persist_findings = {c: findings[c]["findings"] for c in CATEGORIES}
-        loot = findings["friction"].get("loot", [])
-        _persist(session, persist_findings, loot)
+        _persist(session, persist_findings)
     except (ValueError, KeyError, TypeError, sqlite3.Error) as e:
         return _result(
             session, ok=False, failed=["persist"], errors={"persist": str(e)}
         )
-    return _result(session, ok=True)
+    loot_words = sorted(
+        {
+            (p.get("word") or "").strip().lower()
+            for p in findings["friction"].get("loot", [])
+            if (p.get("word") or "").strip()
+        }
+    )
+    return _result(session, ok=True, loot=loot_words)
 
 
 def _run_session_safe(session, cfg, lang, dedup, *, runner=None):
