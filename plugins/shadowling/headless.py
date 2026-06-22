@@ -16,7 +16,7 @@ import subprocess
 HAIKU = "claude-haiku-4-5"
 SONNET = "claude-sonnet-4-6"
 
-DEFAULT_TIMEOUT = 300  # seconds per headless call
+DEFAULT_TIMEOUT = 600  # seconds per headless call
 
 # Tool lockdown for every headless call, alongside `--tools ""`. `--tools ""`
 # drops the built-in tools but NOT MCP tools; "mcp__*" closes that gap as a

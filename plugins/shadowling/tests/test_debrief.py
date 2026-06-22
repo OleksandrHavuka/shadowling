@@ -643,10 +643,10 @@ class SummaryTest(DebriefTestBase):
             "sess-A",
             ok=False,
             failed=["grammar"],
-            errors={"grammar": "claude timed out after 300s"},
+            errors={"grammar": "claude timed out after 600s"},
         )
         self.assertEqual(
-            debrief._session_status(r), "ERROR grammar — claude timed out after 300s"
+            debrief._session_status(r), "ERROR grammar — claude timed out after 600s"
         )
 
     def test_totals_line_with_and_without_failures(self):
