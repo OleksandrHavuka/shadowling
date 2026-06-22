@@ -118,6 +118,16 @@ class TtsLangTest(unittest.TestCase):
         self.assertEqual(anki._tts_lang({}), "en_US")
 
 
+class TruthyTest(unittest.TestCase):
+    def test_true_values(self):
+        for v in (True, "1", "true", "TRUE", " yes ", "on"):
+            self.assertTrue(anki._truthy(v), v)
+
+    def test_false_values(self):
+        for v in (False, None, "", "0", "false", "no", "off", "nope"):
+            self.assertFalse(anki._truthy(v), v)
+
+
 class BuildFieldsTest(unittest.TestCase):
     def test_full_row_maps_every_field(self):
         row = {
@@ -539,6 +549,21 @@ class SyncAllTest(AnkiDbBase):
         row = {r["word"]: r for r in Vocab.list()}["throughput"]
         self.assertEqual(row["status"], "active")  # re-entered glossing
         self.assertEqual(AnkiLink.get("throughput")["lapses"], 1)
+
+    def test_typed_off_by_default_pushes_blank_typed(self):
+        Vocab.add("throughput", "t", examples=["We boosted throughput."])
+        fake = self._no_notes_invoke()
+        anki.sync_all(core.load_config(), invoke=fake)
+        note = fake.params_for("addNote")[0]["note"]
+        self.assertEqual(note["fields"]["Typed"], "")
+
+    def test_typed_on_when_config_flag_set(self):
+        core.save_config({"anki_typed": "true"})  # merges into the base config
+        Vocab.add("throughput", "t", examples=["We boosted throughput."])
+        fake = self._no_notes_invoke()
+        anki.sync_all(core.load_config(), invoke=fake)
+        note = fake.params_for("addNote")[0]["note"]
+        self.assertEqual(note["fields"]["Typed"], "1")
 
     def _make_learned(self, word):
         con = appdb.connect()

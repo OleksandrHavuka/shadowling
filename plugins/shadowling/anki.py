@@ -40,6 +40,16 @@ FIELDS = [
 ]
 
 
+def _truthy(value):
+    """Coerce a config value to a bool. config.json values written via the CLI are
+    strings, but a hand-edited file may hold a real JSON bool — accept both. Only an
+    explicit affirmative ("1"/"true"/"yes"/"on") is True; blank/absent/anything else
+    is False (so the typed-answer stays opt-in)."""
+    if isinstance(value, str):
+        return value.strip().lower() in ("1", "true", "yes", "on")
+    return bool(value)
+
+
 class AnkiError(Exception):
     """A transport failure (Anki/AnkiConnect unreachable) or an AnkiConnect-level
     error. Carries a user-facing message; sync_all/main turn it into a clean abort."""
@@ -360,10 +370,10 @@ def suspend(card_id, invoke=_invoke):
     invoke("suspend", cards=[card_id])
 
 
-def _push_row(row, deck, invoke):
+def _push_row(row, deck, invoke, typed=False):
     """Push one enriched vocab row: update if it already has a note, else add and
     store the new note_id/card_id in anki_link. Returns 'updated' or 'added'."""
-    fields = _build_fields(row)
+    fields = _build_fields(row, typed)
     word = row["word"]
     link = AnkiLink.get(word)
     if link and link.get("note_id"):
@@ -460,6 +470,7 @@ def sync_all(cfg, *, invoke=_invoke):
     update_model(invoke=invoke, cfg=cfg)
     deck = _deck_name(cfg)
     invoke("createDeck", deck=deck)
+    typed = _truthy(core.raw_config().get("anki_typed"))
     counts = {"added": 0, "updated": 0, "suspended": 0, "skipped": 0}
     errors = []
     for row in Vocab.list():
@@ -467,7 +478,7 @@ def sync_all(cfg, *, invoke=_invoke):
             if row["status"] == "dropped":
                 action = _suspend_dropped(row, invoke)
             elif _json_list(row.get("examples")):
-                action = _push_row(row, deck, invoke)
+                action = _push_row(row, deck, invoke, typed)
             else:
                 action = "skipped"  # active/learned but not yet enriched
             counts[action] += 1
