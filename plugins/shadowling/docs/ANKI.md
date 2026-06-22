@@ -101,18 +101,53 @@ randomized example shows correctly on the phone.
 
 ## What a card looks like
 
-The card is a single-direction **cloze recall**:
+The card is a single-direction **cloze recall**, redesigned for breathing room and
+self-paced difficulty:
 
 - **Front:** one of the word's example sentences with the word (or an inflected
   form) blanked out — `She [...] great satisfaction from solving complex problems.`
-- **Back:** the same sentence revealed, plus the translation, alternative
-  translations, synonyms, definition, and the context it was seen in.
+  — vertically centered and large. Below it a tap-to-reveal **hint chip** shows the
+  translation only if you ask for it (tap when stuck, grade honestly; stop tapping
+  as the word solidifies).
+- **Back:** a dimmed, revealed context line; a **hero** block with the word, a
+  **🔊 tap-to-replay pronunciation** (on-device TTS — no audio files), and the
+  translation in accent; then labeled sections, each shown only when it has content:
+  **meaning → also → synonyms → forms → base form → seen in**.
 
 You recall the word, flip, and self-grade with **Again / Hard / Good / Easy** —
 that grade is what feeds Anki's scheduler (enable **FSRS** in Anki's settings for
-the modern algorithm). There is no typed-answer box; that's by design.
+the modern algorithm).
 
 If a word has several examples, the front shows **one at random** each review.
+
+### Typed answer (optional)
+
+By default there is no typing — recall is mental. If you want **active recall by
+typing** (which can help fix spelling), enable it once: open
+`~/.shadowling/config.json` and add a fourth key:
+
+```json
+{
+  "first_language": "Ukrainian",
+  "learning_language": "English",
+  "explanation_language": "English",
+  "anki_typed": true
+}
+```
+
+Re-run `/anki-sync`. Each card then shows a native input on the front; the keyboard
+pops automatically and **Enter** flips the card. The back shows a clean green
+`✓ correct` / red `✕ try again` banner (case- and trailing-space-insensitive), and
+only when you actually typed something — "Show answer" alone shows no banner. To
+turn it off again, set `"anki_typed": false` (or remove the key) and re-sync.
+
+> **shadowling owns the card templates and styling.** Every `/anki-sync` rewrites
+> the `Shadowling Cloze` note type's templates and CSS to the current shadowling
+> design, so any manual edits you make in Anki's card editor are overwritten on the
+> next sync. Your **scheduling** (due dates, intervals, lapses, ease) lives on the
+> cards and is never touched — updates are additive-only (fields are only added,
+> never removed or reordered; no card template is ever deleted), so no review
+> progress is lost.
 
 ---
 
@@ -125,3 +160,4 @@ If a word has several examples, the front shows **one at random** each review.
 | `… N errors` in the summary | A per-word push failed (e.g. a hand-inserted row with no clozable example). The rest still synced; the failed word is named — re-`/loot` it. |
 | Cards don't appear on the phone | You skipped the AnkiWeb upload (step 6.1) or signed into a different account on the phone. |
 | Phone reviews don't reach shadowling | Sync phone → AnkiWeb → desktop before `/anki-sync` (see the progress-flow note above). |
+| No pronunciation sound on the back | TTS uses your device's installed voices. Install a voice for your `learning_language` (OS settings on desktop; Android/iOS TTS settings on phone). No voice → silent, which is harmless. |
