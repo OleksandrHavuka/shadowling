@@ -20,6 +20,7 @@ import typing
 
 import core
 import langcodes
+import loot
 from appdb import connect, tx
 from config import config_block
 from headless import HAIKU, SONNET, HeadlessError, findings_schema, run_claude
@@ -395,6 +396,28 @@ def _totals_line(results):
     return line
 
 
+def _enrich_loot(words, cfg, *, runner=None):
+    """Best-effort vocab enrichment of a session's friction-loot words via the
+    public loot.run API. Runs AFTER the session's findings are committed, so it can
+    never flip session success or the run's exit code. Writes vocab ONLY for words
+    loot fully enriched (>=1 clozable example); pending/failed words are printed to
+    stdout and left unwritten — the user can /loot them later. The broad except
+    mirrors _run_session_safe's deliberate isolation boundary: the session is
+    already persisted, so a downstream enrichment hiccup must never abort the run."""
+    payload = dict.fromkeys(words, "")
+    try:
+        s = loot.run(payload, cfg, runner=runner)
+    except Exception as e:  # best-effort: the session is already committed
+        print(f"    loot: {len(words)} word(s) — enrichment failed: {e}", flush=True)
+        return
+    line = f"    loot: {s['enriched']}/{s['total']} enriched"
+    if s["pending"]:
+        line += f"; {len(s['pending'])} pending (re-run /loot): " + ", ".join(
+            s["pending"]
+        )
+    print(line, flush=True)
+
+
 def main(runner=None):
     """The per-run driver. Returns a process exit code: 1 if any session failed
     (or config/lang resolution failed), else 0. Takes no interactive input and
@@ -438,6 +461,8 @@ def main(runner=None):
         results.append(r)
         if r["ok"] and not r["empty"]:  # this session added findings -> snapshot stale
             dedup = None
+            if r["loot"]:
+                _enrich_loot(r["loot"], cfg, runner=runner)
     print(_totals_line(results), flush=True)
     return 1 if any(not r["ok"] for r in results) else 0
 

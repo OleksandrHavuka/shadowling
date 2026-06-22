@@ -36,6 +36,8 @@ def _schema_kind(argv):
         return "triage"
     if "loot" in props:
         return "friction"
+    if "words" in props:  # loot.run's LOOT_SCHEMA (enrichment call)
+        return "loot"
     item = props["findings"]["items"]["properties"]
     for kind, marker in (
         ("idioms", "idiom"),
@@ -446,6 +448,59 @@ class PersistTest(DebriefTestBase):
         )
 
 
+class EnrichLootTest(DebriefTestBase):
+    _GOOD = {
+        "word": "deadline",
+        "translation": "дедлайн",
+        "alt_translations": [],
+        "forms": [],
+        "lemma": "deadline",
+        "examples": ["The deadline is tomorrow."],
+        "synonyms": [],
+        "definition": "a time limit",
+        "ctx": "",
+    }
+
+    def test_enrich_loot_writes_vocab_with_examples(self):
+        cfg = core.load_config()
+        runner = runner_from({"loot": {"words": [self._GOOD]}})
+        debrief._enrich_loot(["deadline"], cfg, runner=runner)
+        row = appdb.query(
+            "SELECT translation, examples FROM vocab WHERE word='deadline'"
+        )
+        self.assertEqual(len(row), 1)
+        self.assertEqual(row[0]["translation"], "дедлайн")
+        self.assertEqual(json.loads(row[0]["examples"]), ["The deadline is tomorrow."])
+
+    def test_failed_enrichment_leaves_word_out_of_vocab_and_reports(self):
+        import io
+        from contextlib import redirect_stdout
+
+        cfg = core.load_config()
+        # example has no clozable match -> loot._valid fails -> word stays pending
+        bad = {**self._GOOD, "examples": ["no match in this sentence"]}
+        runner = runner_from({"loot": {"words": [bad]}})
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            debrief._enrich_loot(["deadline"], cfg, runner=runner)
+        self.assertEqual(appdb.query("SELECT * FROM vocab"), [])  # not written
+        out = buf.getvalue()
+        self.assertIn("pending", out)
+        self.assertIn("deadline", out)
+
+    def test_loot_run_exception_is_caught_and_reported(self):
+        import io
+        from contextlib import redirect_stdout
+
+        cfg = core.load_config()
+        buf = io.StringIO()
+        with mock.patch.object(debrief.loot, "run", side_effect=RuntimeError("boom")):
+            with redirect_stdout(buf):
+                debrief._enrich_loot(["deadline"], cfg, runner=None)
+        self.assertIn("failed", buf.getvalue())  # net caught it, did not raise
+        self.assertEqual(appdb.query("SELECT * FROM vocab"), [])
+
+
 class RunSessionTest(DebriefTestBase):
     def _all_success_runner(self):
         return runner_from(
@@ -677,6 +732,48 @@ class MainTest(DebriefTestBase):
             debrief.main(runner=runner_from({"triage": "error_result"}))
         out = buf.getvalue()
         self.assertRegex(out, r"\[1/1\] sess-A … ERROR triage — ")
+
+    def test_friction_loot_words_are_enriched_into_vocab(self):
+        from models.messages import Messages
+
+        self._seed("First normal english sentence here please", "sess-A")
+        item = {
+            "word": "deadline",
+            "translation": "дедлайн",
+            "alt_translations": [],
+            "forms": [],
+            "lemma": "deadline",
+            "examples": ["The deadline is tomorrow."],
+            "synonyms": [],
+            "definition": "a time limit",
+            "ctx": "",
+        }
+        runner = runner_from(
+            {
+                "triage": {"tags": [{"id": 1, "langs": ["en"]}]},
+                "grammar": {"findings": []},
+                "rephrasing": {"findings": []},
+                "idioms": {"findings": []},
+                "verbs": {"findings": []},
+                "friction": {
+                    "findings": [],
+                    "loot": [{"word": "deadline", "translation": "дедлайн"}],
+                },
+                "loot": {"words": [item]},
+            }
+        )
+        code = debrief.main(runner=runner)
+        self.assertEqual(code, 0)
+        row = appdb.query("SELECT examples FROM vocab WHERE word='deadline'")
+        self.assertEqual(json.loads(row[0]["examples"]), ["The deadline is tomorrow."])
+        self.assertEqual(Messages.pending_count(), 0)
+
+    def test_no_friction_loot_skips_loot_run(self):
+        self._seed("First normal english sentence here please", "sess-A")
+        with mock.patch.object(debrief.loot, "run") as m:
+            code = debrief.main(runner=_full_runner())  # _full_runner's loot is []
+        self.assertEqual(code, 0)
+        m.assert_not_called()
 
 
 class SessionIsolationTest(DebriefTestBase):
