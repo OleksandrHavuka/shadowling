@@ -197,9 +197,11 @@ heavy analysis, schema-constrained.
 - **R-PAT-3 Enrich-only writes, DB-enforced.** A record reaches the store only after
   successful enrichment; an un-enrichable input is reported, not written as a bare row.
   The required-field floor is enforced by **DB constraints** (NOT NULL / CHECK) so an
-  incomplete row physically cannot be inserted — not by app code alone (R-DB).
-  Semantic checks SQL can't express (e.g. a clozable example) stay at the app layer
-  (`loot._valid`).
+  incomplete row physically cannot be inserted — not by app code alone (R-DB). For
+  `vocab` the floor is a non-empty `translation` (different from `word`) AND `>= 1`
+  `examples` entry (appdb migration 12), so **every vocab row is both glossing- AND
+  Anki-ready — there are no glossing-only rows**. Semantic checks SQL can't express
+  (e.g. a clozable example) stay at the app layer (`loot._valid`).
 - **R-PAT-4 Idempotency.** Re-running an operation is safe and never duplicates:
   triage re-lists only untagged rows, `/anki-sync` updates rather than re-creates,
   migrations are safe on every connect. Required for cron / retry safety.

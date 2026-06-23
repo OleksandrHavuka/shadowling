@@ -460,11 +460,11 @@ def sync_all(cfg, *, invoke=_invoke):
     for row in Vocab.list():
         try:
             if row["status"] == "dropped":
-                action = _suspend_dropped(row, invoke)
-            elif _json_list(row.get("examples")):
-                action = _push_row(row, deck, invoke)
+                action = _suspend_dropped(row, invoke)  # may be "skipped" (no card)
             else:
-                action = "skipped"  # active/learned but not yet enriched
+                # every live row is enriched (examples NOT NULL — appdb m12), so
+                # there is no "not yet enriched" skip: a live row always pushes.
+                action = _push_row(row, deck, invoke)
             counts[action] += 1
         except AnkiError as e:
             errors.append({"word": row["word"], "error": str(e)})
@@ -492,7 +492,7 @@ def main(invoke=None):
         return 1
     print(
         f"anki-sync: +{s['added']} added, {s['updated']} updated, "
-        f"{s['suspended']} suspended, {s['skipped']} skipped (not enriched), "
+        f"{s['suspended']} suspended, {s['skipped']} skipped (no card), "
         f"{s['pulled']} pulled, {len(s['relearned'])} relearned, "
         f"{len(s['errors'])} errors",
         flush=True,

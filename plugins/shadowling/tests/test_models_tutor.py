@@ -38,9 +38,9 @@ class TutorRepoBase(unittest.TestCase):
         try:
             with con:
                 con.execute(
-                    "INSERT INTO vocab(word, translation, remaining, status)"
-                    " VALUES (?, 'переклад', 0, ?)",
-                    (word, status),
+                    "INSERT INTO vocab(word, translation, remaining, status, examples)"
+                    " VALUES (?, 'переклад', 0, ?, json(?))",
+                    (word, status, f'["The {word} was impressive."]'),
                 )
         finally:
             con.close()

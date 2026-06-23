@@ -48,10 +48,6 @@ modules directly (R-IO-2) and stay.
 - [ ] R-MOD-2 — declare `headless` and `parallel` (root infra, currently undeclared in
   `tach.toml`) with their `depends_on` and the edges to them. (`loot` becomes a
   `skills.loot.loot` module when it moves per R-TOP-2.)
-- [ ] R-PAT-3 — add DB constraints (NOT NULL / CHECK) on required enrichment fields
-  (e.g. `vocab.translation`, non-empty `examples`) so an incomplete row cannot be
-  written — backing enrich-only at the schema, not just `loot._valid`. Decide the
-  `untranslated` flow: whether a translation-less vocab row is still permitted.
 - [ ] R-TOP-2 — `debrief.py`, `loot.py`, `anki.py` live at the plugin root but are
   skill-specific → move into their skill folders (`skills/debrief/`, `skills/loot/`,
   `skills/anki_sync/`). Root keeps only shared infra (`models`, `appdb`, `core`,
@@ -63,3 +59,9 @@ modules directly (R-IO-2) and stay.
 ## Done
 
 <!-- move entries here (checked) when closed, or delete; kept short -->
+
+- [x] R-PAT-3 — vocab DB floor (appdb migration 12): `translation` NOT NULL +
+  CHECK (non-empty, `!= word`) and `examples` NOT NULL + CHECK (`>= 1`). Every row
+  is glossing- AND Anki-ready; no glossing-only rows. The dead anki "not yet
+  enriched" branch was removed. untranslated flow: a translation-less / echo row is
+  never stored (DB-rejected + reported pending).

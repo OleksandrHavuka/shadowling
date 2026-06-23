@@ -35,7 +35,7 @@ class VocabRepoBase(unittest.TestCase):
 
 class AddTest(VocabRepoBase):
     def test_add_new_word_starts_at_10_active(self):
-        r = Vocab.add("Throughput", "пропускна здатність")
+        r = Vocab.add("Throughput", "пропускна здатність", examples=["high Throughput"])
         self.assertEqual(r["action"], "add")
         self.assertEqual(r["word"], "throughput")
         self.assertEqual(r["translation"], "пропускна здатність")
@@ -43,7 +43,7 @@ class AddTest(VocabRepoBase):
         self.assertEqual(r["status"], "active")
 
     def test_add_existing_active_refreshes_translation_keeps_remaining(self):
-        Vocab.add("throughput", "old")
+        Vocab.add("throughput", "old", examples=["old throughput"])
         self._set("throughput", remaining=7)
         r = Vocab.add("throughput", "new translation")
         self.assertEqual(r["action"], "refresh")
@@ -62,7 +62,7 @@ class AddTest(VocabRepoBase):
 
     def test_add_stamps_created_and_updated(self):
         with mock.patch("core.now", return_value="2026-06-12T08:00:00"):
-            Vocab.add("throughput", "переклад")
+            Vocab.add("throughput", "переклад", examples=["a throughput line"])
         r = self.rows_by_word()["throughput"]
         self.assertEqual(r["created_at"], "2026-06-12T08:00:00")
         self.assertEqual(r["updated_at"], "2026-06-12T08:00:00")
@@ -73,7 +73,7 @@ class AddTest(VocabRepoBase):
         self.assertEqual(r2["updated_at"], "2026-06-12T09:30:00")
 
     def test_add_existing_learned_resets_to_10_active(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         self._set("throughput", remaining=0, status="learned")
         r = Vocab.add("throughput", "t2")
         self.assertEqual(r["action"], "relearn")
@@ -83,7 +83,7 @@ class AddTest(VocabRepoBase):
 
 class RemoveTest(VocabRepoBase):
     def test_remove_existing_returns_true_and_soft_deletes(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         self.assertTrue(Vocab.remove("Throughput"))
         row = self.rows_by_word()["throughput"]  # row STAYS (soft-delete)
         self.assertEqual(row["status"], "dropped")
@@ -92,7 +92,7 @@ class RemoveTest(VocabRepoBase):
         self.assertFalse(Vocab.remove("nonexistent"))
 
     def test_remove_clears_orphaned_mastery_row(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         con = appdb.connect()
         try:
             with con:
@@ -110,7 +110,7 @@ class RemoveTest(VocabRepoBase):
         self.assertEqual(leftover, [])
 
     def test_remove_leaves_other_kinds_mastery_untouched(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         con = appdb.connect()
         try:
             with con:
@@ -129,15 +129,15 @@ class RemoveTest(VocabRepoBase):
         self.assertEqual(len(kept), 1)
 
     def test_dropped_word_excluded_from_list_active(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         Vocab.remove("throughput")
         self.assertEqual(Vocab.list_active(), [])
 
 
 class ListAllTest(VocabRepoBase):
     def test_list_returns_all_statuses(self):
-        Vocab.add("alpha", "а")
-        Vocab.add("beta", "б")
+        Vocab.add("alpha", "а", examples=["alpha first"])
+        Vocab.add("beta", "б", examples=["beta second"])
         Vocab.remove("beta")
         rows = {r["word"]: r for r in Vocab.list()}
         self.assertEqual(set(rows), {"alpha", "beta"})
@@ -147,7 +147,7 @@ class ListAllTest(VocabRepoBase):
 
 class RelearnTest(VocabRepoBase):
     def test_relearn_resets_remaining_and_status(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         self._set("throughput", remaining=0, status="learned")
         Vocab.relearn("throughput")
         r = self.rows_by_word()["throughput"]
@@ -184,15 +184,15 @@ class MatchTest(VocabRepoBase):
 
 class ListActiveTest(VocabRepoBase):
     def test_list_active_excludes_learned(self):
-        Vocab.add("alpha", "а")
-        Vocab.add("beta", "б")
+        Vocab.add("alpha", "а", examples=["alpha first"])
+        Vocab.add("beta", "б", examples=["beta second"])
         self._set("beta", status="learned")
         self.assertEqual([r["word"] for r in Vocab.list_active()], ["alpha"])
 
 
 class ScanDecrementTest(VocabRepoBase):
     def test_decrements_matched_active_word(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput"])
         self.assertEqual(
             Vocab.scan_decrement("This improves throughput under load."),
             ["throughput"],
@@ -200,12 +200,12 @@ class ScanDecrementTest(VocabRepoBase):
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 9)
 
     def test_ignores_absent_word(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput"])
         self.assertEqual(Vocab.scan_decrement("Nothing relevant here."), [])
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 
     def test_graduates_at_zero(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput"])
         self._set("throughput", remaining=1)
         Vocab.scan_decrement("throughput throughput")
         row = self.rows_by_word()["throughput"]
@@ -213,7 +213,7 @@ class ScanDecrementTest(VocabRepoBase):
         self.assertEqual(row["status"], "learned")
 
     def test_skips_learned_words(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput"])
         self._set("throughput", status="learned", remaining=0)
         self.assertEqual(Vocab.scan_decrement("throughput throughput"), [])
 
@@ -226,7 +226,7 @@ class AddRaceTest(VocabRepoBase):
     # pins the single-process invariant: add-then-add of the same word is
     # add -> refresh, never raises, and leaves exactly one row.
     def test_repeat_add_is_idempotent_single_row(self):
-        a1 = Vocab.add("throughput", "переклад")
+        a1 = Vocab.add("throughput", "переклад", examples=["a throughput line"])
         a2 = Vocab.add("throughput", "новий переклад")
         self.assertEqual(a1["action"], "add")
         self.assertEqual(a2["action"], "refresh")
@@ -240,7 +240,12 @@ class AddConTest(VocabRepoBase):
         con = appdb.connect()
         try:
             with appdb.tx(con):
-                r = Vocab.add("Throughput", "пропускна здатність", con=con)
+                r = Vocab.add(
+                    "Throughput",
+                    "пропускна здатність",
+                    examples=["high Throughput"],
+                    con=con,
+                )
         finally:
             con.close()
         self.assertEqual(r["action"], "add")
@@ -251,7 +256,7 @@ class AddConTest(VocabRepoBase):
         con = appdb.connect()
         try:
             with appdb.tx(con):
-                Vocab.add("throughput", "old", con=con)
+                Vocab.add("throughput", "old", examples=["old throughput"], con=con)
                 r = Vocab.add("throughput", "new translation", con=con)
         finally:
             con.close()
@@ -269,7 +274,7 @@ class AddConTest(VocabRepoBase):
         self.assertNotIn("awesome", self.rows_by_word())
 
     def test_add_con_relearns_learned_word(self):
-        Vocab.add("throughput", "t")
+        Vocab.add("throughput", "t", examples=["a throughput line"])
         self._set("throughput", remaining=0, status="learned")
         con = appdb.connect()
         try:
@@ -308,7 +313,13 @@ class EnrichmentUpsertTest(VocabRepoBase):
 
     def test_non_latin_json_stored_readable_not_escaped(self):
         # first_language data must land as readable UTF-8, not \uXXXX escapes
-        Vocab.add("server", "сервер", alt_translations=["хост"], synonyms=["вузол"])
+        Vocab.add(
+            "server",
+            "сервер",
+            examples=["a server line"],
+            alt_translations=["хост"],
+            synonyms=["вузол"],
+        )
         r = self.rows_by_word()["server"]
         self.assertEqual(r["alt_translations"], '["хост"]')
         self.assertEqual(r["synonyms"], '["вузол"]')
@@ -335,7 +346,7 @@ class EnrichmentUpsertTest(VocabRepoBase):
         self.assertEqual(json.loads(r["alt_translations"]), ["в"])  # preserved
 
     def test_relearn_path_also_writes_provided_enrichment(self):
-        Vocab.add("w", "t")
+        Vocab.add("w", "t", examples=["w base"])
         self._set("w", remaining=0, status="learned")
         r = Vocab.add("w", "t2", examples=["w again"])
         self.assertEqual(r["action"], "relearn")
@@ -348,6 +359,7 @@ class EnrichmentUpsertTest(VocabRepoBase):
         Vocab.add(
             "scattered",
             "розкидав",
+            examples=["the leaves scattered"],
             forms=["scatter", "scatters", "scattering"],
             lemma="scatter",
         )
@@ -355,11 +367,23 @@ class EnrichmentUpsertTest(VocabRepoBase):
         self.assertEqual(json.loads(r["forms"]), ["scatter", "scatters", "scattering"])
         self.assertEqual(r["lemma"], "scatter")
         # learning_language forms with accents store as readable UTF-8, not \uXXXX
-        Vocab.add("comer", "їсти", forms=["comí", "comió"], lemma="comer")
+        Vocab.add(
+            "comer",
+            "їсти",
+            examples=["ayer comí una manzana"],
+            forms=["comí", "comió"],
+            lemma="comer",
+        )
         self.assertEqual(self.rows_by_word()["comer"]["forms"], '["comí", "comió"]')
 
     def test_bare_add_does_not_wipe_forms_or_lemma(self):
-        Vocab.add("scatter", "розкидати", forms=["scattered"], lemma="scatter")
+        Vocab.add(
+            "scatter",
+            "розкидати",
+            examples=["scatter the seeds"],
+            forms=["scattered"],
+            lemma="scatter",
+        )
         Vocab.add("scatter", "розкидати")  # bare refresh, no enrichment kwargs
         r = self.rows_by_word()["scatter"]
         self.assertEqual(json.loads(r["forms"]), ["scattered"])  # preserved
@@ -398,8 +422,8 @@ class ClozePatternTest(unittest.TestCase):
 
 class GetManyTest(VocabRepoBase):
     def test_returns_existing_rows_and_omits_absent(self):
-        Vocab.add("alpha", "а")
-        Vocab.add("beta", "б")
+        Vocab.add("alpha", "а", examples=["alpha first"])
+        Vocab.add("beta", "б", examples=["beta second"])
         got = Vocab.get_many(["Alpha", "beta", "missing"])
         self.assertEqual(set(got), {"alpha", "beta"})
         self.assertEqual(got["alpha"]["translation"], "а")

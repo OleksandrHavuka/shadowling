@@ -466,12 +466,15 @@ class SyncAllTest(AnkiDbBase):
         self.assertEqual(s["skipped"], 0)
         self.assertIn("createDeck", fake.actions())
 
-    def test_unenriched_word_skipped_not_pushed(self):
-        Vocab.add("bare", "t")  # no examples
+    def test_dropped_unsynced_word_counted_skipped(self):
+        # the only "skipped" left: a dropped word never pushed to Anki has no card
+        # to suspend (there are no unenriched live rows any more — examples NOT NULL)
+        Vocab.add("ghost", "t", examples=["a ghost line"])
+        Vocab.remove("ghost")  # dropped, but no AnkiLink was ever created
         fake = self._no_notes_invoke()
         s = anki.sync_all(core.load_config(), invoke=fake)
-        self.assertEqual(s["added"], 0)
         self.assertEqual(s["skipped"], 1)
+        self.assertEqual(s["suspended"], 0)
         self.assertNotIn("addNote", fake.actions())
 
     def test_push_error_collected_not_fatal(self):

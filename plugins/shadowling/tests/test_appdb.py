@@ -575,10 +575,12 @@ class Migration7Test(AppDbTestBase):
             "INSERT INTO vocab(word, translation, remaining, status, created_at,"
             " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
         )
-        con.commit()
+        appdb.MIGRATIONS[6](con)  # run ONLY _migration_7 and read the intermediate
+        con.execute("PRAGMA user_version = 7")  # state here: the full chain's m12
+        row = con.execute(  # would drop this examples-less row (its floor)
+            "SELECT * FROM vocab WHERE word='kept'"
+        ).fetchone()
         con.close()
-        appdb.connect().close()  # replays _migration_7
-        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
         self.assertEqual(row["translation"], "переклад")
         self.assertIsNone(row["examples"])  # added column backfills NULL
 
@@ -617,10 +619,12 @@ class Migration8Test(AppDbTestBase):
             " updated_at, source_context) VALUES"
             " ('kept', 'переклад', 5, 'active', 'c', 'u', 'grounding line')"
         )
-        con.commit()
+        appdb.MIGRATIONS[7](con)  # run ONLY _migration_8 (the rename); read the
+        con.execute("PRAGMA user_version = 8")  # intermediate state — the full
+        row = con.execute(  # chain's m12 would drop this examples-less row
+            "SELECT * FROM vocab WHERE word='kept'"
+        ).fetchone()
         con.close()
-        appdb.connect().close()  # replays _migration_8
-        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
         self.assertEqual(row["ctx"], "grounding line")  # value carried over
         self.assertNotIn("source_context", row.keys())  # old name gone
 
@@ -644,10 +648,12 @@ class Migration9Test(AppDbTestBase):
             "INSERT INTO vocab(word, translation, remaining, status, created_at,"
             " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
         )
-        con.commit()
+        appdb.MIGRATIONS[8](con)  # run ONLY _migration_9; read the intermediate
+        con.execute("PRAGMA user_version = 9")  # state — the full chain's m12
+        row = con.execute(  # would drop this examples-less row
+            "SELECT * FROM vocab WHERE word='kept'"
+        ).fetchone()
         con.close()
-        appdb.connect().close()  # replays _migration_9
-        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
         self.assertEqual(row["translation"], "переклад")  # row preserved
         self.assertIsNone(row["alt_translations"])  # added column backfills NULL
 
@@ -655,11 +661,12 @@ class Migration9Test(AppDbTestBase):
         appdb.connect().close()
         con = sqlite3.connect(appdb.db_path())
         try:
-            # the CHECK rejects at INSERT time (json_valid fails immediately)
+            # examples is supplied (valid) so the row fails ONLY on alt_translations
             with self.assertRaises(sqlite3.IntegrityError):
                 con.execute(
                     "INSERT INTO vocab(word, translation, remaining, status,"
-                    " alt_translations) VALUES ('w', 't', 10, 'active', 'not json')"
+                    " examples, alt_translations) VALUES"
+                    " ('w', 't', 10, 'active', '[\"a w line\"]', 'not json')"
                 )
         finally:
             con.close()
@@ -704,12 +711,15 @@ class Migration10Test(AppDbTestBase):
             "INSERT INTO vocab(word, translation, remaining, status, created_at,"
             " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
         )
-        con.commit()
+        appdb.MIGRATIONS[9](con)  # run ONLY _migration_10; read the intermediate
+        con.execute("PRAGMA user_version = 10")  # state — the full chain's m12
+        row = con.execute(  # would drop this examples-less row
+            "SELECT * FROM vocab WHERE word='kept'"
+        ).fetchone()
+        anki = con.execute("SELECT * FROM anki_link").fetchall()
         con.close()
-        appdb.connect().close()  # replays _migration_10
-        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
         self.assertEqual(row["translation"], "переклад")  # row preserved
-        self.assertEqual(appdb.query("SELECT * FROM anki_link"), [])  # new, empty
+        self.assertEqual(anki, [])  # new, empty
 
 
 class Migration11Test(AppDbTestBase):
@@ -732,10 +742,12 @@ class Migration11Test(AppDbTestBase):
             "INSERT INTO vocab(word, translation, remaining, status, created_at,"
             " updated_at) VALUES ('kept', 'переклад', 5, 'active', 'c', 'u')"
         )
-        con.commit()
+        appdb.MIGRATIONS[10](con)  # run ONLY _migration_11; read the intermediate
+        con.execute("PRAGMA user_version = 11")  # state — the full chain's m12
+        row = con.execute(  # would drop this examples-less row
+            "SELECT * FROM vocab WHERE word='kept'"
+        ).fetchone()
         con.close()
-        appdb.connect().close()  # replays _migration_11
-        row = appdb.query("SELECT * FROM vocab WHERE word='kept'")[0]
         self.assertEqual(row["translation"], "переклад")  # row preserved
         self.assertIsNone(row["forms"])  # added column backfills NULL
         self.assertIsNone(row["lemma"])  # added column backfills NULL
@@ -744,14 +756,89 @@ class Migration11Test(AppDbTestBase):
         appdb.connect().close()
         con = sqlite3.connect(appdb.db_path())
         try:
-            # the CHECK rejects at INSERT time (json_valid fails immediately)
+            # the CHECK rejects at INSERT time (json_valid fails immediately).
+            # examples is supplied (and valid) so the row fails ONLY on forms.
             with self.assertRaises(sqlite3.IntegrityError):
                 con.execute(
                     "INSERT INTO vocab(word, translation, remaining, status,"
-                    " forms) VALUES ('w', 't', 10, 'active', 'not json')"
+                    " examples, forms) VALUES"
+                    " ('w', 't', 10, 'active', '[\"a w line\"]', 'not json')"
                 )
         finally:
             con.close()
+
+
+class Migration12Test(AppDbTestBase):
+    def test_fresh_db_enforces_translation_and_examples_floor(self):
+        appdb.connect().close()
+        con = sqlite3.connect(appdb.db_path())
+        ins = (
+            "INSERT INTO vocab(word, translation, remaining, status, examples)"
+            " VALUES (?, ?, 10, 'active', ?)"
+        )
+        try:
+            # a fully conforming row inserts fine
+            con.execute(ins, ("alpha", "альфа", '["alpha here"]'))
+            con.commit()
+            # missing examples -> NOT NULL
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(
+                    "INSERT INTO vocab(word, translation, remaining, status)"
+                    " VALUES ('beta', 'бета', 10, 'active')"
+                )
+            # empty examples array -> CHECK (json_array_length >= 1)
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(ins, ("gamma", "гама", "[]"))
+            # blank translation -> CHECK
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(ins, ("delta", "  ", '["delta here"]'))
+            # echo translation (== word, case/space-insensitive) -> CHECK
+            with self.assertRaises(sqlite3.IntegrityError):
+                con.execute(ins, ("echo", " Echo ", '["echo here"]'))
+        finally:
+            con.close()
+
+    def test_upgrade_copies_conforming_drops_nonconforming(self):
+        con = sqlite3.connect(appdb.db_path())
+        con.row_factory = sqlite3.Row
+        for migration in appdb.MIGRATIONS[:11]:  # build a pre-12 (v11) database
+            migration(con)
+        con.execute("PRAGMA user_version = 11")
+        # conforming: translation + >=1 example -> survives the rebuild
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status, created_at,"
+            " updated_at, examples) VALUES"
+            " ('good', 'добре', 5, 'active', 'c', 'u', '[\"a good line\"]')"
+        )
+        # non-conforming: no examples -> dropped (re-lootable, kept in .bak)
+        con.execute(
+            "INSERT INTO vocab(word, translation, remaining, status)"
+            " VALUES ('bare', 'голе', 5, 'active')"
+        )
+        con.commit()
+        con.close()
+        appdb.connect().close()  # replays _migration_12
+        rows = {r["word"]: r for r in appdb.query("SELECT * FROM vocab")}
+        self.assertIn("good", rows)
+        self.assertEqual(rows["good"]["translation"], "добре")
+        self.assertEqual(rows["good"]["remaining"], 5)
+        self.assertNotIn("bare", rows)  # dropped: violated the examples floor
+
+    def test_fresh_db_keeps_optional_enrichment_nullable(self):
+        # the floor is translation + examples ONLY; the rest may be NULL
+        appdb.connect().close()
+        con = sqlite3.connect(appdb.db_path())
+        try:
+            con.execute(
+                "INSERT INTO vocab(word, translation, remaining, status, examples)"
+                " VALUES ('w', 'переклад', 10, 'active', '[\"a w line\"]')"
+            )
+            con.commit()
+        finally:
+            con.close()
+        row = appdb.query("SELECT * FROM vocab WHERE word='w'")[0]
+        for col in ("definition", "ctx", "synonyms", "alt_translations", "lemma"):
+            self.assertIsNone(row[col])
 
 
 if __name__ == "__main__":

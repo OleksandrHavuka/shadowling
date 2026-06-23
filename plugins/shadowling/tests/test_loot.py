@@ -132,7 +132,12 @@ class EnrichTest(LootDriverBase):
     def test_pre_read_forwards_known_alt_translations(self):
         from models.vocab import Vocab
 
-        Vocab.add("throughput", "old", alt_translations=["old alt rendering"])
+        Vocab.add(
+            "throughput",
+            "old",
+            examples=["an old throughput line"],
+            alt_translations=["old alt rendering"],
+        )
         cfg = core.load_config()
         captured = []
         runner = echo_runner({"throughput": _item("throughput")}, capture=captured)
@@ -242,7 +247,13 @@ class EnrichTest(LootDriverBase):
     def test_pre_read_forwards_known_forms_and_lemma(self):
         from models.vocab import Vocab
 
-        Vocab.add("scatter", "old", forms=["scattered"], lemma="scatter")
+        Vocab.add(
+            "scatter",
+            "old",
+            examples=["the leaves scatter"],
+            forms=["scattered"],
+            lemma="scatter",
+        )
         cfg = core.load_config()
         captured = []
         runner = echo_runner({"scatter": _item("scatter")}, capture=captured)

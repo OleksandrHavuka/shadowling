@@ -70,9 +70,12 @@ class Vocab:
     ):
         """add/refresh/relearn on an ALREADY-OPEN connection (opens no tx of its
         own). Writes ONLY the enrichment columns actually provided (not-None), so a
-        bare add(word, translation) never wipes a word's existing enrichment, while
-        the loot driver — which always passes the full bundle — overwrites it.
-        examples/synonyms/alt_translations/forms are Python lists, stored as
+        bare add(word, translation) on an EXISTING row never wipes its enrichment,
+        while the loot driver — which always passes the full bundle — overwrites it.
+        Inserting a NEW row, however, requires a non-empty `examples` list: the DB
+        floor (appdb m12, R-PAT-3) is translation + >=1 example, so a bare add of a
+        brand-new word raises sqlite3.IntegrityError — there are no glossing-only
+        rows. examples/synonyms/alt_translations/forms are Python lists, stored as
         json_valid TEXT; lemma is plain TEXT. Returns the same render-ready result
         dict as add()."""
         word = word.strip().lower()

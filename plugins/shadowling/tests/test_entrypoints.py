@@ -111,7 +111,7 @@ class DropTest(EntrypointBase):
         from models.vocab import Vocab
 
         for word, tr in pairs:
-            Vocab.add(word, tr)
+            Vocab.add(word, tr, examples=[f"a line with {word}"])
 
     def test_remove_multiple(self):
         self._seed(("alpha", "а"), ("beta", "б"))

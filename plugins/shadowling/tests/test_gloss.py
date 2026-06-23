@@ -58,7 +58,7 @@ class ScanTest(VocabTestBase):
         return json.dumps({"transcript_path": transcript_path})
 
     def test_scan_decrements_matched_active_word(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         tpath = make_transcript("This improves throughput under load.")
         try:
             changed = gloss.scan(self._stdin(tpath))
@@ -68,7 +68,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 9)
 
     def test_scan_ignores_absent_word(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         tpath = make_transcript("Nothing relevant here.")
         try:
             changed = gloss.scan(self._stdin(tpath))
@@ -78,7 +78,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(self.rows_by_word()["throughput"]["remaining"], 10)
 
     def test_scan_graduates_at_zero(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         self._set("throughput", remaining=1)
         tpath = make_transcript("throughput throughput")  # still one decrement
         try:
@@ -90,7 +90,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(row["status"], "learned")
 
     def test_scan_skips_learned_words(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         self._set("throughput", status="learned", remaining=0)
         tpath = make_transcript("throughput throughput")
         try:
@@ -100,7 +100,7 @@ class ScanTest(VocabTestBase):
         self.assertEqual(changed, [])
 
     def test_scan_uses_last_assistant_message_only(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         # transcript with two assistant turns; only the LAST counts
         fd, tpath = tempfile.mkstemp(suffix=".jsonl")
         a = {
@@ -153,7 +153,9 @@ class InjectTest(VocabTestBase):
         self.assertEqual(gloss.inject(), "")
 
     def test_inject_emits_sessionstart_json_with_words(self):
-        Vocab.add("throughput", "пропускна здатність")
+        Vocab.add(
+            "throughput", "пропускна здатність", examples=["high throughput under load"]
+        )
         out = gloss.inject()
         data = json.loads(out)
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
@@ -163,20 +165,20 @@ class InjectTest(VocabTestBase):
         self.assertIn("first", ctx.lower())  # instruction present
 
     def test_inject_excludes_learned_words(self):
-        Vocab.add("alpha", "а")
-        Vocab.add("beta", "б")
+        Vocab.add("alpha", "а", examples=["alpha version released"])
+        Vocab.add("beta", "б", examples=["beta testing started"])
         self._set("beta", status="learned")
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("alpha", ctx)
         self.assertNotIn("beta", ctx)
 
     def test_inject_defaults_to_sessionstart(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         data = json.loads(gloss.inject())
         self.assertEqual(data["hookSpecificOutput"]["hookEventName"], "SessionStart")
 
     def test_inject_accepts_custom_event_name(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         data = json.loads(gloss.inject("UserPromptSubmit"))
         self.assertEqual(
             data["hookSpecificOutput"]["hookEventName"], "UserPromptSubmit"
@@ -185,24 +187,28 @@ class InjectTest(VocabTestBase):
         self.assertIn("throughput", data["hookSpecificOutput"]["additionalContext"])
 
     def test_inject_includes_remaining_count(self):
-        Vocab.add("throughput", "пропускна здатність")
+        Vocab.add(
+            "throughput", "пропускна здатність", examples=["high throughput under load"]
+        )
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("remaining 10", ctx)
 
     def test_inject_instruction_has_summary_footer_rule(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("summary", ctx.lower())
         self.assertIn("Vocabulary", ctx)
 
     def test_inject_instruction_has_anti_bias_rule(self):
-        Vocab.add("throughput", "п")
+        Vocab.add("throughput", "п", examples=["high throughput under load"])
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("naturally", ctx.lower())
         self.assertIn("influence", ctx.lower())
 
     def test_inject_wraps_in_xml_block(self):
-        Vocab.add("throughput", "пропускна здатність")
+        Vocab.add(
+            "throughput", "пропускна здатність", examples=["high throughput under load"]
+        )
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("<vocab_glossing>", ctx)
         self.assertIn("</vocab_glossing>", ctx)
@@ -216,7 +222,7 @@ class InjectTest(VocabTestBase):
 
     def test_inject_uses_configured_first_language(self):
         core.save_config({"first_language": "Spanish"})
-        Vocab.add("throughput", "rendimiento")
+        Vocab.add("throughput", "rendimiento", examples=["high throughput under load"])
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("Spanish", ctx)
 
@@ -282,13 +288,15 @@ class GateTest(VocabTestBase):
     def test_inject_notices_without_config(self):
         # inject is the one user-visible hook, so an absent config is reported
         # here (capture/scan stay silently gated) rather than going dark.
-        Vocab.add("hello", "привіт")
+        Vocab.add("hello", "привіт", examples=["hello world"])
         self._unconfigure()
         ctx = json.loads(gloss.inject())["hookSpecificOutput"]["additionalContext"]
         self.assertIn("not fully configured", ctx)
 
     def test_scan_noop_without_config(self):
-        Vocab.add("throughput", "пропускна здатність")
+        Vocab.add(
+            "throughput", "пропускна здатність", examples=["high throughput under load"]
+        )
         self._unconfigure()
         tpath = os.path.join(self.home, "t.jsonl")
         with open(tpath, "w", encoding="utf-8") as f:

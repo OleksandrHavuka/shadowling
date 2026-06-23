@@ -288,6 +288,51 @@ def _migration_11(con):
     con.execute("ALTER TABLE vocab ADD COLUMN lemma TEXT")
 
 
+def _migration_12(con):
+    """Required-field floor on vocab: every row must be BOTH glossing-ready AND
+    Anki-ready — a non-empty `translation` (different from `word`) AND >=1
+    `examples` entry. There are no glossing-only rows; the floor is now physical,
+    not just enforced by loot._valid (R-PAT-3). SQLite can't ALTER an existing
+    column to add NOT NULL/CHECK, so this is the standard table rebuild. No view or
+    FK references vocab (see migration 8 / 10), so no drop-recreate dance is needed.
+
+    The INSERT...SELECT copies ONLY conforming rows; any legacy bare row (NULL/empty
+    examples, empty or echo translation) is dropped — it was never Anki-pushable and
+    is re-lootable. The auto `.bak` taken before migrating preserves it. `lower(trim
+    ())` mirrors the loot/_add_on echo + empty guard; cross-script borrowings (e.g.
+    server -> сервер) are different strings and survive. The `>= 1` array check is
+    the floor; the clozable-example semantic stays in loot._valid (SQL can't express
+    it)."""
+    con.execute(
+        "CREATE TABLE vocab_new("
+        " word TEXT PRIMARY KEY,"
+        " translation TEXT NOT NULL CHECK ("
+        " trim(translation) <> '' AND"
+        " lower(trim(translation)) <> lower(trim(word))),"
+        " remaining INTEGER NOT NULL, status TEXT NOT NULL,"
+        " created_at TEXT, updated_at TEXT, definition TEXT, ctx TEXT,"
+        " examples TEXT NOT NULL CHECK ("
+        " json_valid(examples) AND json_array_length(examples) >= 1),"
+        " synonyms TEXT CHECK (synonyms IS NULL OR json_valid(synonyms)),"
+        " alt_translations TEXT"
+        " CHECK (alt_translations IS NULL OR json_valid(alt_translations)),"
+        " forms TEXT CHECK (forms IS NULL OR json_valid(forms)),"
+        " lemma TEXT)"
+    )
+    con.execute(
+        "INSERT INTO vocab_new(word, translation, remaining, status, created_at,"
+        " updated_at, definition, ctx, examples, synonyms, alt_translations,"
+        " forms, lemma)"
+        " SELECT word, translation, remaining, status, created_at, updated_at,"
+        " definition, ctx, examples, synonyms, alt_translations, forms, lemma"
+        " FROM vocab WHERE examples IS NOT NULL AND json_valid(examples)"
+        " AND json_array_length(examples) >= 1 AND trim(translation) <> ''"
+        " AND lower(trim(translation)) <> lower(trim(word))"
+    )
+    con.execute("DROP TABLE vocab")
+    con.execute("ALTER TABLE vocab_new RENAME TO vocab")
+
+
 MIGRATIONS = [
     _migration_1,
     _migration_2,
@@ -300,6 +345,7 @@ MIGRATIONS = [
     _migration_9,
     _migration_10,
     _migration_11,
+    _migration_12,
 ]
 
 # --- views: derived code, never migrated --------------------------------------
