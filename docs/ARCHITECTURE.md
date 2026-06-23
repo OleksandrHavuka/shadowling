@@ -156,6 +156,11 @@ heavy analysis, schema-constrained.
   (`config.config_block`) — it is not a general app-settings store. Any non-LLM use of
   config requires a deliberate discussion + redesign first; do not quietly repurpose
   it.
+  - **Carve-out (derived rendering):** reading a single existing language key to
+    *render* an output string with no behavioral branch — e.g. `anki`'s deck name
+    `shadowling::<learning_language>` and its TTS-locale lookup — is allowed; it is a
+    pure formatting of a key already set, not a new settings axis. Adding a **new**
+    config key, or branching app behavior on config, still requires the discussion.
 
 ## R-MOD — Module boundaries
 
@@ -215,3 +220,13 @@ heavy analysis, schema-constrained.
   [`Debt.md`](./Debt.md).
 - A rule is changed **deliberately**, by editing this file — not by silently letting
   code drift from it.
+
+### Self-improvement: rule-gap candidates
+
+While judging, if a **recurring structural concern has no rule** (not a one-off, a bug,
+or a cleanup), surface a **rule-gap candidate**: the pattern + a proposed one-line rule +
+its R-area. Not a finding (`no-rule → no-finding` holds); rare, else silent; the list is
+ephemeral (proposed in the report, persisted nowhere). Per candidate: **approve** →
+append the rule here under its R-area (next free `R-<area>-<n>`) and send any deviation it
+exposes to [`Debt.md`](./Debt.md) `## Open`; **dismiss** → drop. Never park a candidate in
+`Debt.md` — that file holds deviations from existing rules only.

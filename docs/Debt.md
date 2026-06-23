@@ -56,6 +56,23 @@ modules directly (R-IO-2) and stay.
   into a dedicated `hooks/` dir next to `hooks.json` (Claude Code convention),
   referenced via `${CLAUDE_PLUGIN_ROOT}/hooks/…`.
 
+Findings from `/drift .` (2026-06-23), unrelated to the XML-wire migration above:
+
+- [ ] R-DB-6 — `appdb.py:123` (`attempts` table): `session_id` is nullable (`TEXT`)
+  though `attempts` is the session-originated drill-answer log → add `NOT NULL
+  session_id`. Migration 6 added it to the six incident tables but missed `attempts`.
+- [ ] R-DB-4 — `models/tutor.py:111` (`Tutor.record`), `models/messages.py:48`
+  (`Messages.capture`): read-then-write paths use `with con:` (DEFERRED) → open
+  `appdb.tx` (BEGIN IMMEDIATE), per the `tx()` docstring's own read-then-write policy.
+  Low priority (interactive/sequential — low race risk).
+- [ ] R-ARC-2 / R-TOP-3 — `skills/aha` (`decode.py`): the outer LLM does the analysis
+  (classify `fixed`/`method`, teach) while `decode.py` is a pure R-ARC-3 write, but
+  `aha` is listed R-ARC-2 → migrate to the loot pattern: the outer LLM marshals the
+  phrases + hunches + context into an XML payload; `decode.py` runs an inner
+  schema-constrained `claude -p` (the analysis), stores enriched rows (enrich-only,
+  R-PAT-3), and returns clean feedback to relay. Accepts the added latency
+  (main-context + inner call).
+
 ## Done
 
 <!-- move entries here (checked) when closed, or delete; kept short -->

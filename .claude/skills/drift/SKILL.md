@@ -24,5 +24,9 @@ Behavior:
 - For each genuinely new deviation, ask the user whether to record it. On yes, append it
   under `docs/Debt.md` `## Open` in the file's format:
   `- [ ] R-<id> — <where>: <what deviates> → <target>`. Record only what is confirmed.
-- Never touch production code; the only write is the confirmed `Debt.md` append. If the
-  target matches the baseline, say so and skip triage.
+- Also run the rulebook's **rule-gap loop** ("How this doc is used" → "Self-improvement"):
+  surface rare rule-gap candidates; on approval append the rule to `docs/ARCHITECTURE.md`,
+  else drop. Never park a candidate.
+- Never touch production code. Writes are limited to a confirmed `docs/Debt.md` append
+  (deviation from an existing rule) and, on approval, a new rule in `docs/ARCHITECTURE.md`.
+  If the target matches the baseline and no gap surfaces, say so and skip triage.
