@@ -21,7 +21,9 @@ exactly. A rule states the one allowed way; "NOT" lines sharpen the boundary.
   skill's own folder** (`${CLAUDE_SKILL_DIR}`). The **plugin root holds ONLY shared,
   mandatory components reused across skills** — the data layer (`models/`, `appdb`),
   `core`, the I/O layer (`skillio`/`validator`), the headless engine
-  (`headless`/`parallel`), shared `config`, `langcodes`. Control logic is never in
+  (`headless`/`parallel`), shared `config`, `langcodes`. Hook entrypoints (R-ARC-1) have no
+  skill folder, so they live in `hooks/` alongside `hooks.json` (referenced via
+  `${CLAUDE_PLUGIN_ROOT}/hooks/…`) — never at the bare root. Control logic is never in
   `SKILL.md` prose or the outer LLM.
 - **R-TOP-3** Heavy analysis runs in an INNER headless `claude -p` call — **always
   structured IO** (`--json-schema` → `structured_output`). Never hand-rolled logic in

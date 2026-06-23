@@ -56,6 +56,9 @@ modules directly (R-IO-2) and stay.
   skill-specific → move into their skill folders (`skills/debrief/`, `skills/loot/`,
   `skills/anki_sync/`). Root keeps only shared infra (`models`, `appdb`, `core`,
   `skillio`/`validator`, `headless`/`parallel`, `config`, `langcodes`).
+- [ ] R-TOP-2 — `capture.py` / `gloss.py` (hooks) sit at the bare plugin root → move
+  into a dedicated `hooks/` dir next to `hooks.json` (Claude Code convention),
+  referenced via `${CLAUDE_PLUGIN_ROOT}/hooks/…`.
 
 ## Done
 
