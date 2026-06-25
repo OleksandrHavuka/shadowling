@@ -109,6 +109,10 @@ def run_claude(
     argv = [
         claude,
         "-p",
+        # `--output-format json` alone emits only the final result object on newer
+        # claude CLIs; `--verbose` restores the full event array that parse_result
+        # expects (older CLIs emitted that array by default, without --verbose).
+        "--verbose",
         "--safe-mode",
         "--system-prompt",
         system_prompt,
