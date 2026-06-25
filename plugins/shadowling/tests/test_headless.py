@@ -25,6 +25,20 @@ def _event_array(structured_output, subtype="success", is_error=False):
     )
 
 
+def _single_result(structured_output, subtype="success", is_error=False):
+    """A claude `--output-format json` stdout with verbose OFF: a SINGLE result object
+    (the same `type=='result'` envelope, not wrapped in an event array)."""
+    return json.dumps(
+        {
+            "type": "result",
+            "subtype": subtype,
+            "is_error": is_error,
+            "result": "",
+            "structured_output": structured_output,
+        }
+    )
+
+
 class ParseResultTest(unittest.TestCase):
     def test_success_returns_structured_output(self):
         self.assertEqual(
@@ -70,6 +84,21 @@ class ParseResultTest(unittest.TestCase):
             ]
         )
         self.assertEqual(headless.parse_result(events), {"code": "en"})
+
+    def test_single_result_object_returns_structured_output(self):
+        self.assertEqual(
+            headless.parse_result(_single_result({"code": "en"})), {"code": "en"}
+        )
+
+    def test_single_result_error_subtype_raises(self):
+        with self.assertRaises(headless.HeadlessError):
+            headless.parse_result(
+                _single_result({}, subtype="error_max_turns", is_error=True)
+            )
+
+    def test_scalar_payload_raises(self):
+        with self.assertRaises(headless.HeadlessError):
+            headless.parse_result("5")
 
 
 class RunClaudeTest(unittest.TestCase):
