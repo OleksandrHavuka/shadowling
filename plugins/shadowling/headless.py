@@ -56,20 +56,29 @@ def subprocess_runner(argv, data, timeout=DEFAULT_TIMEOUT):
 
 
 def parse_result(stdout):
-    """Parse claude's `--output-format json` stdout (a JSON array of event
-    objects). Take the LAST type=='result' event; require subtype=='success' and a
-    falsy is_error; return its structured_output dict. Relies on subtype/is_error,
-    NOT the exit code. Any other shape -> HeadlessError."""
+    """Parse claude's `--output-format json` stdout into validated structured_output.
+
+    The envelope shape depends on the CLI's verbose mode (config `verbose` or the
+    `--verbose` flag), NOT the CLI version: verbose-OFF (the default) emits a SINGLE
+    result object; verbose-ON emits a JSON ARRAY of events whose last type=='result'
+    entry is the result. Accept either envelope, then require subtype=='success' and a
+    falsy is_error (NOT the exit code) and return its structured_output dict. Any other
+    shape -> HeadlessError."""
     try:
-        events = json.loads(stdout)
+        payload = json.loads(stdout)
     except (ValueError, TypeError) as e:
         raise HeadlessError("claude did not return JSON") from e
-    if not isinstance(events, list):
-        raise HeadlessError("claude JSON was not an event array")
-    results = [e for e in events if isinstance(e, dict) and e.get("type") == "result"]
-    if not results:
-        raise HeadlessError("no result event in claude output")
-    result = results[-1]
+    if isinstance(payload, dict):
+        result = payload
+    elif isinstance(payload, list):
+        results = [
+            e for e in payload if isinstance(e, dict) and e.get("type") == "result"
+        ]
+        if not results:
+            raise HeadlessError("no result event in claude output")
+        result = results[-1]
+    else:
+        raise HeadlessError("claude JSON was neither an object nor an event array")
     if result.get("subtype") != "success" or result.get("is_error"):
         raise HeadlessError(
             f"claude result not success: subtype={result.get('subtype')!r}"
